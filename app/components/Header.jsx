@@ -28,7 +28,7 @@ export default function Header() {
       background: "#fff",
       zIndex: 10
     }}>
-      <strong>MyBuZiness</strong>
+      <strong>MyBuZiness • v2</strong>
       <nav style={{ display: "flex", gap: 8 }}>
         <Link href="/" style={linkStyle("/")}>Start</Link>
         <Link href="/kunden" style={linkStyle("/kunden")}>Kunden</Link>
