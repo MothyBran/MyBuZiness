@@ -31,6 +31,7 @@ export default function Header() {
       <nav style={{ display: "flex", gap: 8 }}>
         <Link href="/" style={linkStyle("/")}>Start</Link>
         <Link href="/kunden" style={linkStyle("/kunden")}>Kunden</Link>
+        <Link href="/produkte" style={linkStyle("/produkte")}>Produkte</Link>
       </nav>
     </header>
   );
