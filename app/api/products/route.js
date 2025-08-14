@@ -1,35 +1,17 @@
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("q") || "").trim();
+export async function PUT(request, { params }) {
+  const { id } = params;
+  const body = await request.json();
+  const { name, sku, priceCents, currency = "EUR", description } = body || {};
 
-  const where = q
-    ? {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { sku: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-        ],
-      }
-    : {};
+  if (!name || !name.trim()) {
+    return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
+  }
 
-  const data = await prisma.product.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  });
-
-  return Response.json({ ok: true, data });
-}
-
-export async function POST(request) {
   try {
-    const body = await request.json();
-    const { name, sku, priceCents, currency = "EUR", description } = body || {};
-    if (!name || !name.trim()) {
-      return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
-    }
-    const created = await prisma.product.create({
+    const updated = await prisma.product.update({
+      where: { id },
       data: {
         name: name.trim(),
         sku: sku?.trim() || null,
@@ -38,8 +20,18 @@ export async function POST(request) {
         description: description?.trim() || null,
       },
     });
-    return Response.json({ ok: true, data: created }, { status: 201 });
+    return Response.json({ ok: true, data: updated });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: "Erstellen fehlgeschlagen (evtl. doppelte SKU?)." }), { status: 400 });
+    return new Response(JSON.stringify({ ok: false, error: "Update fehlgeschlagen (evtl. doppelte SKU?)." }), { status: 400 });
+  }
+}
+
+export async function DELETE(_request, { params }) {
+  const { id } = params;
+  try {
+    await prisma.product.delete({ where: { id } });
+    return Response.json({ ok: true });
+  } catch {
+    return new Response(JSON.stringify({ ok: false, error: "Löschen fehlgeschlagen." }), { status: 400 });
   }
 }
