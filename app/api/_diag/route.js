@@ -11,7 +11,6 @@ export async function GET() {
     return new Response(
       JSON.stringify({
         ok: true,
-        db: "reachable",
         tables: {
           customerCount: customers,
           productCount: products,
