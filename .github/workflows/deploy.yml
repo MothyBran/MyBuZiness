@@ -1,0 +1,16 @@
+name: Deploy to Railway
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bervProject/railway-deploy@v0.1.2-beta
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        with:
+          # Optional: falls nötig, den Service-Namen in Railway eintragen
+          # service: "mybuziness"
