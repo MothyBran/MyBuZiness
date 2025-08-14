@@ -2,79 +2,95 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "mb_customers";
-
 export default function KundenPage() {
-  const [customers, setCustomers] = useState([]);
+  const [items, setItems] = useState([]);
   const [form, setForm] = useState({ name: "", email: "", note: "" });
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Laden
-  useEffect(() => {
+  async function reload(q = "") {
+    setLoading(true);
+    const res = await fetch(`/api/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+    const json = await res.json();
+    setItems(json.data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return alert("Bitte einen Namen eingeben.");
+    const res = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form)
+    });
+    const json = await res.json();
+    if (!json.ok) return alert(json.error || "Fehler beim Anlegen.");
+    setForm({ name: "", email: "", note: "" });
+    reload(search);
+  }
+
+  async function remove(id) {
+    if (!confirm("Diesen Eintrag löschen?")) return;
+    const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (!json.ok) return alert(json.error || "Fehler beim Löschen.");
+    reload(search);
+  }
+
+  async function importFromLocalStorage() {
+    const STORAGE_KEY = "mb_customers";
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setCustomers(JSON.parse(raw));
-    } catch {}
-  }, []);
+      if (!raw) return alert("Keine lokalen Einträge gefunden.");
+      const list = JSON.parse(raw);
+      if (!Array.isArray(list) || list.length === 0) return alert("Keine lokalen Einträge gefunden.");
 
-  // Speichern
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(customers));
-    } catch {}
-  }, [customers]);
+      let ok = 0;
+      for (const c of list) {
+        const body = {
+          name: c.name || "",
+          email: c.email || "",
+          note: c.note || ""
+        };
+        if (!body.name.trim()) continue;
+        await fetch("/api/customers", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(r => r.ok && (ok++));
+      }
+      alert(`${ok} Einträge importiert.`);
+      reload();
+    } catch {
+      alert("Import fehlgeschlagen.");
+    }
+  }
 
-  // Einfacher Filter
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
+    if (!q) return items;
+    return items.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.note.toLowerCase().includes(q)
+        (c.email || "").toLowerCase().includes(q) ||
+        (c.note || "").toLowerCase().includes(q)
     );
-  }, [customers, search]);
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    const name = form.name.trim();
-    const email = form.email.trim();
-    const note = form.note.trim();
-    if (!name) return alert("Bitte einen Namen eingeben.");
-
-    const newCustomer = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      note,
-      createdAt: new Date().toISOString(),
-    };
-    setCustomers((prev) => [newCustomer, ...prev]);
-    setForm({ name: "", email: "", note: "" });
-  }
-
-  function remove(id) {
-    if (!confirm("Diesen Eintrag löschen?")) return;
-    setCustomers((prev) => prev.filter((c) => c.id !== id));
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(customers, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `kunden-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  }, [items, search]);
 
   return (
     <main>
-      <h1>Kunden</h1>
+      <h1>Kunden (Server‑gespeichert)</h1>
       <p style={{ marginTop: -8, color: "#666" }}>
-        Einfaches Kundenverzeichnis (lokal im Browser gespeichert).
+        Daten liegen in einer PostgreSQL‑Datenbank auf Railway.
       </p>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={() => reload(search)} style={btnGhost}>{loading ? "Lade..." : "Neu laden"}</button>
+        <button onClick={importFromLocalStorage} style={btnGhost}>Aus LocalStorage importieren</button>
+      </div>
 
       <section style={{
         display: "grid",
@@ -82,14 +98,7 @@ export default function KundenPage() {
         gridTemplateColumns: "1fr",
         marginTop: 24
       }}>
-        <form onSubmit={handleSubmit} style={{
-          background: "#fff",
-          border: "1px solid #eee",
-          borderRadius: 12,
-          padding: 16,
-          display: "grid",
-          gap: 12
-        }}>
+        <form onSubmit={handleSubmit} style={card}>
           <div style={{ display: "grid", gap: 6 }}>
             <label><strong>Name *</strong></label>
             <input
@@ -125,20 +134,14 @@ export default function KundenPage() {
 
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" style={btnPrimary}>Hinzufügen</button>
-            <button type="button" style={btnGhost} onClick={exportJson}>Export (.json)</button>
           </div>
         </form>
 
-        <div style={{
-          background: "#fff",
-          border: "1px solid #eee",
-          borderRadius: 12,
-          padding: 16
-        }}>
+        <div style={card}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); reload(e.target.value); }}
               placeholder="Suchen (Name, E‑Mail, Notiz)"
               style={{ ...inputStyle, maxWidth: 380 }}
             />
@@ -188,6 +191,13 @@ export default function KundenPage() {
   );
 }
 
+const card = {
+  background: "#fff",
+  border: "1px solid #eee",
+  borderRadius: 12,
+  padding: 16
+};
+
 const inputStyle = {
   padding: "10px 12px",
   borderRadius: 10,
@@ -236,3 +246,4 @@ const btnDanger = {
   color: "#c00",
   cursor: "pointer",
 };
+
