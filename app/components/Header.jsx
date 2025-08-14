@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 export default function Header() {
   const pathname = usePathname();
+
   const linkStyle = (href) => ({
     padding: "8px 12px",
     borderRadius: 8,
