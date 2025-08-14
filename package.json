@@ -4,11 +4,10 @@
   "version": "0.2.0",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma migrate deploy && next build",
-    "start": "next start -p ${PORT:-3000}",
+    "build": "next build",
+    "start": "prisma migrate deploy && next start -p ${PORT:-3000}",
     "lint": "next lint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "5.16.1",
