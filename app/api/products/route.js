@@ -1,45 +1,55 @@
-import { prisma } from "@/lib/prisma";
+// app/api/products/route.js
+import { initDb, q, uuid } from "@/lib/db";
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("q") || "").trim();
+  try {
+    await initDb();
+    const { searchParams } = new URL(request.url);
+    const qStr = (searchParams.get("q") || "").trim();
 
-  const where = q
-    ? {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { sku: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-        ],
-      }
-    : {};
+    let rows;
+    if (qStr) {
+      rows = (await q(
+        `SELECT * FROM "Product"
+         WHERE lower("name") LIKE $1 OR lower("sku") LIKE $1 OR lower("description") LIKE $1
+         ORDER BY "createdAt" DESC`,
+        [`%${qStr.toLowerCase()}%`]
+      )).rows;
+    } else {
+      rows = (await q(`SELECT * FROM "Product" ORDER BY "createdAt" DESC`)).rows;
+    }
 
-  const data = await prisma.product.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  });
-
-  return Response.json({ ok: true, data });
+    return Response.json({ ok: true, data: rows });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
+  }
 }
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { name, sku, priceCents, currency = "EUR", description } = body || {};
-    if (!name || !name.trim()) {
+    await initDb();
+    const body = await request.json().catch(() => ({}));
+    const name = (body.name || "").trim();
+    if (!name) {
       return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
     }
-    const created = await prisma.product.create({
-      data: {
-        name: name.trim(),
-        sku: sku?.trim() || null,
-        priceCents: Number.isFinite(priceCents) ? priceCents : 0,
-        currency,
-        description: description?.trim() || null,
-      },
-    });
-    return Response.json({ ok: true, data: created }, { status: 201 });
+    const sku = (body.sku || "").trim() || null;
+    const currency = (body.currency || "EUR").trim();
+    const priceCents = Number.isFinite(body.priceCents) ? body.priceCents : 0;
+    const description = (body.description || "").trim() || null;
+
+    const id = uuid();
+    const res = await q(
+      `INSERT INTO "Product" ("id","name","sku","priceCents","currency","description")
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING *`,
+      [id, name, sku, priceCents, currency, description]
+    );
+    return Response.json({ ok: true, data: res.rows[0] }, { status: 201 });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: "Erstellen fehlgeschlagen (evtl. doppelte SKU?)." }), { status: 400 });
+    if (String(e).includes("duplicate key")) {
+      return new Response(JSON.stringify({ ok: false, error: "SKU ist bereits vergeben." }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
