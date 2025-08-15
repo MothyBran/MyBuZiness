@@ -2,10 +2,10 @@
   "name": "mybuziness",
   "private": true,
   "version": "0.2.0",
-  "scripts": {
+    "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "prisma migrate deploy || prisma db push && next start -p ${PORT:-3000}",
+    "start": "sh -c \"prisma migrate deploy || true; prisma db push; next start -p ${PORT:-3000}\"",
     "lint": "next lint",
     "postinstall": "prisma generate"
   },
