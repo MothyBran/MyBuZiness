@@ -1,38 +1,49 @@
 // app/api/products/[id]/route.js
-import { prisma } from "@/lib/prisma";
+import { initDb, q } from "@/lib/db";
 
 export async function PUT(request, { params }) {
-  const { id } = params;
-  const body = await request.json();
-  const { name, sku, priceCents, currency = "EUR", description } = body || {};
-
-  if (!name || !name.trim()) {
-    return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
-  }
-
   try {
-    const updated = await prisma.product.update({
-      where: { id },
-      data: {
-        name: name.trim(),
-        sku: sku?.trim() || null,
-        priceCents: Number.isFinite(priceCents) ? priceCents : 0,
-        currency,
-        description: description?.trim() || null,
-      },
-    });
-    return Response.json({ ok: true, data: updated });
+    await initDb();
+    const { id } = params;
+    const body = await request.json().catch(() => ({}));
+    const name = (body.name || "").trim();
+    if (!name) {
+      return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
+    }
+    const sku = (body.sku || "").trim() || null;
+    const currency = (body.currency || "EUR").trim();
+    const priceCents = Number.isFinite(body.priceCents) ? body.priceCents : 0;
+    const description = (body.description || "").trim() || null;
+
+    const res = await q(
+      `UPDATE "Product"
+       SET "name"=$1,"sku"=$2,"priceCents"=$3,"currency"=$4,"description"=$5,"updatedAt"=CURRENT_TIMESTAMP
+       WHERE "id"=$6
+       RETURNING *`,
+      [name, sku, priceCents, currency, description, id]
+    );
+    if (res.rowCount === 0) {
+      return new Response(JSON.stringify({ ok: false, error: "Nicht gefunden." }), { status: 404 });
+    }
+    return Response.json({ ok: true, data: res.rows[0] });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: "Update fehlgeschlagen (evtl. doppelte SKU?)." }), { status: 400 });
+    if (String(e).includes("duplicate key")) {
+      return new Response(JSON.stringify({ ok: false, error: "SKU ist bereits vergeben." }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
 
 export async function DELETE(_request, { params }) {
-  const { id } = params;
   try {
-    await prisma.product.delete({ where: { id } });
+    await initDb();
+    const { id } = params;
+    const res = await q(`DELETE FROM "Product" WHERE "id"=$1`, [id]);
+    if (res.rowCount === 0) {
+      return new Response(JSON.stringify({ ok: false, error: "Nicht gefunden." }), { status: 404 });
+    }
     return Response.json({ ok: true });
-  } catch {
-    return new Response(JSON.stringify({ ok: false, error: "Löschen fehlgeschlagen." }), { status: 400 });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
