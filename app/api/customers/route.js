@@ -1,57 +1,54 @@
-import { prisma } from "@/lib/prisma";
+// app/api/customers/route.js
+import { initDb, q, uuid } from "@/lib/db";
 
 export async function GET(request) {
   try {
+    await initDb();
     const { searchParams } = new URL(request.url);
-    const q = (searchParams.get("q") || "").toLowerCase();
+    const qStr = (searchParams.get("q") || "").trim();
 
-    let where = {};
-    if (q) {
-      where = {
-        OR: [
-          { name: { contains: q, mode: "insensitive" } },
-          { email: { contains: q, mode: "insensitive" } },
-          { note: { contains: q, mode: "insensitive" } }
-        ]
-      };
+    let rows;
+    if (qStr) {
+      rows = (await q(
+        `SELECT * FROM "Customer"
+         WHERE lower("name") LIKE $1 OR lower("email") LIKE $1 OR lower("note") LIKE $1
+         ORDER BY "createdAt" DESC`,
+        [`%${qStr.toLowerCase()}%`]
+      )).rows;
+    } else {
+      rows = (await q(`SELECT * FROM "Customer" ORDER BY "createdAt" DESC`)).rows;
     }
 
-    const data = await prisma.customer.findMany({
-      where,
-      orderBy: { createdAt: "desc" }
-    });
-
-    return Response.json({ ok: true, data });
+    return Response.json({ ok: true, data: rows });
   } catch (e) {
-    // WICHTIG: Fehler transparent zurückgeben, damit du siehst, was los ist
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
 export async function POST(request) {
   try {
+    await initDb();
     const body = await request.json().catch(() => ({}));
-    const { name, email, note } = body || {};
-    if (!name || !name.trim()) {
+    const name = (body.name || "").trim();
+    const email = (body.email || "").trim() || null;
+    const note = (body.note || "").trim() || null;
+    if (!name) {
       return new Response(JSON.stringify({ ok: false, error: "Name ist erforderlich." }), { status: 400 });
     }
 
-    const created = await prisma.customer.create({
-      data: {
-        name: name.trim(),
-        email: email?.trim() || null,
-        note: note?.trim() || null
-      }
-    });
-
-    return Response.json({ ok: true, data: created }, { status: 201 });
+    const id = uuid();
+    const res = await q(
+      `INSERT INTO "Customer" ("id","name","email","note")
+       VALUES ($1,$2,$3,$4)
+       RETURNING *`,
+      [id, name, email, note]
+    );
+    return Response.json({ ok: true, data: res.rows[0] }, { status: 201 });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 400,
-      headers: { "content-type": "application/json" }
-    });
+    // unique violation?
+    if (String(e).includes("duplicate key")) {
+      return new Response(JSON.stringify({ ok: false, error: "E-Mail ist bereits vergeben." }), { status: 400 });
+    }
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
