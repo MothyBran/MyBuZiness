@@ -28,8 +28,8 @@ export default function Header() {
       background: "#fff",
       zIndex: 10
     }}>
-      <strong>MyBuZiness • v2</strong>
-      <nav style={{ display: "flex", gap: 8 }}>
+      <strong>MyBuZiness • HDR-R1</strong>
+      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Link href="/" style={linkStyle("/")}>Start</Link>
         <Link href="/kunden" style={linkStyle("/kunden")}>Kunden</Link>
         <Link href="/produkte" style={linkStyle("/produkte")}>Produkte</Link>
