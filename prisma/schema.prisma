@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,7 +20,7 @@ model Product {
   id          String   @id @default(uuid())
   name        String
   sku         String?  @unique
-  priceCents  Int      @default(0)   // Preis in Cent (z. B. 1299 = 12,99 €)
+  priceCents  Int      @default(0)
   currency    String   @default("EUR")
   description String?
   createdAt   DateTime @default(now())
