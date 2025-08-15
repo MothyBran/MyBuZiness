@@ -1,21 +1,17 @@
 {
   "name": "mybuziness",
   "private": true,
-  "version": "0.2.0",
-    "scripts": {
+  "version": "0.3.0",
+  "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "sh -c \"prisma migrate deploy || true; next start -p ${PORT:-3000}\"",
-    "lint": "next lint",
-    "postinstall": "prisma generate"
+    "start": "node -e \"console.log('DB init…')\" && next start -p ${PORT:-3000}",
+    "lint": "next lint"
   },
   "dependencies": {
-    "@prisma/client": "5.16.1",
     "next": "14.2.5",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "devDependencies": {
-    "prisma": "5.16.1"
+    "react-dom": "18.3.1",
+    "pg": "8.11.5"
   }
 }
