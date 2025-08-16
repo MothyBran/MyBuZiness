@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -17,10 +15,10 @@ export default function DashboardPage() {
     (async () => {
       try {
         const [cs, iv, rc, st] = await Promise.all([
-          fetch("/api/customers").then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/invoices").then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/receipts").then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/settings").then(r => r.json()).catch(() => ({ data: { currencyDefault: "EUR" } }))
+          fetch("/api/customers", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/invoices", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/receipts", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/settings", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: { currencyDefault: "EUR" } }))
         ]);
         setCustomers(cs.data || []);
         setInvoices(iv.data || []);
@@ -34,8 +32,8 @@ export default function DashboardPage() {
 
   const today = new Date();
   const ym = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-
   const currentYM = ym(today);
+
   const invoicesThisMonth = useMemo(() => invoices.filter(i => ym(new Date(i.issueDate)) === currentYM), [invoices, currentYM]);
   const receiptsThisMonth = useMemo(() => receipts.filter(r => ym(new Date(r.date)) === currentYM), [receipts, currentYM]);
 
@@ -50,7 +48,6 @@ export default function DashboardPage() {
         Kurzer Überblick über Kunden, Rechnungen und Belege. Erfassung erfolgt in den jeweiligen Modulen.
       </p>
 
-      {/* KPI Cards */}
       <div style={grid3}>
         <Card title="Kunden">
           <div style={kpi}>{customers.length}</div>
@@ -70,7 +67,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Quick Links */}
       <div style={{ ...card, marginTop: 16 }}>
         <strong>Schnelle Navigation</strong>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:12 }}>
@@ -82,7 +78,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Letzte Aktivitäten */}
       <div style={{ display:"grid", gap:16, gridTemplateColumns:"1fr 1fr", marginTop:16 }}>
         <Card title="Zuletzt erstellte Rechnungen">
           <List tableHeaders={["Nr.", "Kunde", "Datum", "Brutto"]}>
