@@ -34,6 +34,7 @@ export default function Header() {
         <Link href="/kunden" style={linkStyle("/kunden")}>Kunden</Link>
         <Link href="/produkte" style={linkStyle("/produkte")}>Produkte</Link>
         <Link href="/rechnungen" style={linkStyle("/rechnungen")}>Rechnungen</Link>
+        <Link href="/einstellungen" style={linkStyle("/einstellungen")}>Einstellungen</Link>
       </nav>
     </header>
   );
