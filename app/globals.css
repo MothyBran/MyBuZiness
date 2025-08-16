@@ -1,0 +1,20 @@
+:root {
+  --color-primary: #111111;
+  --color-accent: #2563eb;
+  --color-bg: #fafafa;
+  --color-text: #111111;
+  --radius: 12px;
+  --font-family: system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  margin: 0;
+}
+
+button, input, select, textarea {
+  font-family: var(--font-family);
+  border-radius: var(--radius);
+}
