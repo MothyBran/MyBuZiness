@@ -88,4 +88,16 @@ export default function ReceiptDetailPage() {
 
       <style>{`
         @media print {
-          header, nav, .no-print { display: none
+          header, nav, .no-print { display: none !important; }
+          #print-area { border: none !important; box-shadow: none !important; padding: 0 !important; }
+        }
+      `}</style>
+    </main>
+  );
+}
+
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16, marginTop:12 };
+const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px", fontSize:13, color:"#555" };
+const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
+const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
