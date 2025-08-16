@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,7 +16,7 @@ export default function InvoicesPage() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch(q ? `/api/invoices?q=${encodeURIComponent(q)}` : "/api/invoices");
+    const res = await fetch(q ? `/api/invoices?q=${encodeURIComponent(q)}` : "/api/invoices", { cache: "no-store" });
     const json = await res.json().catch(() => ({ data: [] }));
     setRows(json.data || []);
     setLoading(false);
@@ -81,12 +83,12 @@ function NewInvoiceModal({ open, onClose, onSaved }) {
 
   useEffect(() => {
     (async () => {
-      const st = await fetch("/api/settings").then(r=>r.json()).catch(()=>({data:null}));
-      const cs = await fetch("/api/customers").then(r=>r.json()).catch(()=>({data:[]}));
+      const st = await fetch("/api/settings", { cache: "no-store" }).then(r=>r.json()).catch(()=>({data:null}));
+      const cs = await fetch("/api/customers", { cache: "no-store" }).then(r=>r.json()).catch(()=>({data:[]}));
       const s = st.data || {};
       setSettings(s);
       setTaxRate(Number(s.taxRateDefault ?? 19));
-      setVatExempt(!!s.kleinunternehmer); // §19 => typischerweise steuerfrei
+      setVatExempt(!!s.kleinunternehmer);
       setCustomers(cs.data || []);
     })();
   }, []);
