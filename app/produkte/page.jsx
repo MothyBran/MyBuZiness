@@ -1,222 +1,237 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toCents, fromCents } from "@/lib/money";
 
-export default function ProduktePage() {
-  const [items, setItems] = useState([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", sku: "", price: "", currency: "EUR", description: "" });
-  const [editId, setEditId] = useState(null);
+export default function ProductsPage() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [filterKind, setFilterKind] = useState(""); // '', 'service', 'product'
 
-  async function reload(q = "") {
+  const [form, setForm] = useState({
+    kind: "service",          // 'service' | 'product'
+    categoryCode: "",
+    name: "",
+    sku: "",
+    price: "",
+    currency: "EUR",
+    description: "",
+    travelEnabled: false,
+    travelRate: "",           // EUR
+    travelUnit: "km"
+  });
+
+  async function load() {
     setLoading(true);
-    const res = await fetch(`/api/products${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-    const json = await res.json();
-    setItems(json.data || []);
+    const qs = new URLSearchParams();
+    if (q) qs.set("q", q);
+    if (filterKind) qs.set("kind", filterKind);
+    const res = await fetch(`/api/products${qs.toString() ? `?${qs}` : ""}`);
+    const json = await res.json().catch(() => ({ data: [] }));
+    setRows(json.data || []);
     setLoading(false);
   }
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filterKind]);
 
-  async function handleSubmit(e) {
+  function resetForm() {
+    setForm({
+      kind: "service",
+      categoryCode: "",
+      name: "",
+      sku: "",
+      price: "",
+      currency: "EUR",
+      description: "",
+      travelEnabled: false,
+      travelRate: "",
+      travelUnit: "km"
+    });
+  }
+
+  async function createProduct(e) {
     e.preventDefault();
     const payload = {
+      kind: form.kind,
+      categoryCode: form.categoryCode || null,
       name: form.name,
-      sku: form.sku,
-      priceCents: toCents(form.price),
+      sku: form.sku || null,
+      priceCents: toCents(form.price || 0),
       currency: form.currency,
-      description: form.description
+      description: form.description || null,
+      travelEnabled: !!form.travelEnabled,
+      travelRateCents: toCents(form.travelRate || 0),
+      travelUnit: form.travelUnit || "km"
     };
+    if (!payload.name) return alert("Name ist erforderlich.");
 
-    const url = editId ? `/api/products/${editId}` : "/api/products";
-    const method = editId ? "PUT" : "POST";
-    const res = await fetch(url, {
-      method,
+    const res = await fetch("/api/products", {
+      method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     });
     const json = await res.json();
-    if (!json.ok) return alert(json.error || "Fehler beim Speichern.");
-
-    setForm({ name: "", sku: "", price: "", currency: "EUR", description: "" });
-    setEditId(null);
-    reload(search);
+    if (!json.ok) return alert(json.error || "Erstellen fehlgeschlagen.");
+    resetForm();
+    load();
   }
 
-  function startEdit(p) {
-    setEditId(p.id);
-    setForm({
-      name: p.name || "",
-      sku: p.sku || "",
-      price: (p.priceCents / 100).toString().replace(".", ","),
-      currency: p.currency || "EUR",
-      description: p.description || ""
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  async function remove(id) {
-    if (!confirm("Dieses Produkt löschen?")) return;
+  async function del(id) {
+    if (!confirm("Eintrag wirklich löschen?")) return;
     const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
     const json = await res.json();
-    if (!json.ok) return alert(json.error || "Fehler beim Löschen.");
-    reload(search);
+    if (!json.ok) return alert(json.error || "Löschen fehlgeschlagen.");
+    load();
   }
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.sku || "").toLowerCase().includes(q) ||
-        (p.description || "").toLowerCase().includes(q)
-    );
-  }, [items, search]);
 
   return (
     <main>
-      <h1>Produkte</h1>
-      <p style={{ marginTop: -8, color: "#666" }}>Verwalte deine Produktliste (in PostgreSQL gespeichert).</p>
+      <h1>Produkte & Dienstleistungen</h1>
+      <p style={{ marginTop: -8, color: "#666" }}>
+        Lege **Dienstleistungen** oder **Produkte** an, vergebe Kategorie-Codes (z. B. 1.1, 2.3) und optional Fahrtkosten (pro km).
+      </p>
 
-      <section style={grid}>
-        <form onSubmit={handleSubmit} style={card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <strong>{editId ? "Produkt bearbeiten" : "Neues Produkt"}</strong>
-            {editId && (
-              <button type="button" onClick={() => { setEditId(null); setForm({ name: "", sku: "", price: "", currency: "EUR", description: "" }); }} style={btnGhost}>
-                Abbrechen
-              </button>
-            )}
-          </div>
+      {/* Toolbar */}
+      <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:12, flexWrap:"wrap" }}>
+        <input value={q} onChange={(e)=>setQ(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name, SKU, Kategorie)…" style={input} />
+        <button onClick={() => load()} style={btnGhost}>Suchen</button>
 
-          <div style={row}>
-            <div style={col}>
-              <label><strong>Name *</strong></label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="z. B. Maniküre Basic"
-                required
-                style={input}
-              />
-            </div>
-            <div style={col}>
-              <label><strong>SKU (optional)</strong></label>
-              <input
-                value={form.sku}
-                onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                placeholder="PROD-001"
-                style={input}
-              />
-            </div>
-          </div>
+        <span style={{ marginLeft: 12, color:"#666" }}>Typ:</span>
+        <select value={filterKind} onChange={(e)=>setFilterKind(e.target.value)} style={inputSm}>
+          <option value="">Alle</option>
+          <option value="service">Dienstleistung</option>
+          <option value="product">Produkt</option>
+        </select>
+      </div>
 
-          <div style={row}>
-            <div style={col}>
-              <label><strong>Preis *</strong></label>
-              <input
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                placeholder="z. B. 29,90"
-                inputMode="decimal"
-                style={input}
-              />
-            </div>
-            <div style={{ ...col, maxWidth: 180 }}>
-              <label><strong>Währung</strong></label>
-              <select
-                value={form.currency}
-                onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                style={input}
-              >
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </div>
-          </div>
+      {/* Formular */}
+      <form onSubmit={createProduct} style={{ ...card, marginTop: 12, display:"grid", gap:12 }}>
+        <strong>Neuen Eintrag erstellen</strong>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(4, 1fr)" }}>
+          <label style={label}>
+            <span>Typ</span>
+            <select value={form.kind} onChange={(e)=>setForm({ ...form, kind: e.target.value })} style={input}>
+              <option value="service">Dienstleistung</option>
+              <option value="product">Produkt</option>
+            </select>
+          </label>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label><strong>Beschreibung</strong></label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Kurzbeschreibung ..."
-              rows={3}
-              style={{ ...input, resize: "vertical" }}
-            />
-          </div>
+          <label style={label}>
+            <span>Kategorie-Code</span>
+            <input value={form.categoryCode} onChange={(e)=>setForm({ ...form, categoryCode: e.target.value })} style={input} placeholder="z. B. 1.1" />
+          </label>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={btnPrimary}>{editId ? "Speichern" : "Hinzufügen"}</button>
-          </div>
-        </form>
+          <label style={label}>
+            <span>Name *</span>
+            <input value={form.name} onChange={(e)=>setForm({ ...form, name: e.target.value })} style={input} required />
+          </label>
 
-        <div style={card}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); reload(e.target.value); }}
-              placeholder="Suchen (Name, SKU, Beschreibung)"
-              style={{ ...input, maxWidth: 380 }}
-            />
-            <span style={{ color: "#666", fontSize: 14 }}>
-              {filtered.length} Produkt(e)
-            </span>
-            <button onClick={() => reload(search)} style={btnGhost}>{loading ? "Lade..." : "Neu laden"}</button>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Name</th>
-                  <th style={th}>SKU</th>
-                  <th style={th}>Preis</th>
-                  <th style={th}>Währung</th>
-                  <th style={th}>Beschreibung</th>
-                  <th style={th}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.id}>
-                    <td style={td}>{p.name}</td>
-                    <td style={td}>{p.sku || <em style={{ color: "#999" }}>–</em>}</td>
-                    <td style={td}>{fromCents(p.priceCents, p.currency)}</td>
-                    <td style={td}>{p.currency}</td>
-                    <td style={td}>{p.description || <em style={{ color: "#999" }}>–</em>}</td>
-                    <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button onClick={() => startEdit(p)} style={btnGhost}>Bearbeiten</button>{" "}
-                      <button onClick={() => remove(p.id)} style={btnDanger}>Löschen</button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>
-                      Keine Einträge gefunden.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <label style={label}>
+            <span>SKU</span>
+            <input value={form.sku} onChange={(e)=>setForm({ ...form, sku: e.target.value })} style={input} />
+          </label>
         </div>
-      </section>
+
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(4, 1fr)" }}>
+          <label style={label}>
+            <span>Preis (Einheit)</span>
+            <input value={form.price} onChange={(e)=>setForm({ ...form, price: e.target.value })} style={input} inputMode="decimal" placeholder="z. B. 29,90" />
+          </label>
+
+          <label style={label}>
+            <span>Währung</span>
+            <select value={form.currency} onChange={(e)=>setForm({ ...form, currency: e.target.value })} style={input}>
+              <option>EUR</option>
+              <option>USD</option>
+            </select>
+          </label>
+
+          <label style={{ ...label, alignItems:"center", display:"grid", gridTemplateColumns:"1fr auto" }}>
+            <div style={{ display:"grid", gap:6 }}>
+              <span>Fahrtkosten aktiv</span>
+              <small style={{ color:"#666" }}>Wenn aktiv: pro-km-Satz angeben</small>
+            </div>
+            <input type="checkbox" checked={form.travelEnabled} onChange={(e)=>setForm({ ...form, travelEnabled: e.target.checked })} />
+          </label>
+
+          <label style={label}>
+            <span>Fahrtkosten (pro km)</span>
+            <input value={form.travelRate} onChange={(e)=>setForm({ ...form, travelRate: e.target.value })} style={input} inputMode="decimal" placeholder="z. B. 0,35" />
+          </label>
+        </div>
+
+        <div style={{ display:"grid", gap:12 }}>
+          <label style={label}>
+            <span>Beschreibung</span>
+            <textarea value={form.description} onChange={(e)=>setForm({ ...form, description: e.target.value })} style={{ ...input, resize:"vertical" }} rows={2} />
+          </label>
+        </div>
+
+        <div>
+          <button type="submit" style={btnPrimary}>Speichern</button>
+          <button type="button" onClick={resetForm} style={{ ...btnGhost, marginLeft:8 }}>Zurücksetzen</button>
+        </div>
+      </form>
+
+      {/* Tabelle */}
+      <div style={{ ...card, marginTop: 12 }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Typ</th>
+                <th style={th}>Kategorie</th>
+                <th style={th}>Name</th>
+                <th style={th}>Preis</th>
+                <th style={th}>Fahrtkosten</th>
+                <th style={{ ...th, textAlign:"right" }}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(p => (
+                <tr key={p.id}>
+                  <td style={td}>{p.kind === "product" ? "Produkt" : "Dienstleistung"}</td>
+                  <td style={td}>{p.categoryCode || "-"}</td>
+                  <td style={td}>
+                    <div style={{ fontWeight:600 }}>{p.name}</div>
+                    <div style={{ color:"#666", fontSize:13 }}>{p.sku || ""}</div>
+                    {p.description && <div style={{ color:"#666", fontSize:13 }}>{p.description}</div>}
+                  </td>
+                  <td style={td}>{fromCents(p.priceCents, p.currency)}</td>
+                  <td style={td}>
+                    {p.travelEnabled
+                      ? `${fromCents(p.travelRateCents, p.currency)} pro ${p.travelUnit || "km"}`
+                      : "—"}
+                  </td>
+                  <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
+                    {/* Für Bearbeiten könntest du ein Modal oder eine eigene Seite ergänzen */}
+                    <button onClick={() => del(p.id)} style={btnDanger}>Löschen</button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} style={{ ...td, textAlign:"center", color:"#999" }}>
+                    {loading ? "Lade…" : "Keine Einträge."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </main>
   );
 }
 
-const grid = { display: "grid", gap: 16, gridTemplateColumns: "1fr", marginTop: 24 };
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16 };
-const row = { display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" };
-const col = { display: "grid", gap: 6 };
-const input = { padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", outline: "none" };
-const th = { textAlign: "left", borderBottom: "1px solid #eee", padding: "10px 8px", fontSize: 13, color: "#555" };
-const td = { borderBottom: "1px solid #f2f2f2", padding: "10px 8px", fontSize: 14 };
-const btnPrimary = { padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" };
-const btnGhost = { padding: "8px 10px", borderRadius: 8, border: "1px solid #111", background: "transparent", color: "#111", cursor: "pointer" };
-const btnDanger = { padding: "8px 10px", borderRadius: 8, border: "1px solid #c00", background: "#fff", color: "#c00", cursor: "pointer" };
+const label = { display:"grid", gap:6 };
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:12, padding:16 };
+const input = { padding:"10px 12px", borderRadius:10, border:"1px solid #ddd", background:"#fff", outline:"none" };
+const inputSm = { padding:"8px 10px", borderRadius:10, border:"1px solid #ddd", background:"#fff", outline:"none" };
+const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px", fontSize:13, color:"#555" };
+const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
+const btnPrimary = { padding:"10px 12px", borderRadius:10, border:"1px solid #111", background:"#111", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"8px 10px", borderRadius:8, border:"1px solid #111", background:"transparent", color:"#111", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
