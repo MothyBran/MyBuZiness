@@ -1,11 +1,8 @@
-export const dynamic = "force-dynamic";
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/app/components/Modal";
-import LineItemsEditor from "@/app/components/LineItemsEditor";
 import { toCents, fromCents } from "@/lib/money";
 
 export default function ReceiptsPage() {
@@ -75,7 +72,9 @@ function NewReceiptModal({ open, onClose, onSaved }) {
   const [settings, setSettings] = useState(null);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("");
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([
+    { id: crypto.randomUUID(), name: "", quantity: 1, unitPrice: "" }
+  ]);
 
   useEffect(() => {
     (async () => {
@@ -89,16 +88,21 @@ function NewReceiptModal({ open, onClose, onSaved }) {
   const discountCents = toCents(discount || 0);
   const gross = Math.max(0, itemsTotal - discountCents);
 
+  function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
+  function addRow(){ setItems([...items, { id: crypto.randomUUID(), name:"", quantity:1, unitPrice:"" }]); }
+  function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+
   async function submit(e){
     e.preventDefault();
     if(items.length === 0) return alert("Bitte mindestens eine Position hinzufügen.");
+    if(items.some(r => !r.name?.trim())) return alert("Jede Position braucht einen Namen.");
     const payload = {
       date,
       currency,
-      vatExempt: true, // Belege standardmäßig ohne USt
+      vatExempt: true,
       discountCents,
       items: items.map(it => ({
-        productId: it.productId || null,
+        productId: null,
         name: it.name,
         quantity: Number(it.quantity||0),
         unitPriceCents: toCents(it.unitPrice || 0)
@@ -111,7 +115,7 @@ function NewReceiptModal({ open, onClose, onSaved }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Neuen Beleg erfassen" maxWidth={980}>
+    <Modal open={open} onClose={onClose} title="Neuen Beleg erfassen" maxWidth={860}>
       <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <label style={label}><span>Datum</span>
@@ -122,14 +126,45 @@ function NewReceiptModal({ open, onClose, onSaved }) {
           </label>
         </div>
 
-        <LineItemsEditor currency={currency} value={items} onChange={setItems} />
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Bezeichnung</th>
+                <th style={th}>Menge</th>
+                <th style={th}>Einzelpreis</th>
+                <th style={th}>Summe</th>
+                <th style={{ ...th, textAlign:"right" }}>Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(r => {
+                const qty = Number(r.quantity||0);
+                const up = toCents(r.unitPrice || 0);
+                const line = qty*up;
+                return (
+                  <tr key={r.id}>
+                    <td style={td}><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                    <td style={td}><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
+                    <td style={td}><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
+                    <td style={td}>{fromCents(line, currency)}</td>
+                    <td style={{ ...td, textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
+                  </tr>
+                );
+              })}
+              {items.length===0 && <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+            </tbody>
+          </table>
+        </div>
 
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <label style={label}><span>Rabatt (gesamt)</span>
-            <input value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" />
-          </label>
-          <div style={{ alignSelf:"end", textAlign:"right", fontWeight:700 }}>
-            Gesamt: {fromCents(gross, currency)}
+        <div style={{ display:"flex", gap:8, justifyContent:"space-between" }}>
+          <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
+          <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+            <label style={{ display:"grid", gap:6 }}>
+              <span>Rabatt (gesamt)</span>
+              <input value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" />
+            </label>
+            <div style={{ fontWeight:700 }}>Gesamt: {fromCents(gross, currency)}</div>
           </div>
         </div>
 
@@ -147,4 +182,5 @@ const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px"
 const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
 const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none" };
 const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnGhost = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
