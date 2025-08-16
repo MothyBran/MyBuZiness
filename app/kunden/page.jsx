@@ -1,249 +1,108 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
-export default function KundenPage() {
-  const [items, setItems] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", note: "" });
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function CustomersPage() {
+  const [rows, setRows] = useState([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  async function reload(q = "") {
+  async function load() {
     setLoading(true);
-    const res = await fetch(`/api/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-    const json = await res.json();
-    setItems(json.data || []);
+    const url = q ? `/api/customers?q=${encodeURIComponent(q)}` : "/api/customers";
+    const res = await fetch(url);
+    const json = await res.json().catch(()=>({ data:[] }));
+    setRows(json.data || []);
     setLoading(false);
   }
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { load(); }, []);
 
-  async function handleSubmit(e) {
+  async function create(e){
     e.preventDefault();
-    if (!form.name.trim()) return alert("Bitte einen Namen eingeben.");
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name: fd.get("name"),
+      email: fd.get("email") || null,
+      note: fd.get("note") || null
+    };
+    if(!payload.name) return alert("Name ist erforderlich.");
     const res = await fetch("/api/customers", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(form)
+      method: "POST", headers: { "content-type":"application/json" }, body: JSON.stringify(payload)
     });
     const json = await res.json();
-    if (!json.ok) return alert(json.error || "Fehler beim Anlegen.");
-    setForm({ name: "", email: "", note: "" });
-    reload(search);
+    if(!json.ok) return alert(json.error || "Erstellen fehlgeschlagen.");
+    e.currentTarget.reset();
+    load();
   }
 
-  async function remove(id) {
-    if (!confirm("Diesen Eintrag löschen?")) return;
-    const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
+  async function del(id){
+    if(!confirm("Kunde wirklich löschen?")) return;
+    const res = await fetch(`/api/customers/${id}`, { method:"DELETE" });
     const json = await res.json();
-    if (!json.ok) return alert(json.error || "Fehler beim Löschen.");
-    reload(search);
+    if(!json.ok) return alert(json.error || "Löschen fehlgeschlagen.");
+    load();
   }
-
-  async function importFromLocalStorage() {
-    const STORAGE_KEY = "mb_customers";
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return alert("Keine lokalen Einträge gefunden.");
-      const list = JSON.parse(raw);
-      if (!Array.isArray(list) || list.length === 0) return alert("Keine lokalen Einträge gefunden.");
-
-      let ok = 0;
-      for (const c of list) {
-        const body = {
-          name: c.name || "",
-          email: c.email || "",
-          note: c.note || ""
-        };
-        if (!body.name.trim()) continue;
-        await fetch("/api/customers", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body)
-        }).then(r => r.ok && (ok++));
-      }
-      alert(`${ok} Einträge importiert.`);
-      reload();
-    } catch {
-      alert("Import fehlgeschlagen.");
-    }
-  }
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.note || "").toLowerCase().includes(q)
-    );
-  }, [items, search]);
 
   return (
     <main>
-      <h1>Kunden (Server‑gespeichert)</h1>
-      <p style={{ marginTop: -8, color: "#666" }}>
-        Daten liegen in einer PostgreSQL‑Datenbank auf Railway.
-      </p>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button onClick={() => reload(search)} style={btnGhost}>{loading ? "Lade..." : "Neu laden"}</button>
-        <button onClick={importFromLocalStorage} style={btnGhost}>Aus LocalStorage importieren</button>
+      <h1>Kunden</h1>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/E-Mail)..." style={input} />
+        <button onClick={load} style={btnGhost}>Suchen</button>
       </div>
 
-      <section style={{
-        display: "grid",
-        gap: 16,
-        gridTemplateColumns: "1fr",
-        marginTop: 24
-      }}>
-        <form onSubmit={handleSubmit} style={card}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label><strong>Name *</strong></label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Max Mustermann"
-              required
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label><strong>E‑Mail</strong></label>
-            <input
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="max@firma.de"
-              type="email"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label><strong>Notiz</strong></label>
-            <textarea
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              placeholder="z. B. bevorzugt E‑Mail, Stammkunde, ..."
-              rows={3}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={btnPrimary}>Hinzufügen</button>
-          </div>
-        </form>
-
-        <div style={card}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); reload(e.target.value); }}
-              placeholder="Suchen (Name, E‑Mail, Notiz)"
-              style={{ ...inputStyle, maxWidth: 380 }}
-            />
-            <span style={{ color: "#666", fontSize: 14 }}>
-              {filtered.length} Eintrag(e)
-            </span>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>E‑Mail</th>
-                  <th style={thStyle}>Notiz</th>
-                  <th style={thStyle}>Erstellt</th>
-                  <th style={thStyle}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id}>
-                    <td style={tdStyle}>{c.name}</td>
-                    <td style={tdStyle}>
-                      {c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : <em style={{ color: "#999" }}>–</em>}
-                    </td>
-                    <td style={tdStyle}>{c.note || <em style={{ color: "#999" }}>–</em>}</td>
-                    <td style={tdStyle}>{new Date(c.createdAt).toLocaleString()}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <button onClick={() => remove(c.id)} style={btnDanger}>Löschen</button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ ...tdStyle, textAlign: "center", color: "#999" }}>
-                      Keine Einträge gefunden.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+      <form onSubmit={create} style={{ ...card, marginTop:12, display:"grid", gap:12 }}>
+        <strong>Neuen Kunden anlegen</strong>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+          <label style={label}><span>Name *</span><input name="name" required style={input} /></label>
+          <label style={label}><span>E-Mail</span><input name="email" style={input} /></label>
         </div>
-      </section>
+        <label style={label}><span>Notiz</span><textarea name="note" rows={2} style={{ ...input, resize:"vertical" }} /></label>
+        <div><button type="submit" style={btnPrimary}>Speichern</button></div>
+      </form>
+
+      <div style={{ ...card, marginTop:12 }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Name</th>
+                <th style={th}>E-Mail</th>
+                <th style={{ ...th, textAlign:"right" }}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(c => (
+                <tr key={c.id}>
+                  <td style={td}>
+                    <div style={{ fontWeight:600 }}>{c.name}</div>
+                    {c.note && <div style={{ color:"#666", fontSize:13 }}>{c.note}</div>}
+                  </td>
+                  <td style={td}>{c.email || "—"}</td>
+                  <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
+                    <Link href={`/kunden/${c.id}`} style={btnGhost}>Bearbeiten</Link>{" "}
+                    <button onClick={()=>del(c.id)} style={btnDanger}>Löschen</button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length===0 && (
+                <tr><td colSpan={3} style={{ ...td, textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Kunden."}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </main>
   );
 }
 
-const card = {
-  background: "#fff",
-  border: "1px solid #eee",
-  borderRadius: 12,
-  padding: 16
-};
-
-const inputStyle = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #ddd",
-  background: "#fff",
-  outline: "none",
-};
-
-const thStyle = {
-  textAlign: "left",
-  borderBottom: "1px solid #eee",
-  padding: "10px 8px",
-  fontSize: 13,
-  color: "#555",
-};
-
-const tdStyle = {
-  borderBottom: "1px solid #f2f2f2",
-  padding: "10px 8px",
-  fontSize: 14,
-};
-
-const btnPrimary = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #111",
-  background: "#111",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const btnGhost = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #111",
-  background: "transparent",
-  color: "#111",
-  cursor: "pointer",
-};
-
-const btnDanger = {
-  padding: "8px 10px",
-  borderRadius: 8,
-  border: "1px solid #c00",
-  background: "#fff",
-  color: "#c00",
-  cursor: "pointer",
-};
-
+const label = { display:"grid", gap:6 };
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16 };
+const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none" };
+const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px", fontSize:13, color:"#555" };
+const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
+const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
