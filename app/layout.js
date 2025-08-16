@@ -1,19 +1,20 @@
 // app/layout.js
+import TopBar from "./components/TopBar";
 import Header from "./components/Header";
+import AppFooter from "./components/AppFooter";
 import { initDb, q } from "@/lib/db";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "MyBuZiness",
-  description: "WebApp – Business Tool",
+  title: "BuZiness",
+  description: "Schnell erfassen, sicher Verwalten.",
 };
 
 async function getSettings() {
   try {
     await initDb();
-    // kein fetch-Cache, direkte DB-Abfrage
     const row = (await q(`SELECT * FROM "Settings" WHERE "id"='singleton'`)).rows[0] || null;
     return row;
   } catch {
@@ -24,7 +25,7 @@ async function getSettings() {
 export default async function RootLayout({ children }) {
   const s = await getSettings();
 
-  const title = s?.headerTitle || "MyBuZiness";
+  const title = s?.headerTitle || "MyBuZiness"; // Nutzer-Header (Menü) – darf von Einstellungen kommen
   const showLogo = !!s?.showLogo;
   const logoUrl = showLogo ? (s?.logoUrl ? s.logoUrl : "/api/settings/logo") : "";
 
@@ -53,11 +54,19 @@ export default async function RootLayout({ children }) {
           body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-family); }
         `}</style>
 
+        {/* NEU: Brand-Leiste ganz oben */}
+        <TopBar />
+
+        {/* Bestehender Navigations-Header deiner App */}
         <Header title={title} showLogo={showLogo} logoUrl={logoUrl} />
 
+        {/* Inhalt */}
         <div style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
           {children}
         </div>
+
+        {/* NEU: Footer mit Anbieterangaben */}
+        <AppFooter />
       </body>
     </html>
   );
