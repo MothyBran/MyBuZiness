@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toCents, fromCents } from "@/lib/money";
 
 export default function ProductsPage() {
@@ -10,7 +11,7 @@ export default function ProductsPage() {
   const [filterKind, setFilterKind] = useState(""); // '', 'service', 'product'
 
   const [form, setForm] = useState({
-    kind: "service",          // 'service' | 'product'
+    kind: "service",
     categoryCode: "",
     name: "",
     sku: "",
@@ -18,7 +19,7 @@ export default function ProductsPage() {
     currency: "EUR",
     description: "",
     travelEnabled: false,
-    travelRate: "",           // EUR
+    travelRate: "",
     travelUnit: "km"
   });
 
@@ -90,7 +91,7 @@ export default function ProductsPage() {
     <main>
       <h1>Produkte & Dienstleistungen</h1>
       <p style={{ marginTop: -8, color: "#666" }}>
-        Lege **Dienstleistungen** oder **Produkte** an, vergebe Kategorie-Codes (z. B. 1.1, 2.3) und optional Fahrtkosten (pro km).
+        Lege Dienstleistungen oder Produkte an, kategorisiere (1.1 etc.) und hinterlege optional Fahrtkosten pro km.
       </p>
 
       {/* Toolbar */}
@@ -106,7 +107,7 @@ export default function ProductsPage() {
         </select>
       </div>
 
-      {/* Formular */}
+      {/* Formular (Neu) */}
       <form onSubmit={createProduct} style={{ ...card, marginTop: 12, display:"grid", gap:12 }}>
         <strong>Neuen Eintrag erstellen</strong>
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(4, 1fr)" }}>
@@ -117,17 +118,14 @@ export default function ProductsPage() {
               <option value="product">Produkt</option>
             </select>
           </label>
-
           <label style={label}>
             <span>Kategorie-Code</span>
             <input value={form.categoryCode} onChange={(e)=>setForm({ ...form, categoryCode: e.target.value })} style={input} placeholder="z. B. 1.1" />
           </label>
-
           <label style={label}>
             <span>Name *</span>
             <input value={form.name} onChange={(e)=>setForm({ ...form, name: e.target.value })} style={input} required />
           </label>
-
           <label style={label}>
             <span>SKU</span>
             <input value={form.sku} onChange={(e)=>setForm({ ...form, sku: e.target.value })} style={input} />
@@ -139,7 +137,6 @@ export default function ProductsPage() {
             <span>Preis (Einheit)</span>
             <input value={form.price} onChange={(e)=>setForm({ ...form, price: e.target.value })} style={input} inputMode="decimal" placeholder="z. B. 29,90" />
           </label>
-
           <label style={label}>
             <span>Währung</span>
             <select value={form.currency} onChange={(e)=>setForm({ ...form, currency: e.target.value })} style={input}>
@@ -147,7 +144,6 @@ export default function ProductsPage() {
               <option>USD</option>
             </select>
           </label>
-
           <label style={{ ...label, alignItems:"center", display:"grid", gridTemplateColumns:"1fr auto" }}>
             <div style={{ display:"grid", gap:6 }}>
               <span>Fahrtkosten aktiv</span>
@@ -155,7 +151,6 @@ export default function ProductsPage() {
             </div>
             <input type="checkbox" checked={form.travelEnabled} onChange={(e)=>setForm({ ...form, travelEnabled: e.target.checked })} />
           </label>
-
           <label style={label}>
             <span>Fahrtkosten (pro km)</span>
             <input value={form.travelRate} onChange={(e)=>setForm({ ...form, travelRate: e.target.value })} style={input} inputMode="decimal" placeholder="z. B. 0,35" />
@@ -206,7 +201,7 @@ export default function ProductsPage() {
                       : "—"}
                   </td>
                   <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
-                    {/* Für Bearbeiten könntest du ein Modal oder eine eigene Seite ergänzen */}
+                    <Link href={`/produkte/${p.id}`} style={btnGhost}>Bearbeiten</Link>{" "}
                     <button onClick={() => del(p.id)} style={btnDanger}>Löschen</button>
                   </td>
                 </tr>
@@ -227,11 +222,11 @@ export default function ProductsPage() {
 }
 
 const label = { display:"grid", gap:6 };
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:12, padding:16 };
-const input = { padding:"10px 12px", borderRadius:10, border:"1px solid #ddd", background:"#fff", outline:"none" };
-const inputSm = { padding:"8px 10px", borderRadius:10, border:"1px solid #ddd", background:"#fff", outline:"none" };
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16 };
+const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none" };
+const inputSm = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none" };
 const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px", fontSize:13, color:"#555" };
 const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
-const btnPrimary = { padding:"10px 12px", borderRadius:10, border:"1px solid #111", background:"#111", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"8px 10px", borderRadius:8, border:"1px solid #111", background:"transparent", color:"#111", cursor:"pointer" };
-const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
+const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
