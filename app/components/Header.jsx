@@ -33,6 +33,7 @@ export default function Header() {
         <Link href="/" style={linkStyle("/")}>Start</Link>
         <Link href="/kunden" style={linkStyle("/kunden")}>Kunden</Link>
         <Link href="/produkte" style={linkStyle("/produkte")}>Produkte</Link>
+        <Link href="/belege" style={linkStyle("/belege")}>Belege</Link>
         <Link href="/rechnungen" style={linkStyle("/rechnungen")}>Rechnungen</Link>
         <Link href="/einstellungen" style={linkStyle("/einstellungen")}>Einstellungen</Link>
       </nav>
