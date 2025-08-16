@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 
+const FONT_PRESETS = [
+  { key: "system-ui, sans-serif", label: "System (Sans Serif)" },
+  { key: "ui-rounded, system-ui, sans-serif", label: "System Rounded" },
+  { key: "Georgia, serif", label: "Georgia (Serif)" },
+  { key: "Times New Roman, Times, serif", label: "Times New Roman (Serif)" },
+  { key: "Arial, Helvetica, sans-serif", label: "Arial / Helvetica" },
+  { key: "Inter, system-ui, sans-serif", label: "Inter (falls installiert)" },
+  { key: "Roboto, system-ui, sans-serif", label: "Roboto (falls installiert)" },
+  { key: "Montserrat, system-ui, sans-serif", label: "Montserrat (falls installiert)" }
+];
+
 export default function SettingsPage() {
   const [s, setS] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,12 +22,12 @@ export default function SettingsPage() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/settings");
+    const res = await fetch("/api/settings", { cache: "no-store" });
     const json = await res.json();
     const data = json.data || {};
     setS(data);
     // Logo-Preview (DB-Logo)
-    const probe = await fetch("/api/settings/logo");
+    const probe = await fetch("/api/settings/logo", { cache: "no-store" });
     setLogoPreviewUrl(probe.ok ? "/api/settings/logo" : (data.logoUrl || ""));
     setLoading(false);
   }
@@ -35,7 +46,8 @@ export default function SettingsPage() {
     setSaving(false);
     if (!json.ok) return alert(json.error || "Speichern fehlgeschlagen.");
     setS(json.data);
-    alert("Gespeichert!");
+    // Seite neu laden, damit Layout (Server-Komponente) neue Variablen setzt
+    location.reload();
   }
 
   async function uploadLogo(file) {
@@ -58,6 +70,16 @@ export default function SettingsPage() {
 
   if (loading || !s) return <main><p>Lade…</p></main>;
 
+  // Live-Styles direkt aus s (für Preview)
+  const previewStyle = {
+    borderRadius: Number(s.borderRadius ?? 12),
+    background: s.backgroundColor || "#fafafa",
+    color: s.textColor || "#111",
+    fontFamily: s.fontFamily || "system-ui, sans-serif",
+    border: "1px solid #eee",
+    padding: 16
+  };
+
   return (
     <main>
       <h1>Einstellungen</h1>
@@ -65,35 +87,19 @@ export default function SettingsPage() {
         Firmendaten, Kleinunternehmer (§19 UStG), Logo-Upload und Design.
       </p>
 
-      {/* Firmendaten */}
       <form onSubmit={save} style={card}>
         <strong>Firma</strong>
         <div style={grid2}>
-          <Field label="Firmenname">
-            <input value={s.companyName || ""} onChange={e => setS({ ...s, companyName: e.target.value })} style={input} />
-          </Field>
-          <Field label="E-Mail">
-            <input value={s.email || ""} onChange={e => setS({ ...s, email: e.target.value })} style={input} />
-          </Field>
-          <Field label="Telefon">
-            <input value={s.phone || ""} onChange={e => setS({ ...s, phone: e.target.value })} style={input} />
-          </Field>
-          <Field label="USt-ID">
-            <input value={s.vatId || ""} onChange={e => setS({ ...s, vatId: e.target.value })} style={input} />
-          </Field>
-          <Field label="IBAN">
-            <input value={s.iban || ""} onChange={e => setS({ ...s, iban: e.target.value })} style={input} />
-          </Field>
+          <Field label="Firmenname"><input value={s.companyName || ""} onChange={e => setS({ ...s, companyName: e.target.value })} style={input} /></Field>
+          <Field label="E-Mail"><input value={s.email || ""} onChange={e => setS({ ...s, email: e.target.value })} style={input} /></Field>
+          <Field label="Telefon"><input value={s.phone || ""} onChange={e => setS({ ...s, phone: e.target.value })} style={input} /></Field>
+          <Field label="USt-ID"><input value={s.vatId || ""} onChange={e => setS({ ...s, vatId: e.target.value })} style={input} /></Field>
+          <Field label="IBAN"><input value={s.iban || ""} onChange={e => setS({ ...s, iban: e.target.value })} style={input} /></Field>
           <div />
-          <Field label="Adresse Zeile 1">
-            <input value={s.addressLine1 || ""} onChange={e => setS({ ...s, addressLine1: e.target.value })} style={input} />
-          </Field>
-          <Field label="Adresse Zeile 2">
-            <input value={s.addressLine2 || ""} onChange={e => setS({ ...s, addressLine2: e.target.value })} style={input} />
-          </Field>
+          <Field label="Adresse Zeile 1"><input value={s.addressLine1 || ""} onChange={e => setS({ ...s, addressLine1: e.target.value })} style={input} /></Field>
+          <Field label="Adresse Zeile 2"><input value={s.addressLine2 || ""} onChange={e => setS({ ...s, addressLine2: e.target.value })} style={input} /></Field>
         </div>
 
-        {/* Steuer/Währung */}
         <div style={{ ...grid2, marginTop: 12 }}>
           <Field label="Standard-Währung">
             <select value={s.currencyDefault || "EUR"} onChange={e => setS({ ...s, currencyDefault: e.target.value })} style={input}>
@@ -179,7 +185,15 @@ export default function SettingsPage() {
               <input value={s.borderRadius ?? 12} onChange={e => setS({ ...s, borderRadius: parseInt(e.target.value || "12", 10) })} style={input} inputMode="numeric" />
             </Field>
             <Field label="Schriftfamilie">
-              <input value={s.fontFamily || "system-ui, sans-serif"} onChange={e => setS({ ...s, fontFamily: e.target.value })} style={input} />
+              <select
+                value={s.fontFamily || "system-ui, sans-serif"}
+                onChange={e => setS({ ...s, fontFamily: e.target.value })}
+                style={input}
+              >
+                {FONT_PRESETS.map(f => (
+                  <option key={f.key} value={f.key}>{f.label}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Header-Titel">
               <input value={s.headerTitle || "MyBuZiness"} onChange={e => setS({ ...s, headerTitle: e.target.value })} style={input} />
@@ -193,18 +207,10 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      {/* Live-Preview (klein) */}
+      {/* Live-Preview */}
       <section style={{ ...card, marginTop: 12 }}>
         <strong>Live-Vorschau</strong>
-        <div style={{
-          marginTop: 12,
-          padding: 16,
-          borderRadius: (s.borderRadius ?? 12),
-          background: s.backgroundColor || "#fafafa",
-          color: s.textColor || "#111",
-          fontFamily: s.fontFamily || "system-ui, sans-serif",
-          border: "1px solid #eee"
-        }}>
+        <div style={{ marginTop: 12, ...previewStyle }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {s.showLogo && (logoPreviewUrl || s.logoUrl) && (
               <img src={logoPreviewUrl || s.logoUrl} alt="Logo" style={{ height: 40, objectFit: "contain" }} />
@@ -212,10 +218,10 @@ export default function SettingsPage() {
             <div style={{ fontWeight: 700, color: s.primaryColor || "#111" }}>{s.headerTitle || "MyBuZiness"}</div>
           </div>
           <div style={{ marginTop: 12 }}>
-            <span style={{ padding: "8px 12px", borderRadius: (s.borderRadius ?? 12), border: `1px solid ${s.primaryColor || "#111"}`, color: s.primaryColor || "#111" }}>
+            <span style={{ padding: "8px 12px", borderRadius: Number(s.borderRadius ?? 12), border: `1px solid ${s.primaryColor || "#111"}`, color: s.primaryColor || "#111" }}>
               Beispiel-Button
             </span>{" "}
-            <span style={{ padding: "8px 12px", borderRadius: (s.borderRadius ?? 12), background: s.accentColor || "#2563eb", color: "#fff" }}>
+            <span style={{ padding: "8px 12px", borderRadius: Number(s.borderRadius ?? 12), background: s.accentColor || "#2563eb", color: "#fff" }}>
               Akzent
             </span>
           </div>
@@ -237,6 +243,6 @@ function Field({ label, children }) {
 const card = { background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16, marginTop: 16 };
 const grid2 = { display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 12 };
 const input = { padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", outline: "none" };
-const btnPrimary = { padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" };
-const btnGhost = { padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "transparent", color: "#111", cursor: "pointer" };
+const btnPrimary = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--color-primary)", background: "var(--color-primary)", color: "#fff", cursor: "pointer" };
+const btnGhost = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--color-primary)", background: "transparent", color: "var(--color-primary)", cursor: "pointer" };
 const btnDanger = { padding: "10px 12px", borderRadius: 10, border: "1px solid #c00", background: "#fff", color: "#c00", cursor: "pointer" };
