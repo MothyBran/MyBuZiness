@@ -1,4 +1,5 @@
 // app/api/settings/route.js
+export const dynamic = "force-dynamic"; // niemals cachen
 import { initDb, q } from "@/lib/db";
 
 // Alle Felder, die wir speichern (ohne die BYTEA-Felder)
@@ -7,6 +8,18 @@ const FIELDS = [
   "iban","vatId","currencyDefault","taxRateDefault","logoUrl",
   "kleinunternehmer","showLogo","primaryColor","accentColor",
   "backgroundColor","textColor","borderRadius","fontFamily","headerTitle"
+];
+
+// Whitelist für Schriftfamilien (Dropdown)
+export const FONT_PRESETS = [
+  { key: "system-ui, sans-serif", label: "System (Sans Serif)" },
+  { key: "ui-rounded, system-ui, sans-serif", label: "System Rounded" },
+  { key: "Georgia, serif", label: "Georgia (Serif)" },
+  { key: "Times New Roman, Times, serif", label: "Times New Roman (Serif)" },
+  { key: "Arial, Helvetica, sans-serif", label: "Arial / Helvetica" },
+  { key: "Inter, system-ui, sans-serif", label: "Inter (falls vorhanden)" },
+  { key: "Roboto, system-ui, sans-serif", label: "Roboto (falls vorhanden)" },
+  { key: "Montserrat, system-ui, sans-serif", label: "Montserrat (falls vorhanden)" }
 ];
 
 // Sorgt dafür, dass Tabelle + Spalten existieren (idempotent)
@@ -55,8 +68,16 @@ async function ensureSettingsShape() {
 export async function GET() {
   try {
     await ensureSettingsShape();
-    const row = (await q(`SELECT * FROM "Settings" WHERE "id"='singleton'`)).rows[0];
-    return Response.json({ ok: true, data: row || null });
+    const row = (await q(`SELECT * FROM "Settings" WHERE "id"='singleton'`)).rows[0] || null;
+    return new Response(JSON.stringify({ ok: true, data: row }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "pragma": "no-cache",
+        "expires": "0"
+      }
+    });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
@@ -71,13 +92,19 @@ export async function PUT(request) {
     const patch = {};
     for (const k of FIELDS) patch[k] = body[k] ?? null;
 
+    // Font nur erlauben, wenn sie in den Presets existiert (sonst system-ui)
+    const presetKeys = new Set(FONT_PRESETS.map(p => p.key));
+    const safeFont = presetKeys.has(String(patch.fontFamily || "")) ? patch.fontFamily : "system-ui, sans-serif";
+
+    const borderRadiusNum =
+      Number.isFinite(patch.borderRadius) ? patch.borderRadius :
+      Number.isFinite(Number(patch.borderRadius)) ? Number(patch.borderRadius) : 12;
+
     const vals = [
       patch.companyName, patch.addressLine1, patch.addressLine2, patch.email, patch.phone,
       patch.iban, patch.vatId, patch.currencyDefault, patch.taxRateDefault, patch.logoUrl,
       !!patch.kleinunternehmer, !!patch.showLogo, patch.primaryColor, patch.accentColor,
-      patch.backgroundColor, patch.textColor,
-      Number.isFinite(patch.borderRadius) ? patch.borderRadius : Number(patch.borderRadius) || 12,
-      patch.fontFamily, patch.headerTitle
+      patch.backgroundColor, patch.textColor, borderRadiusNum, safeFont, patch.headerTitle
     ];
 
     const res = await q(
@@ -92,7 +119,15 @@ export async function PUT(request) {
       vals
     );
 
-    return Response.json({ ok: true, data: res.rows[0] });
+    return new Response(JSON.stringify({ ok: true, data: res.rows[0] }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "pragma": "no-cache",
+        "expires": "0"
+      }
+    });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
