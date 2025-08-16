@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Modal from "@/app/components/Modal";
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [openNew, setOpenNew] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -16,26 +18,7 @@ export default function CustomersPage() {
     setRows(json.data || []);
     setLoading(false);
   }
-
   useEffect(() => { load(); }, []);
-
-  async function create(e){
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      name: fd.get("name"),
-      email: fd.get("email") || null,
-      note: fd.get("note") || null
-    };
-    if(!payload.name) return alert("Name ist erforderlich.");
-    const res = await fetch("/api/customers", {
-      method: "POST", headers: { "content-type":"application/json" }, body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    if(!json.ok) return alert(json.error || "Erstellen fehlgeschlagen.");
-    e.currentTarget.reset();
-    load();
-  }
 
   async function del(id){
     if(!confirm("Kunde wirklich löschen?")) return;
@@ -47,21 +30,14 @@ export default function CustomersPage() {
 
   return (
     <main>
-      <h1>Kunden</h1>
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/E-Mail)..." style={input} />
-        <button onClick={load} style={btnGhost}>Suchen</button>
-      </div>
-
-      <form onSubmit={create} style={{ ...card, marginTop:12, display:"grid", gap:12 }}>
-        <strong>Neuen Kunden anlegen</strong>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <label style={label}><span>Name *</span><input name="name" required style={input} /></label>
-          <label style={label}><span>E-Mail</span><input name="email" style={input} /></label>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <h1>Kunden</h1>
+        <div style={{ display:"flex", gap:8 }}>
+          <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/E-Mail/Telefon)..." style={input}/>
+          <button onClick={load} style={btnGhost}>Suchen</button>
+          <button onClick={()=>setOpenNew(true)} style={btnPrimary}>+ Neuer Kunde</button>
         </div>
-        <label style={label}><span>Notiz</span><textarea name="note" rows={2} style={{ ...input, resize:"vertical" }} /></label>
-        <div><button type="submit" style={btnPrimary}>Speichern</button></div>
-      </form>
+      </div>
 
       <div style={{ ...card, marginTop:12 }}>
         <div style={{ overflowX:"auto" }}>
@@ -70,6 +46,8 @@ export default function CustomersPage() {
               <tr>
                 <th style={th}>Name</th>
                 <th style={th}>E-Mail</th>
+                <th style={th}>Telefon</th>
+                <th style={th}>Adresse</th>
                 <th style={{ ...th, textAlign:"right" }}>Aktionen</th>
               </tr>
             </thead>
@@ -81,6 +59,11 @@ export default function CustomersPage() {
                     {c.note && <div style={{ color:"#666", fontSize:13 }}>{c.note}</div>}
                   </td>
                   <td style={td}>{c.email || "—"}</td>
+                  <td style={td}>{c.phone || "—"}</td>
+                  <td style={td}>
+                    {[c.addressStreet, [c.addressZip, c.addressCity].filter(Boolean).join(" "), c.addressCountry]
+                      .filter(Boolean).join(", ") || "—"}
+                  </td>
                   <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}>
                     <Link href={`/kunden/${c.id}`} style={btnGhost}>Bearbeiten</Link>{" "}
                     <button onClick={()=>del(c.id)} style={btnDanger}>Löschen</button>
@@ -88,13 +71,55 @@ export default function CustomersPage() {
                 </tr>
               ))}
               {rows.length===0 && (
-                <tr><td colSpan={3} style={{ ...td, textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Kunden."}</td></tr>
+                <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Kunden."}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal: Neuer Kunde */}
+      <NewCustomerModal open={openNew} onClose={()=>setOpenNew(false)} onSaved={()=>{ setOpenNew(false); load(); }} />
     </main>
+  );
+}
+
+function NewCustomerModal({ open, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:"", email:"", phone:"",
+    addressStreet:"", addressZip:"", addressCity:"", addressCountry:"",
+    note:""
+  });
+  async function submit(e){
+    e.preventDefault();
+    if(!form.name) return alert("Name ist erforderlich.");
+    const res = await fetch("/api/customers", {
+      method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(form)
+    });
+    const json = await res.json();
+    if(!json.ok) return alert(json.error || "Erstellen fehlgeschlagen.");
+    onSaved?.();
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Neuen Kunden anlegen">
+      <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+          <label style={label}><span>Name *</span><input value={form.name} onChange={e=>setForm({ ...form, name:e.target.value })} style={input} required /></label>
+          <label style={label}><span>E-Mail</span><input value={form.email} onChange={e=>setForm({ ...form, email:e.target.value })} style={input} /></label>
+          <label style={label}><span>Telefon</span><input value={form.phone} onChange={e=>setForm({ ...form, phone:e.target.value })} style={input} /></label>
+          <label style={label}><span>Straße</span><input value={form.addressStreet} onChange={e=>setForm({ ...form, addressStreet:e.target.value })} style={input} /></label>
+          <label style={label}><span>PLZ</span><input value={form.addressZip} onChange={e=>setForm({ ...form, addressZip:e.target.value })} style={input} /></label>
+          <label style={label}><span>Ort</span><input value={form.addressCity} onChange={e=>setForm({ ...form, addressCity:e.target.value })} style={input} /></label>
+          <label style={label}><span>Land</span><input value={form.addressCountry} onChange={e=>setForm({ ...form, addressCountry:e.target.value })} style={input} /></label>
+        </div>
+        <label style={label}><span>Notiz</span><textarea value={form.note} onChange={e=>setForm({ ...form, note:e.target.value })} rows={3} style={{ ...input, resize:"vertical" }} /></label>
+
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
+          <button type="submit" style={btnPrimary}>Speichern</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
