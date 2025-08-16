@@ -8,6 +8,7 @@ export default function RechnungenPage() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [settings, setSettings] = useState(null);
 
   const [form, setForm] = useState({
     customerId: "",
@@ -26,17 +27,27 @@ export default function RechnungenPage() {
 
   // Load base data
   useEffect(() => {
-    (async () => {
-      const [cs, ps, inv] = await Promise.all([
-        fetch("/api/customers").then(r => r.json()).catch(() => ({data: []})),
-        fetch("/api/products").then(r => r.json()).catch(() => ({data: []})),
-        fetch("/api/invoices").then(r => r.json()).catch(() => ({data: []}))
-      ]);
-      setCustomers(cs.data || []);
-      setProducts(ps.data || []);
-      setInvoices(inv.data || []);
-    })();
-  }, []);
+  (async () => {
+    const [cs, ps, inv, st] = await Promise.all([
+      fetch("/api/customers").then(r => r.json()).catch(() => ({data: []})),
+      fetch("/api/products").then(r => r.json()).catch(() => ({data: []})),
+      fetch("/api/invoices").then(r => r.json()).catch(() => ({data: []})),
+      fetch("/api/settings").then(r => r.json()).catch(() => ({data: null}))
+    ]);
+    setCustomers(cs.data || []);
+    setProducts(ps.data || []);
+    setInvoices(inv.data || []);
+    setSettings(st.data || null);
+    // Defaults aus Settings, falls leer
+    if (st.data) {
+      setForm(f => ({
+        ...f,
+        currency: st.data.currencyDefault || f.currency,
+        taxRate: st.data.taxRateDefault ?? f.taxRate,
+      }));
+    }
+  })();
+}, []);
 
   async function reloadInvoices(q = "") {
     setLoading(true);
