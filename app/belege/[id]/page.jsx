@@ -32,11 +32,12 @@ export default function ReceiptDetailPage() {
         <h1>Beleg {r.receiptNo}</h1>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={() => window.print()} style={btnPrimary}>Als PDF drucken</button>
-          <Link href="/belege" style={btnGhost}>Zurück zur Liste</Link>
+          <Link href="/belege" style={btnGhost}>Zurück</Link>
         </div>
       </div>
 
       <section id="print-area" style={card}>
+        {/* Kopf */}
         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
           <div>
             <div><strong>Beleg-Nr.:</strong> {r.receiptNo}</div>
@@ -44,60 +45,47 @@ export default function ReceiptDetailPage() {
           </div>
           <div style={{ textAlign:"right" }}>
             <div><strong>Währung:</strong> {r.currency}</div>
-            {r.vatExempt && <div style={{ color:"#666" }}>Kein USt-Ausweis gem. §19 UStG</div>}
           </div>
         </div>
 
-        <div style={{ overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead>
-              <tr>
-                <th style={th}>Position</th>
-                <th style={th}>Menge</th>
-                <th style={th}>Einzelpreis</th>
-                <th style={th}>Summe</th>
+        {/* Positionen */}
+        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead>
+            <tr>
+              <th style={th}>Position</th>
+              <th style={th}>Menge</th>
+              <th style={th}>Einzelpreis</th>
+              <th style={th}>Summe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(it => (
+              <tr key={it.id}>
+                <td style={td}><strong>{it.name}</strong></td>
+                <td style={{ ...td, textAlign:"right" }}>{it.quantity}</td>
+                <td style={{ ...td, textAlign:"right" }}>{fromCents(it.unitPriceCents, r.currency)}</td>
+                <td style={{ ...td, textAlign:"right" }}>{fromCents(it.lineTotalCents, r.currency)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {items.map(it => (
-                <tr key={it.id}>
-                  <td style={td}><strong>{it.name}</strong></td>
-                  <td style={{ ...td, textAlign:"right" }}>{it.quantity}</td>
-                  <td style={{ ...td, textAlign:"right" }}>{fromCents(it.unitPriceCents, r.currency)}</td>
-                  <td style={{ ...td, textAlign:"right" }}>{fromCents(it.lineTotalCents, r.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Summen */}
+        <div style={{ marginTop:16, textAlign:"right" }}>
+          Netto: <strong>{fromCents(r.netCents, r.currency)}</strong><br/>
+          {r.discountCents > 0 && <>Rabatt: -{fromCents(r.discountCents, r.currency)}<br/></>}
+          <span style={{ fontSize:18 }}>Gesamt: <strong>{fromCents(r.grossCents, r.currency)}</strong></span>
         </div>
 
-        <div style={{ marginTop:16, display:"grid", gap:4, justifyContent:"end" }}>
-          <div style={{ textAlign:"right" }}>Netto: <strong>{fromCents(r.netCents, r.currency)}</strong></div>
-          {!r.vatExempt && <div style={{ textAlign:"right" }}>USt: <strong>{fromCents(r.taxCents, r.currency)}</strong></div>}
-          {r.discountCents > 0 && <div style={{ textAlign:"right" }}>Rabatt: <strong>-{fromCents(r.discountCents, r.currency)}</strong></div>}
-          <div style={{ textAlign:"right", fontSize:18 }}>Gesamt: <strong>{fromCents(r.grossCents, r.currency)}</strong></div>
+        {/* Fußzeile mit Kleinunternehmer Hinweis */}
+        <div style={{ marginTop:24, fontSize:13, color:"#555" }}>
+          {r.vatExempt && (
+            <p><em>Hinweis: Kein Ausweis der Umsatzsteuer gemäß §19 UStG (Kleinunternehmerregelung).</em></p>
+          )}
+          {r.note && <p>{r.note}</p>}
         </div>
-
-        {r.note && (
-          <div style={{ marginTop:16 }}>
-            <strong>Hinweis:</strong>
-            <p>{r.note}</p>
-          </div>
-        )}
       </section>
 
       <style>{`
         @media print {
-          header, nav, .no-print { display: none !important; }
-          #print-area { border: none !important; box-shadow: none !important; padding: 0 !important; }
-        }
-      `}</style>
-    </main>
-  );
-}
-
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:12, padding:16, marginTop:12 };
-const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px", fontSize:13, color:"#555" };
-const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
-const btnPrimary = { padding:"10px 12px", borderRadius:10, border:"1px solid #111", background:"#111", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:10, border:"1px solid #111", background:"transparent", color:"#111", cursor:"pointer" };
+          header, nav, .no-print { display: none
