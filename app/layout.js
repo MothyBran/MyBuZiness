@@ -1,8 +1,9 @@
 // app/layout.js
 import Header from "./components/Header";
 import { initDb, q } from "@/lib/db";
+import "./globals.css";
 
-export const dynamic = "force-dynamic"; // stellt sicher, dass Settings bei jedem Request frisch sind
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "MyBuZiness",
@@ -24,12 +25,8 @@ export default async function RootLayout({ children }) {
 
   const title = s?.headerTitle || "MyBuZiness";
   const showLogo = !!s?.showLogo;
-  // Logo-Reihenfolge: DB-Logo-Endpunkt → explizite URL → (kein Logo)
-  const logoUrl = showLogo
-    ? (s?.logoUrl ? s.logoUrl : "/api/settings/logo")
-    : "";
+  const logoUrl = showLogo ? (s?.logoUrl ? s.logoUrl : "/api/settings/logo") : "";
 
-  // Theme-Variablen (Fallbacks)
   const theme = {
     primary: s?.primaryColor || "#111111",
     accent: s?.accentColor || "#2563eb",
@@ -41,17 +38,9 @@ export default async function RootLayout({ children }) {
 
   return (
     <html lang="de">
-      <body
-        style={{
-          margin: 0,
-          background: theme.background,
-          color: theme.text,
-          fontFamily: theme.font,
-        }}
-      >
-        {/* CSS-Variablen global setzen */}
+      <body>
         <style>{`
-          :root{
+          :root {
             --color-primary: ${theme.primary};
             --color-accent: ${theme.accent};
             --color-bg: ${theme.background};
@@ -59,15 +48,9 @@ export default async function RootLayout({ children }) {
             --radius: ${theme.radius}px;
             --font-family: ${theme.font};
           }
-          a { color: inherit; }
-          button { font-family: var(--font-family); }
         `}</style>
 
-        <Header
-          title={title}
-          showLogo={showLogo}
-          logoUrl={logoUrl}
-        />
+        <Header title={title} showLogo={showLogo} logoUrl={logoUrl} />
 
         <div style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
           {children}
