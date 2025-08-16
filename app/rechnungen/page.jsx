@@ -73,18 +73,19 @@ export default function RechnungenPage() {
   }
 
   function onProductSelect(idx, pid) {
-    const p = products.find(x => x.id === pid);
-    setForm(f => {
-      const arr = f.items.slice();
-      arr[idx] = {
-        ...arr[idx],
-        productId: pid,
-        name: p ? p.name : arr[idx].name,
-        unitPrice: p ? (p.priceCents / 100).toString().replace(".", ",") : arr[idx].unitPrice
-      };
-      return { ...f, items: arr };
-    });
-  }
+  const p = products.find(x => x.id === pid);
+  setForm(f => {
+    const arr = f.items.slice();
+    arr[idx] = {
+      ...arr[idx],
+      productId: pid,
+      name: p ? p.name : arr[idx].name,
+      unitPrice: p ? (p.priceCents / 100).toString().replace(".", ",") : arr[idx].unitPrice,
+      km: arr[idx].km || ""
+    };
+    return { ...f, items: arr };
+  });
+}
 
   const totals = useMemo(() => {
     const net = form.items.reduce((s, it) => {
@@ -106,7 +107,8 @@ export default function RechnungenPage() {
         name: (it.name || "").trim(),
         description: (it.description || "").trim(),
         quantity: Number.parseInt(it.quantity || 1),
-        unitPriceCents: toCents(it.unitPrice || 0)
+        unitPriceCents: toCents(it.unitPrice || 0),
+        km: ""
       }))
       .filter(it => it.name && it.quantity > 0);
 
