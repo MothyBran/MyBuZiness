@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,7 +16,7 @@ export default function ReceiptsPage() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch(q ? `/api/receipts?q=${encodeURIComponent(q)}` : "/api/receipts");
+    const res = await fetch(q ? `/api/receipts?q=${encodeURIComponent(q)}` : "/api/receipts", { cache: "no-store" });
     const json = await res.json().catch(() => ({ data: [] }));
     setRows(json.data || []);
     setLoading(false);
@@ -77,7 +79,7 @@ function NewReceiptModal({ open, onClose, onSaved }) {
 
   useEffect(() => {
     (async () => {
-      const js = await fetch("/api/settings").then(r=>r.json()).catch(()=>({data:null}));
+      const js = await fetch("/api/settings", { cache: "no-store" }).then(r=>r.json()).catch(()=>({data:null}));
       setSettings(js.data || {});
     })();
   }, []);
@@ -93,7 +95,7 @@ function NewReceiptModal({ open, onClose, onSaved }) {
     const payload = {
       date,
       currency,
-      vatExempt: true, // Belege standardmäßig ohne USt (Kleinunternehmer)
+      vatExempt: true, // Belege standardmäßig ohne USt
       discountCents,
       items: items.map(it => ({
         productId: it.productId || null,
