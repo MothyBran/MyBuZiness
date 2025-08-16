@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toCents, fromCents } from "@/lib/money";
+import Link from "next/link";
 
 export default function RechnungenPage() {
   const [customers, setCustomers] = useState([]);
@@ -324,23 +325,41 @@ export default function RechnungenPage() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.map(inv => (
-                  <tr key={inv.id}>
-                    <td style={td}>{inv.invoiceNo}</td>
-                    <td style={td}>{inv.customerName}</td>
-                    <td style={td}>{new Date(inv.issueDate).toLocaleDateString()}</td>
-                    <td style={td}>{fromCents(inv.grossCents, inv.currency)}</td>
-                    <td style={td}>
-                      <StatusBadge status={inv.status} />
-                    </td>
-                  </tr>
-                ))}
-                {invoices.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ ...td, textAlign: "center", color: "#999" }}>Keine Rechnungen gefunden.</td>
-                  </tr>
-                )}
-              </tbody>
+  {invoices.map(inv => (
+    <tr key={inv.id}>
+      <td style={td}>
+        <Link href={`/rechnungen/${inv.id}`}>{inv.invoiceNo}</Link>
+      </td>
+      <td style={td}>{inv.customerName}</td>
+      <td style={td}>{new Date(inv.issueDate).toLocaleDateString()}</td>
+      <td style={td}>{fromCents(inv.grossCents, inv.currency)}</td>
+      <td style={{ ...td, whiteSpace: "nowrap" }}>
+        <StatusBadge status={inv.status} />{" "}
+        <button
+          onClick={async () => {
+            await fetch(`/api/invoices/${inv.id}`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ status: inv.status === "paid" ? "open" : "paid" })
+            });
+            reloadInvoices(search);
+          }}
+          style={btnGhost}
+          title={inv.status === "paid" ? "Zurück auf offen" : "Als bezahlt markieren"}
+        >
+          {inv.status === "paid" ? "↺ Offen" : "✓ Bezahlt"}
+        </button>
+      </td>
+    </tr>
+  ))}
+  {invoices.length === 0 && (
+    <tr>
+      <td colSpan={5} style={{ ...td, textAlign: "center", color: "#999" }}>
+        Keine Rechnungen gefunden.
+      </td>
+    </tr>
+  )}
+</tbody>
             </table>
           </div>
         </div>
