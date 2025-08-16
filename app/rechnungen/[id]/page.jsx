@@ -1,41 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fromCents } from "@/lib/money";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { fromCents } from "@/lib/money";
 
 export default function InvoiceDetailPage() {
-  const params = useParams();
-  const id = params.id;
+  const { id } = useParams();
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
-    const res = await fetch(`/api/invoices/${id}`);
-    const json = await res.json();
-    setData(json.data || null);
+    const [invRes, stRes] = await Promise.all([
+      fetch(`/api/invoices/${id}`).then(r => r.json()).catch(() => ({ data: null })),
+      fetch(`/api/settings`).then(r => r.json()).catch(() => ({ data: null })),
+    ]);
+    setData(invRes.data || null);
+    setSettings(stRes.data || null);
     setLoading(false);
   }
 
-  useEffect(() => {
-  (async () => {
-    await load();
-    const st = await fetch(`/api/settings`).then(r => r.json()).catch(() => ({ data: null }));
-    setSettings(st.data || null);
-  })();
-}, [id]);
+  useEffect(() => { load(); }, [id]);
 
   if (loading) return <main><p>Lade…</p></main>;
-  if (!data) return <main><p>Rechnung nicht gefunden.</p></main>;
+  if (!data)    return <main><p>Rechnung nicht gefunden.</p></main>;
 
-  const inv = data.invoice;
+  const inv   = data.invoice;
   const items = data.items || [];
+  const s     = settings || {};
+
+  // Logo-Quelle: DB-Logo-Endpunkt bevorzugt, sonst logoUrl (falls vorhanden)
+  const logoUrl = s?.showLogo ? (s?.logoUrl ? s.logoUrl : "/api/settings/logo") : "";
+
+  // §19-Hinweis: zeige, wenn Settings §19 aktiv ODER die Rechnung keine Steuer hat
+  const showKleinunternehmerHint = !!s?.kleinunternehmer || (Number(inv.taxCents || 0) === 0);
 
   return (
     <main>
+      {/* Seitenkopf / Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <h1>Rechnung {inv.invoiceNo}</h1>
         <div style={{ display: "flex", gap: 8 }}>
@@ -44,22 +48,57 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {/* Druckbereich */}
       <section id="print-area" style={card}>
-        {/* Kopf */}
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20 }}>{settings?.companyName || "Dein Firmenname"}</h2>
-          {settings?.addressLine1 && <div>{settings.addressLine1}</div>}
-          {settings?.addressLine2 && <div>{settings.addressLine2}</div>}
-          {(settings?.email || settings?.phone) && <div>{[settings.email, settings.phone].filter(Boolean).join(" • ")}</div>}
-          {(settings?.iban || settings?.vatId) && <div>{[settings.iban && `IBAN: ${settings.iban}`, settings.vatId && `USt-ID: ${settings.vatId}`].filter(Boolean).join(" • ")}</div>}
-          {settings?.logoUrl && <img src={settings.logoUrl} alt="Logo" style={{ maxHeight: 64 }} />}
+
+        {/* Firmenkopf */}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {s?.showLogo && !!logoUrl && (
+              <img
+                src={logoUrl}
+                alt="Logo"
+                style={{ height: 54, objectFit: "contain", maxWidth: 180 }}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            )}
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20, color: "var(--color-primary)" }}>
+                {s?.companyName || "Dein Firmenname"}
+              </h2>
+              {(s?.addressLine1 || s?.addressLine2) && (
+                <div style={{ color: "#555" }}>
+                  {[s.addressLine1, s.addressLine2].filter(Boolean).join(" · ")}
+                </div>
+              )}
+              {(s?.email || s?.phone) && (
+                <div style={{ color: "#555" }}>
+                  {[s.email, s.phone].filter(Boolean).join(" · ")}
+                </div>
+              )}
+              {(s?.iban || s?.vatId) && (
+                <div style={{ color: "#555" }}>
+                  {[s.iban && `IBAN: ${s.iban}`, s.vatId && `USt-ID: ${s.vatId}`]
+                    .filter(Boolean).join(" · ")}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Rechnungskopf rechts */}
+          <div style={{ textAlign: "right" }}>
+            <div><strong>Rechnungsnr.:</strong> {inv.invoiceNo}</div>
+            <div><strong>Datum:</strong> {new Date(inv.issueDate).toLocaleDateString()}</div>
+            {inv.dueDate && <div><strong>Fällig bis:</strong> {new Date(inv.dueDate).toLocaleDateString()}</div>}
+            <div><strong>Status:</strong> {inv.status}</div>
+          </div>
         </div>
 
         {/* Kunde */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ margin: "8px 0 12px 0" }}>
           <strong>Rechnung an:</strong>
           <div>{inv.customerName}</div>
-          {inv.customerEmail && <div>{inv.customerEmail}</div>}
+          {inv.customerEmail && <div style={{ color: "#555" }}>{inv.customerEmail}</div>}
         </div>
 
         {/* Positionen */}
@@ -91,38 +130,83 @@ export default function InvoiceDetailPage() {
 
         {/* Summen */}
         <div style={{ marginTop: 16, display: "grid", gap: 4, justifyContent: "end" }}>
-          <div style={{ textAlign: "right" }}>Netto: <strong>{fromCents(inv.netCents, inv.currency)}</strong></div>
-          <div style={{ textAlign: "right" }}>Steuer ({inv.taxRate}%): <strong>{fromCents(inv.taxCents, inv.currency)}</strong></div>
-          <div style={{ textAlign: "right", fontSize: 18 }}>Brutto: <strong>{fromCents(inv.grossCents, inv.currency)}</strong></div>
+          <div style={{ textAlign: "right" }}>
+            Netto: <strong>{fromCents(inv.netCents, inv.currency)}</strong>
+          </div>
+          {Number(inv.taxCents || 0) > 0 && (
+            <div style={{ textAlign: "right" }}>
+              Steuer ({Number(inv.taxRate || 0)}%): <strong>{fromCents(inv.taxCents, inv.currency)}</strong>
+            </div>
+          )}
+          <div style={{ textAlign: "right", fontSize: 18 }}>
+            Brutto: <strong>{fromCents(inv.grossCents, inv.currency)}</strong>
+          </div>
         </div>
 
-        {/* Notiz */}
-        {inv.note && (
-          <div style={{ marginTop: 16 }}>
-            <strong>Hinweis:</strong>
-            <p>{inv.note}</p>
-          </div>
-        )}
+        {/* Fußzeile */}
+        <div style={{ marginTop: 24, fontSize: 13, color: "#555" }}>
+          {showKleinunternehmerHint && (
+            <p>
+              <em>Hinweis: Kein Ausweis der Umsatzsteuer gemäß §19 UStG (Kleinunternehmerregelung).</em>
+            </p>
+          )}
+          {inv.note && <p>{inv.note}</p>}
+        </div>
       </section>
 
-      {/* Print Styles */}
+      {/* Druck-Styles */}
       <style>{`
         @media print {
-          body { background: #fff !important; }
           header, nav, .no-print { display: none !important; }
           #print-area {
             border: none !important;
             box-shadow: none !important;
             padding: 0 !important;
           }
+          body {
+            background: #fff !important;
+            color: #000 !important;
+          }
+          a { color: #000 !important; text-decoration: none !important; }
         }
       `}</style>
     </main>
   );
 }
 
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 16 };
-const th = { textAlign: "left", borderBottom: "1px solid #eee", padding: "10px 8px", fontSize: 13, color: "#555" };
-const td = { borderBottom: "1px solid #f2f2f2", padding: "10px 8px", fontSize: 14 };
-const btnPrimary = { padding: "10px 12px", borderRadius: 10, border: "1px solid #111", background: "#111", color: "#fff", cursor: "pointer" };
-const btnGhost = { padding: "8px 10px", borderRadius: 8, border: "1px solid #111", background: "transparent", color: "#111", cursor: "pointer" };
+/* Styles (nutzen Theme-Variablen) */
+const card = {
+  background: "#fff",
+  border: "1px solid #eee",
+  borderRadius: "var(--radius)",
+  padding: 16,
+  marginTop: 12
+};
+const th = {
+  textAlign: "left",
+  borderBottom: "1px solid #eee",
+  padding: "10px 8px",
+  fontSize: 13,
+  color: "#555"
+};
+const td = {
+  borderBottom: "1px solid #f2f2f2",
+  padding: "10px 8px",
+  fontSize: 14
+};
+const btnPrimary = {
+  padding: "10px 12px",
+  borderRadius: "var(--radius)",
+  border: "1px solid var(--color-primary)",
+  background: "var(--color-primary)",
+  color: "#fff",
+  cursor: "pointer"
+};
+const btnGhost = {
+  padding: "10px 12px",
+  borderRadius: "var(--radius)",
+  border: "1px solid var(--color-primary)",
+  background: "transparent",
+  color: "var(--color-primary)",
+  cursor: "pointer"
+};
