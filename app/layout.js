@@ -13,6 +13,7 @@ export const metadata = {
 async function getSettings() {
   try {
     await initDb();
+    // kein fetch-Cache, direkte DB-Abfrage
     const row = (await q(`SELECT * FROM "Settings" WHERE "id"='singleton'`)).rows[0] || null;
     return row;
   } catch {
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="de">
       <body>
+        {/* CSS-Variablen setzen */}
         <style>{`
           :root {
             --color-primary: ${theme.primary};
@@ -48,6 +50,7 @@ export default async function RootLayout({ children }) {
             --radius: ${theme.radius}px;
             --font-family: ${theme.font};
           }
+          body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-family); }
         `}</style>
 
         <Header title={title} showLogo={showLogo} logoUrl={logoUrl} />
