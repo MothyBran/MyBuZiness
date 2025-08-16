@@ -1,15 +1,17 @@
 import { initDb, q, uuid } from "@/lib/db";
 
 function toInt(v, d=0){ const n=Number(v); return Number.isFinite(n)?Math.trunc(n):d; }
-function calcTotals(items, vatExempt, taxRate = 19) {
-  const net = items.reduce((s, it)=> s + toInt(it.unitPriceCents)*toInt(it.quantity,1), 0);
-  const tax = vatExempt ? 0 : Math.round(net * (Number(taxRate)/100));
-  const gross = net + tax;
-  return { netCents: net, taxCents: tax, grossCents: gross };
-}
 function formatReceiptNo(seq){
   const y = new Date().getFullYear();
   return `RC-${y}-${String(seq).padStart(5,"0")}`;
+}
+
+function calcTotals(items, vatExempt, taxRate = 19, discountCents = 0) {
+  const net = items.reduce((s, it)=> s + toInt(it.unitPriceCents)*toInt(it.quantity,1), 0);
+  const tax = vatExempt ? 0 : Math.round(net * (Number(taxRate)/100));
+  let gross = net + tax;
+  gross = Math.max(0, gross - Math.max(0, toInt(discountCents, 0)));
+  return { netCents: net, taxCents: tax, grossCents: gross };
 }
 
 export async function GET(request){
@@ -42,16 +44,18 @@ export async function POST(request){
     await initDb();
     const body = await request.json().catch(()=> ({}));
     const {
-      items = [],                 // [{name, quantity, unitPriceCents}]
-      vatExempt = true,           // §19 UStG: true = keine USt
-      taxRate = 19,               // wird ignoriert wenn vatExempt=true
+      items = [],                 // [{productId?, name, quantity, unitPriceCents}]
+      vatExempt = true,
+      taxRate = 19,
       currency = "EUR",
       note = "",
-      date = null                 // optional YYYY-MM-DD
+      date = null,                // optional YYYY-MM-DD
+      discountCents = 0
     } = body || {};
 
     const validItems = (Array.isArray(items)? items: [])
       .map(it => ({
+        productId: it.productId || null,
         name: String(it.name||"").trim(),
         quantity: toInt(it.quantity,1),
         unitPriceCents: toInt(it.unitPriceCents,0)
@@ -62,7 +66,7 @@ export async function POST(request){
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position erforderlich." }), { status:400 });
     }
 
-    const totals = calcTotals(validItems, !!vatExempt, Number(taxRate));
+    const totals = calcTotals(validItems, !!vatExempt, Number(taxRate), toInt(discountCents, 0));
 
     await client.query("BEGIN");
     const seq = (await client.query(`SELECT nextval('"ReceiptNumberSeq"') AS seq`)).rows[0].seq;
@@ -71,19 +75,19 @@ export async function POST(request){
 
     const ins = await client.query(
       `INSERT INTO "Receipt"
-       ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","note")
-       VALUES ($1,$2,COALESCE($3,CURRENT_DATE),$4,$5,$6,$7,$8,$9)
+       ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","note")
+       VALUES ($1,$2,COALESCE($3,CURRENT_DATE),$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
-      [id, receiptNo, date, !!vatExempt, currency, totals.netCents, totals.taxCents, totals.grossCents, note]
+      [id, receiptNo, date, !!vatExempt, currency, totals.netCents, totals.taxCents, totals.grossCents, toInt(discountCents,0), note]
     );
 
     for(const it of validItems){
       const line = it.quantity * it.unitPriceCents;
       await client.query(
         `INSERT INTO "ReceiptItem"
-         ("id","receiptId","name","quantity","unitPriceCents","lineTotalCents")
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [uuid(), id, it.name, it.quantity, it.unitPriceCents, line]
+         ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents")
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [uuid(), id, it.productId, it.name, it.quantity, it.unitPriceCents, line]
       );
     }
 
