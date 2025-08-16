@@ -10,6 +10,7 @@ export default function InvoiceDetailPage() {
   const id = params.id;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -19,7 +20,13 @@ export default function InvoiceDetailPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+  (async () => {
+    await load();
+    const st = await fetch(`/api/settings`).then(r => r.json()).catch(() => ({ data: null }));
+    setSettings(st.data || null);
+  })();
+}, [id]);
 
   if (loading) return <main><p>Lade…</p></main>;
   if (!data) return <main><p>Rechnung nicht gefunden.</p></main>;
@@ -39,19 +46,13 @@ export default function InvoiceDetailPage() {
 
       <section id="print-area" style={card}>
         {/* Kopf */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Dein Firmenname</h2>
-            <div>Adresse Zeile 1</div>
-            <div>Adresse Zeile 2</div>
-            <div>E-Mail / Telefon</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div><strong>Rechnungsnr.:</strong> {inv.invoiceNo}</div>
-            <div><strong>Datum:</strong> {new Date(inv.issueDate).toLocaleDateString()}</div>
-            {inv.dueDate && <div><strong>Fällig bis:</strong> {new Date(inv.dueDate).toLocaleDateString()}</div>}
-            <div><strong>Status:</strong> {inv.status}</div>
-          </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>{settings?.companyName || "Dein Firmenname"}</h2>
+          {settings?.addressLine1 && <div>{settings.addressLine1}</div>}
+          {settings?.addressLine2 && <div>{settings.addressLine2}</div>}
+          {(settings?.email || settings?.phone) && <div>{[settings.email, settings.phone].filter(Boolean).join(" • ")}</div>}
+          {(settings?.iban || settings?.vatId) && <div>{[settings.iban && `IBAN: ${settings.iban}`, settings.vatId && `USt-ID: ${settings.vatId}`].filter(Boolean).join(" • ")}</div>}
+          {settings?.logoUrl && <img src={settings.logoUrl} alt="Logo" style={{ maxHeight: 64 }} />}
         </div>
 
         {/* Kunde */}
