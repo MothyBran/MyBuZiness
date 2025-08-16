@@ -8,44 +8,71 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Produkte für Auto-Preis
+  const [products, setProducts] = useState([]);
+
   // Schnell-Beleg Formular
   const [vatExempt, setVatExempt] = useState(true); // §19: default aktiv
   const [currency, setCurrency] = useState("EUR");
-  const [items, setItems] = useState([{ name: "", quantity: 1, unitPrice: "" }]);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0,10)); // heute
+  const [discount, setDiscount] = useState(""); // Eingabe in EUR, wir wandeln zu Cent
+  const [items, setItems] = useState([{ productId: "", name: "", quantity: 1, unitPrice: "" }]);
   const [note, setNote] = useState("");
+  // Anzeige: Beleg-Nr. (wird automatisch vergeben)
+  const receiptNoHint = "wird automatisch vergeben";
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/dashboard");
-    const json = await res.json();
-    setStats(json.data || null);
+    const [dash, prods] = await Promise.all([
+      fetch("/api/dashboard").then(r => r.json()).catch(() => ({data:null})),
+      fetch("/api/products").then(r => r.json()).catch(() => ({data:[]}))
+    ]);
+    setStats(dash.data || null);
+    setProducts(prods.data || []);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
 
   function addRow(){
-    setItems((arr)=> [...arr, { name:"", quantity:1, unitPrice:"" }]);
+    setItems((arr)=> [...arr, { productId:"", name:"", quantity:1, unitPrice:"" }]);
   }
   function removeRow(i){
-    setItems(arr => arr.length>1 ? arr.filter((_,idx)=> idx!==i) : [{ name:"", quantity:1, unitPrice:"" }]);
+    setItems(arr => arr.length>1 ? arr.filter((_,idx)=> idx!==i) : [{ productId:"", name:"", quantity:1, unitPrice:"" }]);
+  }
+  function onProductChange(idx, pid){
+    const p = products.find(x => x.id === pid);
+    setItems(arr => arr.map((x,i)=> {
+      if(i!==idx) return x;
+      return {
+        ...x,
+        productId: pid,
+        name: p ? p.name : x.name,                                   // Bezeichnung autofüllen
+        unitPrice: p ? (p.priceCents/100).toString().replace(".", ",") : x.unitPrice // Preis autofüllen
+      };
+    }));
   }
 
   const totals = useMemo(() => {
     const net = items.reduce((s,it)=> s + toCents(it.unitPrice||0) * Number.parseInt(it.quantity||1), 0);
-    const tax = vatExempt ? 0 : Math.round(net * 0.19); // 19% default; bei Bedarf später Settings ziehen
-    const gross = net + tax;
-    return { net, tax, gross };
-  }, [items, vatExempt]);
+    const tax = vatExempt ? 0 : Math.round(net * 0.19);
+    const grossBefore = net + tax;
+    const discountCents = toCents(discount || 0);
+    const gross = Math.max(0, grossBefore - discountCents);
+    return { net, tax, discountCents, gross };
+  }, [items, vatExempt, discount]);
 
   async function submitReceipt(e){
     e.preventDefault();
     const payload = {
       vatExempt,
       currency,
+      date: date || null,
       note,
+      discountCents: totals.discountCents,
       items: items
         .map(it=>({
+          productId: it.productId || null,
           name: (it.name||"").trim(),
           quantity: Number.parseInt(it.quantity||1),
           unitPriceCents: toCents(it.unitPrice||0)
@@ -62,8 +89,10 @@ export default function DashboardPage() {
     const json = await res.json();
     if(!json.ok) return alert(json.error || "Beleg anlegen fehlgeschlagen.");
     // Reset
-    setItems([{ name:"", quantity:1, unitPrice:"" }]);
+    setItems([{ productId:"", name:"", quantity:1, unitPrice:"" }]);
     setNote("");
+    setDiscount("");
+    setDate(new Date().toISOString().slice(0,10));
     // Stats neu laden
     load();
     alert(`Beleg erstellt: ${json.data.receiptNo}`);
@@ -95,13 +124,22 @@ export default function DashboardPage() {
         </div>
 
         <form onSubmit={submitReceipt} style={{ display:"grid", gap:12, marginTop:12 }}>
-          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-            <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <input type="checkbox" checked={vatExempt} onChange={e=>setVatExempt(e.target.checked)} />
-              Kleinunternehmer (§19 UStG) – keine USt ausweisen
+          {/* Kopfzeile: Beleg-Nr. (auto), Datum, §19, Währung */}
+          <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+            <label style={label}>
+              <span>Beleg-Nr.</span>
+              <input value={receiptNoHint} readOnly style={{ ...input, color:"#666" }} />
             </label>
-            <label>
-              <span style={{ display:"block", fontWeight:600, marginBottom:6 }}>Währung</span>
+            <label style={label}>
+              <span>Datum</span>
+              <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={input} />
+            </label>
+            <label style={{ display:"flex", alignItems:"end", gap:8 }}>
+              <input type="checkbox" checked={vatExempt} onChange={e=>setVatExempt(e.target.checked)} />
+              <span>Kleinunternehmer (§19 UStG)</span>
+            </label>
+            <label style={label}>
+              <span>Währung</span>
               <select value={currency} onChange={e=>setCurrency(e.target.value)} style={input}>
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
@@ -109,58 +147,95 @@ export default function DashboardPage() {
             </label>
           </div>
 
-          {items.map((it, idx)=>(
-            <div key={idx} style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr auto" }}>
-              <input
-                placeholder="Bezeichnung (z. B. Haarschnitt)"
-                value={it.name}
-                onChange={e=>{
-                  const v = e.target.value;
-                  setItems(arr => arr.map((x,i)=> i===idx? { ...x, name:v } : x));
-                }}
-                style={input}
-              />
-              <input
-                placeholder="Menge"
-                inputMode="numeric"
-                value={it.quantity}
-                onChange={e=>{
-                  const v = e.target.value;
-                  setItems(arr => arr.map((x,i)=> i===idx? { ...x, quantity:v } : x));
-                }}
-                style={input}
-              />
-              <input
-                placeholder="Einzelpreis (z. B. 29,90)"
-                inputMode="decimal"
-                value={it.unitPrice}
-                onChange={e=>{
-                  const v = e.target.value;
-                  setItems(arr => arr.map((x,i)=> i===idx? { ...x, unitPrice:v } : x));
-                }}
-                style={input}
-              />
-              <button type="button" onClick={()=>removeRow(idx)} style={btnDanger}>Entfernen</button>
+          {/* Positionen */}
+          <div style={{ display:"grid", gap:8 }}>
+            <strong>Positionen</strong>
+            {items.map((it, idx)=>(
+              <div key={idx} style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr 1fr auto" }}>
+                {/* Produktauswahl */}
+                <select
+                  value={it.productId}
+                  onChange={e=> onProductChange(idx, e.target.value)}
+                  style={input}
+                >
+                  <option value="">— Produkt wählen (optional) —</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+
+                {/* Freitext Bezeichnung */}
+                <input
+                  placeholder="Dienstleistung/Produkt (Freitext)"
+                  value={it.name}
+                  onChange={e=>{
+                    const v = e.target.value;
+                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, name:v } : x));
+                  }}
+                  style={input}
+                />
+
+                {/* Anzahl */}
+                <input
+                  placeholder="Anzahl"
+                  inputMode="numeric"
+                  value={it.quantity}
+                  onChange={e=>{
+                    const v = e.target.value;
+                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, quantity:v } : x));
+                  }}
+                  style={input}
+                />
+
+                {/* Einzelpreis */}
+                <input
+                  placeholder="Preis (z. B. 29,90)"
+                  inputMode="decimal"
+                  value={it.unitPrice}
+                  onChange={e=>{
+                    const v = e.target.value;
+                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, unitPrice:v } : x));
+                  }}
+                  style={input}
+                />
+
+                <button type="button" onClick={()=>removeRow(idx)} style={btnDanger}>Entfernen</button>
+              </div>
+            ))}
+            <div>
+              <button type="button" onClick={addRow} style={btnGhost}>+ Position hinzufügen</button>
             </div>
-          ))}
-          <div>
-            <button type="button" onClick={addRow} style={btnGhost}>+ Position hinzufügen</button>
           </div>
 
+          {/* Rabatt + Notiz */}
+          <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 3fr" }}>
+            <label style={label}>
+              <span>Rabatt (absolut)</span>
+              <input
+                placeholder="z. B. 5,00"
+                inputMode="decimal"
+                value={discount}
+                onChange={e=>setDiscount(e.target.value)}
+                style={input}
+              />
+            </label>
+            <label style={label}>
+              <span>Notiz (optional)</span>
+              <textarea
+                value={note}
+                onChange={e=>setNote(e.target.value)}
+                rows={2}
+                style={{ ...input, resize:"vertical" }}
+              />
+            </label>
+          </div>
+
+          {/* Summen */}
           <div style={{ display:"grid", gap:4, justifyContent:"end" }}>
             <div>Netto: <strong>{fromCents(totals.net, currency)}</strong></div>
             {!vatExempt && <div>USt (19%): <strong>{fromCents(totals.tax, currency)}</strong></div>}
-            <div style={{ fontSize:18 }}>Brutto: <strong>{fromCents(totals.gross, currency)}</strong></div>
-          </div>
-
-          <div>
-            <textarea
-              placeholder="Notiz (optional)…"
-              value={note}
-              onChange={e=>setNote(e.target.value)}
-              rows={2}
-              style={{ ...input, resize:"vertical" }}
-            />
+            {totals.discountCents>0 && <div>Rabatt: <strong>-{fromCents(totals.discountCents, currency)}</strong></div>}
+            <div style={{ fontSize:18 }}>Gesamtbetrag: <strong>{fromCents(totals.gross, currency)}</strong></div>
           </div>
 
           <div style={{ display:"flex", gap:8 }}>
@@ -189,7 +264,7 @@ export default function DashboardPage() {
                   <td style={td}>{r.receiptNo}</td>
                   <td style={td}>{new Date(r.date).toLocaleDateString()}</td>
                   <td style={td}>{fromCents(r.grossCents, r.currency)}</td>
-                  <td style={td}>{/* Platz für spätere Aktionen */}</td>
+                  <td style={td}></td>
                 </tr>
               ))}
               {(!stats || (stats.recentReceipts||[]).length===0) && (
@@ -212,6 +287,7 @@ function KPI({ title, value }) {
   );
 }
 
+const label = { display:"grid", gap:6 };
 const kpiGrid = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginTop:12 };
 const kpiCard = { background:"#fff", border:"1px solid #eee", borderRadius:12, padding:16 };
 const card = { background:"#fff", border:"1px solid #eee", borderRadius:12, padding:16 };
