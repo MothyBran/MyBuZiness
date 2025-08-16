@@ -1,11 +1,8 @@
-export const dynamic = "force-dynamic";
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/app/components/Modal";
-import LineItemsEditor from "@/app/components/LineItemsEditor";
 import { toCents, fromCents } from "@/lib/money";
 
 export default function InvoicesPage() {
@@ -74,12 +71,16 @@ export default function InvoicesPage() {
 function NewInvoiceModal({ open, onClose, onSaved }) {
   const [settings, setSettings] = useState(null);
   const [customers, setCustomers] = useState([]);
+
   const [customerId, setCustomerId] = useState("");
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0,10));
   const [dueDate, setDueDate] = useState("");
   const [taxRate, setTaxRate] = useState(19);
   const [vatExempt, setVatExempt] = useState(false);
-  const [items, setItems] = useState([]);
+
+  const [items, setItems] = useState([
+    { id: crypto.randomUUID(), name:"", quantity:1, unitPrice:"" }
+  ]);
 
   useEffect(() => {
     (async () => {
@@ -98,15 +99,20 @@ function NewInvoiceModal({ open, onClose, onSaved }) {
   const tax = vatExempt ? 0 : Math.round(itemsTotal * (Number(taxRate || 0) / 100));
   const gross = itemsTotal + tax;
 
+  function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
+  function addRow(){ setItems([...items, { id: crypto.randomUUID(), name:"", quantity:1, unitPrice:"" }]); }
+  function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+
   async function submit(e){
     e.preventDefault();
     if(!customerId) return alert("Bitte einen Kunden wählen.");
     if(items.length === 0) return alert("Bitte mindestens eine Position hinzufügen.");
+    if(items.some(r => !r.name?.trim())) return alert("Jede Position braucht einen Namen.");
     const payload = {
       customerId, issueDate, dueDate: dueDate || null,
       currency, taxRate: vatExempt ? 0 : Number(taxRate || 0),
       items: items.map(it => ({
-        productId: it.productId || null,
+        productId: null,
         name: it.name,
         description: null,
         quantity: Number(it.quantity||0),
@@ -120,7 +126,7 @@ function NewInvoiceModal({ open, onClose, onSaved }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Neue Rechnung erstellen" maxWidth={980}>
+    <Modal open={open} onClose={onClose} title="Neue Rechnung erstellen" maxWidth={860}>
       <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
           <label style={label}><span>Kunde *</span>
@@ -140,7 +146,36 @@ function NewInvoiceModal({ open, onClose, onSaved }) {
           </label>
         </div>
 
-        <LineItemsEditor currency={currency} value={items} onChange={setItems} />
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Bezeichnung</th>
+                <th style={th}>Menge</th>
+                <th style={th}>Einzelpreis</th>
+                <th style={th}>Summe</th>
+                <th style={{ ...th, textAlign:"right" }}>Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(r => {
+                const qty = Number(r.quantity||0);
+                const up = toCents(r.unitPrice || 0);
+                const line = qty*up;
+                return (
+                  <tr key={r.id}>
+                    <td style={td}><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                    <td style={td}><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
+                    <td style={td}><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
+                    <td style={td}>{fromCents(line, currency)}</td>
+                    <td style={{ ...td, textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
+                  </tr>
+                );
+              })}
+              {items.length===0 && <tr><td colSpan={5} style={{ ...td, textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+            </tbody>
+          </table>
+        </div>
 
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <label style={{ ...label, alignItems:"center", gridTemplateColumns:"auto 1fr", display:"grid" }}>
@@ -153,7 +188,7 @@ function NewInvoiceModal({ open, onClose, onSaved }) {
         </div>
 
         <div style={{ textAlign:"right", fontWeight:700 }}>
-          Netto: {fromCents(itemsTotal, currency)} &nbsp;·&nbsp; Steuer: {fromCents(tax, currency)} &nbsp;·&nbsp; Brutto: {fromCents(gross, currency)}
+          Netto: {fromCents(itemsTotal, currency)} &nbsp;·&nbsp; Steuer: {fromCents(vatExempt?0:Math.round(itemsTotal*(Number(taxRate||0)/100)), currency)} &nbsp;·&nbsp; Brutto: {fromCents(itemsTotal+(vatExempt?0:Math.round(itemsTotal*(Number(taxRate||0)/100))), currency)}
         </div>
 
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
@@ -170,4 +205,5 @@ const th = { textAlign:"left", borderBottom:"1px solid #eee", padding:"10px 8px"
 const td = { borderBottom:"1px solid #f2f2f2", padding:"10px 8px", fontSize:14 };
 const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none" };
 const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnGhost = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"transparent", color:"var(--color-primary)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
