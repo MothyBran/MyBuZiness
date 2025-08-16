@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const [currency, setCurrency] = useState("EUR");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0,10)); // heute
   const [discount, setDiscount] = useState(""); // Eingabe in EUR, wir wandeln zu Cent
-  const [items, setItems] = useState([{ productId: "", name: "", quantity: 1, unitPrice: "" }]);
+  const [items, setItems] = useState([{ productId: "", name: "", quantity: 1, unitPrice: "", km: "" }]);
   const [note, setNote] = useState("");
   // Anzeige: Beleg-Nr. (wird automatisch vergeben)
   const receiptNoHint = "wird automatisch vergeben";
@@ -45,22 +45,38 @@ export default function DashboardPage() {
     setItems(arr => arr.map((x,i)=> {
       if(i!==idx) return x;
       return {
-        ...x,
-        productId: pid,
-        name: p ? p.name : x.name,                                   // Bezeichnung autofüllen
-        unitPrice: p ? (p.priceCents/100).toString().replace(".", ",") : x.unitPrice // Preis autofüllen
+      ...x,
+      productId: pid,
+      name: p ? p.name : x.name,
+      unitPrice: p ? (p.priceCents/100).toString().replace(".", ",") : x.unitPrice,
+      // km behalten – erst beim Rendern zeigen wir das Feld, wenn travelEnabled
+      km: x.km || ""
       };
     }));
   }
 
   const totals = useMemo(() => {
-    const net = items.reduce((s,it)=> s + toCents(it.unitPrice||0) * Number.parseInt(it.quantity||1), 0);
-    const tax = vatExempt ? 0 : Math.round(net * 0.19);
-    const grossBefore = net + tax;
-    const discountCents = toCents(discount || 0);
-    const gross = Math.max(0, grossBefore - discountCents);
-    return { net, tax, discountCents, gross };
-  }, [items, vatExempt, discount]);
+  const netBase = items.reduce((s,it)=> s + toCents(it.unitPrice||0) * Number.parseInt(it.quantity||1), 0);
+
+  // zusätzliche Fahrtkosten aus km * rate
+  const travelCents = items.reduce((s, it) => {
+    if (!it.productId) return s;
+    const p = products.find(x => x.id === it.productId);
+    if (!p || !p.travelEnabled) return s;
+    const km = parseFloat((it.km || "0").toString().replace(",", "."));
+    if (!(km > 0)) return s;
+    const rate = p.travelRateCents || 0;
+    return s + Math.round(km * rate);
+  }, 0);
+
+  const netWithTravel = netBase + travelCents;
+  const tax = vatExempt ? 0 : Math.round(netWithTravel * 0.19);
+  const grossBefore = netWithTravel + tax;
+  const discountCents = toCents(discount || 0);
+  const gross = Math.max(0, grossBefore - discountCents);
+  return { net: netWithTravel, tax, discountCents, travelCents, gross };
+}, [items, vatExempt, discount, products]);
+
 
   async function submitReceipt(e){
     e.preventDefault();
@@ -151,56 +167,75 @@ export default function DashboardPage() {
           <div style={{ display:"grid", gap:8 }}>
             <strong>Positionen</strong>
             {items.map((it, idx)=>(
-              <div key={idx} style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr 1fr auto" }}>
-                {/* Produktauswahl */}
-                <select
-                  value={it.productId}
-                  onChange={e=> onProductChange(idx, e.target.value)}
-                  style={input}
-                >
-                  <option value="">— Produkt wählen (optional) —</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+              <div key={idx} style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr auto" }}>
+          
+          {/* Produktauswahl */}
+          <select
+            value={it.productId}
+            onChange={e=> onProductChange(idx, e.target.value)}
+            style={input}
+          >
+            <option value="">— Produkt wählen (optional) —</option>
+            {products.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        
+          {/* Freitext */}
+          <input
+            placeholder="Dienstleistung/Produkt (Freitext)"
+            value={it.name}
+            onChange={e=>{
+              const v = e.target.value;
+              setItems(arr => arr.map((x,i)=> i===idx? { ...x, name:v } : x));
+            }}
+            style={input}
+          />
+        
+          {/* Anzahl */}
+          <input
+            placeholder="Anzahl"
+            inputMode="numeric"
+            value={it.quantity}
+            onChange={e=>{
+              const v = e.target.value;
+              setItems(arr => arr.map((x,i)=> i===idx? { ...x, quantity:v } : x));
+            }}
+            style={input}
+          />
+        
+          {/* Einzelpreis */}
+          <input
+            placeholder="Preis (z. B. 29,90)"
+            inputMode="decimal"
+            value={it.unitPrice}
+            onChange={e=>{
+              const v = e.target.value;
+              setItems(arr => arr.map((x,i)=> i===idx? { ...x, unitPrice:v } : x));
+            }}
+            style={input}
+          />
+        
+          {/* Kilometer – nur anzeigen, wenn Produkt Fahrtkosten hat */}
+          <input
+            placeholder="km"
+            inputMode="decimal"
+            value={it.km}
+            onChange={e=>{
+              const v = e.target.value;
+              setItems(arr => arr.map((x,i)=> i===idx? { ...x, km:v } : x));
+            }}
+            style={{
+              ...input,
+              background: (it.productId && products.find(p=>p.id===it.productId)?.travelEnabled) ? "#fff" : "#f5f5f5"
+            }}
+            disabled={!(it.productId && products.find(p=>p.id===it.productId)?.travelEnabled)}
+            title="Kilometerangabe (nur, wenn Produkt Fahrtkosten aktiviert hat)"
+          />
+        
+          <button type="button" onClick={()=>removeRow(idx)} style={btnDanger}>Entfernen</button>
+        </div>
 
-                {/* Freitext Bezeichnung */}
-                <input
-                  placeholder="Dienstleistung/Produkt (Freitext)"
-                  value={it.name}
-                  onChange={e=>{
-                    const v = e.target.value;
-                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, name:v } : x));
-                  }}
-                  style={input}
-                />
-
-                {/* Anzahl */}
-                <input
-                  placeholder="Anzahl"
-                  inputMode="numeric"
-                  value={it.quantity}
-                  onChange={e=>{
-                    const v = e.target.value;
-                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, quantity:v } : x));
-                  }}
-                  style={input}
-                />
-
-                {/* Einzelpreis */}
-                <input
-                  placeholder="Preis (z. B. 29,90)"
-                  inputMode="decimal"
-                  value={it.unitPrice}
-                  onChange={e=>{
-                    const v = e.target.value;
-                    setItems(arr => arr.map((x,i)=> i===idx? { ...x, unitPrice:v } : x));
-                  }}
-                  style={input}
-                />
-
-                <button type="button" onClick={()=>removeRow(idx)} style={btnDanger}>Entfernen</button>
-              </div>
             ))}
             <div>
               <button type="button" onClick={addRow} style={btnGhost}>+ Position hinzufügen</button>
