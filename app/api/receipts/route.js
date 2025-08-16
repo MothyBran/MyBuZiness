@@ -1,102 +1,70 @@
+// app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
-function toInt(v, d=0){ const n=Number(v); return Number.isFinite(n)?Math.trunc(n):d; }
-function formatReceiptNo(seq){
-  const y = new Date().getFullYear();
-  return `RC-${y}-${String(seq).padStart(5,"0")}`;
-}
-
-function calcTotals(items, vatExempt, taxRate = 19, discountCents = 0) {
-  const net = items.reduce((s, it)=> s + toInt(it.unitPriceCents)*toInt(it.quantity,1), 0);
-  const tax = vatExempt ? 0 : Math.round(net * (Number(taxRate)/100));
-  let gross = net + tax;
-  gross = Math.max(0, gross - Math.max(0, toInt(discountCents, 0)));
-  return { netCents: net, taxCents: tax, grossCents: gross };
-}
-
-export async function GET(request){
-  try{
+export async function GET(request) {
+  try {
     await initDb();
     const { searchParams } = new URL(request.url);
-    const qStr = (searchParams.get("q")||"").trim();
+    const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
     let rows;
-    if(qStr){
+    if (qs) {
       rows = (await q(
         `SELECT * FROM "Receipt"
-         WHERE "receiptNo" ILIKE $1
-         ORDER BY "createdAt" DESC LIMIT 50`, [`%${qStr}%`]
+         WHERE lower("receiptNo") LIKE $1 OR lower(COALESCE("note", '')) LIKE $1
+         ORDER BY "date" DESC, "createdAt" DESC`,
+        [`%${qs}%`]
       )).rows;
     } else {
-      rows = (await q(
-        `SELECT * FROM "Receipt" ORDER BY "createdAt" DESC LIMIT 50`
-      )).rows;
+      rows = (await q(`SELECT * FROM "Receipt" ORDER BY "date" DESC, "createdAt" DESC`)).rows;
     }
-    return Response.json({ ok:true, data:rows });
-  }catch(e){
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+    return Response.json({ ok: true, data: rows });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
-export async function POST(request){
-  const client = await (await import("@/lib/db")).pool.connect();
-  try{
+export async function POST(request) {
+  try {
     await initDb();
-    const body = await request.json().catch(()=> ({}));
-    const {
-      items = [],                 // [{productId?, name, quantity, unitPriceCents}]
-      vatExempt = true,
-      taxRate = 19,
-      currency = "EUR",
-      note = "",
-      date = null,                // optional YYYY-MM-DD
-      discountCents = 0
-    } = body || {};
+    const body = await request.json().catch(() => ({}));
+    const { date, vatExempt = true, currency = "EUR", discountCents = 0 } = body;
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (items.length === 0) return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
 
-    const validItems = (Array.isArray(items)? items: [])
-      .map(it => ({
-        productId: it.productId || null,
-        name: String(it.name||"").trim(),
-        quantity: toInt(it.quantity,1),
-        unitPriceCents: toInt(it.unitPriceCents,0)
-      }))
-      .filter(it => it.name && it.quantity>0);
-
-    if(validItems.length===0){
-      return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position erforderlich." }), { status:400 });
-    }
-
-    const totals = calcTotals(validItems, !!vatExempt, Number(taxRate), toInt(discountCents, 0));
-
-    await client.query("BEGIN");
-    const seq = (await client.query(`SELECT nextval('"ReceiptNumberSeq"') AS seq`)).rows[0].seq;
-    const receiptNo = formatReceiptNo(seq);
     const id = uuid();
+    const seq = (await q(`SELECT nextval('\"ReceiptNumberSeq\"') AS n`)).rows[0].n;
+    const receiptNo = String(seq);
 
-    const ins = await client.query(
-      `INSERT INTO "Receipt"
-       ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","note")
-       VALUES ($1,$2,COALESCE($3,CURRENT_DATE),$4,$5,$6,$7,$8,$9,$10)
-       RETURNING *`,
-      [id, receiptNo, date, !!vatExempt, currency, totals.netCents, totals.taxCents, totals.grossCents, toInt(discountCents,0), note]
+    const netCents = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unitPriceCents || 0), 0);
+    const netAfterDiscount = Math.max(0, netCents - Number(discountCents || 0));
+    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19); // Falls du mal Belege mit USt willst
+    const grossCents = netAfterDiscount + taxCents;
+
+    await q(
+      `INSERT INTO "Receipt" ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents")
+       VALUES ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7,$8,$9)`,
+      [id, receiptNo, date || null, !!vatExempt, currency, netAfterDiscount, taxCents, grossCents, Number(discountCents || 0)]
     );
 
-    for(const it of validItems){
-      const line = it.quantity * it.unitPriceCents;
-      await client.query(
-        `INSERT INTO "ReceiptItem"
-         ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents")
+    for (const it of items) {
+      await q(
+        `INSERT INTO "ReceiptItem" ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents")
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [uuid(), id, it.productId, it.name, it.quantity, it.unitPriceCents, line]
+        [
+          uuid(),
+          id,
+          it.productId || null,
+          it.name,
+          Number(it.quantity || 0),
+          Number(it.unitPriceCents || 0),
+          Number(it.quantity || 0) * Number(it.unitPriceCents || 0)
+        ]
       );
     }
 
-    await client.query("COMMIT");
-    return Response.json({ ok:true, data:ins.rows[0] }, { status:201 });
-  }catch(e){
-    await client.query("ROLLBACK");
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
-  }finally{
-    client.release();
+    return Response.json({ ok: true, data: { id, receiptNo } }, { status: 201 });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
