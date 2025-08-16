@@ -1,4 +1,3 @@
-// app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
 export async function GET(request) {
