@@ -6,11 +6,17 @@ import { usePathname } from "next/navigation";
 
 export default function ModuleLauncher({ open, onClose, id }) {
   const pathname = usePathname();
-  useEffect(() => { if (open) onClose?.(); }, [pathname]); // schließt bei Navigation
+
+  useEffect(() => { if (open) onClose?.(); /* schließt bei Navigation */ }, [pathname]); // eslint-disable-line
+
   if (!open) return null;
 
   return (
-    <div id={id} className="surface" style={{ marginTop: 12, padding: 12, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)" }}>
+    <div
+      id={id}
+      className="surface"
+      style={{ marginTop: 12, padding: 12, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)" }}
+    >
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <ModuleLink href="/">Dashboard</ModuleLink>
         <ModuleLink href="/kunden">Kunden</ModuleLink>
