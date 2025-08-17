@@ -6,60 +6,37 @@ export async function GET(_req, { params }) {
     await initDb();
     const { id } = params;
 
-    const inv = (await q(
-      `SELECT i.*, c."name" as "customerName", c."email" as "customerEmail"
+    const head = (await q(
+      `SELECT i.*, c."name" AS "customerName",
+              c."email" AS "customerEmail",
+              c."phone" AS "customerPhone"
        FROM "Invoice" i
        JOIN "Customer" c ON c."id" = i."customerId"
-       WHERE i."id"=$1`, [id]
+       WHERE i."id"=$1`,
+      [id]
     )).rows[0];
 
-    if (!inv) return new Response(JSON.stringify({ ok: false, error: "Nicht gefunden." }), { status: 404 });
+    if (!head) return new Response(JSON.stringify({ ok:false, error:"Not found" }), { status:404 });
 
     const items = (await q(
-      `SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "id"`, [id]
+      `SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "createdAt" NULLS LAST, "id"`,
+      [id]
     )).rows;
 
-    return Response.json({ ok: true, data: { invoice: inv, items } });
+    return Response.json({ ok:true, data: { ...head, items } });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
   }
 }
 
-export async function PUT(request, { params }) {
-  try {
-    await initDb();
-    const { id } = params;
-    const body = await request.json().catch(() => ({}));
-    const status = (body.status || "").trim(); // open | paid | canceled
-    if (!["open","paid","canceled"].includes(status)) {
-      return new Response(JSON.stringify({ ok: false, error: "Ungültiger Status." }), { status: 400 });
-    }
-
-    const res = await q(
-      `UPDATE "Invoice"
-       SET "status"=$1, "paidAt"=CASE WHEN $1='paid' THEN CURRENT_TIMESTAMP ELSE NULL END,
-           "updatedAt"=CURRENT_TIMESTAMP
-       WHERE "id"=$2
-       RETURNING *`,
-      [status, id]
-    );
-
-    if (res.rowCount === 0) return new Response(JSON.stringify({ ok: false, error: "Nicht gefunden." }), { status: 404 });
-
-    return Response.json({ ok: true, data: res.rows[0] });
-  } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
-  }
-}
-
-export async function DELETE(_request, { params }) {
+export async function DELETE(_req, { params }) {
   try {
     await initDb();
     const { id } = params;
     const res = await q(`DELETE FROM "Invoice" WHERE "id"=$1`, [id]);
-    if (res.rowCount === 0) return new Response(JSON.stringify({ ok: false, error: "Nicht gefunden." }), { status: 404 });
-    return Response.json({ ok: true });
+    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Not found" }), { status:404 });
+    return Response.json({ ok:true });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
   }
 }
