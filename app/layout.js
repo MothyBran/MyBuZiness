@@ -1,6 +1,5 @@
 import "./globals.css";
-
-import HeaderTop from "@/app/components/HeaderTop";
+import HeaderTop from "./components/HeaderTop";
 
 export const metadata = {
   title: "BuZiness",
@@ -10,16 +9,16 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
-      <body>
+      <body style={{ overflowX: "hidden", width: "100%", maxWidth: "100%" }}>
         {/* Neuer Header mit Logo, Claim, Auth-Buttons & Modul-Panel */}
         <HeaderTop />
 
-        {/* Hauptinhalt */}
+        {/* Hauptinhalt (kein horizontales Scrollen) */}
         <main style={{ flex: 1, width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
           {children}
         </main>
 
-        {/* Footer mit Firmendaten */}
+        {/* Footer */}
         <footer
           className="container"
           style={{
