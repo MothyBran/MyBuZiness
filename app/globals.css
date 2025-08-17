@@ -219,3 +219,23 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 
 /* Tabellen in Cards sollen nicht überlaufen */
 .table-wrap { overflow-x: auto; }
+
+/* ==== Tabellen-Header nicht zwischen Buchstaben umbrechen ==== */
+.table th {
+  white-space: nowrap;      /* eine Zeile erzwingen */
+  word-break: normal;       /* nicht mitten im Wort trennen */
+  overflow-wrap: normal;    /* nur an normalen Stellen umbrechen */
+  text-overflow: ellipsis;  /* falls zu schmal -> … */
+  overflow: hidden;
+}
+
+/* Inhalt darf weiter flexibel umbrechen */
+.table td {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* optional: auf sehr kleinen Screens Header etwas kleiner */
+@media (max-width: 420px) {
+  .table th { font-size: 12px; }
+}
