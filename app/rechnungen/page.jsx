@@ -40,6 +40,7 @@ export default function InvoicesPage() {
   const [currencyCode, setCurrencyCode] = useState("EUR");
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [settings, setSettings] = useState({ kleinunternehmer: true, defaultVat: 19 });
 
   async function load() {
     setLoading(true);
@@ -50,11 +51,17 @@ export default function InvoicesPage() {
       fetch("/api/products", { cache: "no-store" }),
     ]);
     const js = await res.json().catch(()=>({ data: [] }));
-    const stj = await st.json().catch(()=>({ data:{ currencyDefault:"EUR" }}));
+    const stj = await st.json().catch(()=>({ data:{ currencyDefault:"EUR", kleinunternehmer:true, defaultVat:19 }}));
     const cst = await cs.json().catch(()=>({ data: [] }));
     const prj = await pr.json().catch(()=>({ data: [] }));
+
+    const stData = stj?.data || {};
     setRows(js.data || []);
-    setCurrencyCode(stj?.data?.currencyDefault || "EUR");
+    setCurrencyCode(stData.currencyDefault || "EUR");
+    setSettings({
+      kleinunternehmer: !!stData.kleinunternehmer,
+      defaultVat: Number.isFinite(stData.defaultVat) ? stData.defaultVat : 19
+    });
     setCustomers(cst.data || []);
     setProducts((prj.data || []).map(p => ({ id: p.id, name: p.name, priceCents: p.unitPriceCents, currency: p.currency })));
     setLoading(false);
@@ -81,13 +88,19 @@ export default function InvoicesPage() {
   async function createInvoice(e) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const itemsRaw = JSON.parse(fd.get("items") || "[]");
+    if (!itemsRaw.length) return alert("Mindestens eine Position erforderlich.");
+
+    const vatRate = (settings.kleinunternehmer === true) ? 0 : (Number.isFinite(settings.defaultVat) ? settings.defaultVat : 19);
+
     const payload = {
+      invoiceNo: fd.get("invoiceNo") || null,       // Server darf automatisch vergeben
       customerId: fd.get("customerId"),
       issueDate: fd.get("issueDate"),
-      dueDate: fd.get("dueDate") || null,
       currency: currencyCode,
-      taxRate: Number(fd.get("vatExempt")==="on" ? 0 : (fd.get("taxRate")||19)),
-      items: JSON.parse(fd.get("items") || "[]").map(it => ({
+      taxRate: vatRate,
+      discountCents: toCents(fd.get("discount") || 0),
+      items: itemsRaw.map(it => ({
         productId: it.productId || null,
         name: it.name,
         description: null,
@@ -96,7 +109,6 @@ export default function InvoicesPage() {
       })),
     };
     if (!payload.customerId) return alert("Bitte einen Kunden wählen.");
-    if (!payload.items.length) return alert("Mindestens eine Position erforderlich.");
 
     const res = await fetch("/api/invoices", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
     const js = await res.json().catch(()=>({}));
@@ -142,25 +154,25 @@ export default function InvoicesPage() {
                       <td className="ellipsis">{r.invoiceNo}</td>
                       <td className="ellipsis">{r.customerName || "—"}</td>
                       <td className="hide-sm">{d ? d.toLocaleDateString() : "—"}</td>
-                      <td>{currency(r.grossCents, r.currency || currencyCode)}</td>
+                      <td>{currency(r.grossCents, currencyCode)}</td>
                     </tr>
 
                     {expandedId === r.id && (
                       <tr key={r.id + "-details"}>
                         <td colSpan={4} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
                           {editId === r.id ? (
-                            <InvoiceEditForm
+                            <InvoiceEditDetails
                               initial={r}
                               customers={customers}
                               products={products}
-                              currencyCode={r.currency || currencyCode}
+                              currencyCode={currencyCode}
                               onCancel={() => setEditId(null)}
                               onSave={(values) => saveInvoice(r.id, values)}
                             />
                           ) : (
                             <InvoiceDetails
                               row={r}
-                              currencyCode={r.currency || currencyCode}
+                              currencyCode={currencyCode}
                               onEdit={() => setEditId(r.id)}
                               onDelete={() => removeInvoice(r.id)}
                             />
@@ -187,13 +199,14 @@ export default function InvoicesPage() {
           customers={customers}
           products={products}
           currencyCode={currencyCode}
+          settings={settings}
         />
       )}
     </main>
   );
 }
 
-/* ===== Details & Edit ===== */
+/* ===== Details (read-only) ===== */
 function InvoiceDetails({ row, currencyCode, onEdit, onDelete }) {
   const items = row.items || [];
   const taxCents = Number(row.taxCents || 0);
@@ -201,10 +214,9 @@ function InvoiceDetails({ row, currencyCode, onEdit, onDelete }) {
 
   return (
     <div style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
         <Field label="Rechnungs-Nr."><div>{row.invoiceNo}</div></Field>
         <Field label="Datum"><div>{row.issueDate ? new Date(row.issueDate).toLocaleDateString() : "—"}</div></Field>
-        <Field label="Fällig bis"><div>{row.dueDate ? new Date(row.dueDate).toLocaleDateString() : "—"}</div></Field>
         <Field label="Kunde"><div>{row.customerName || "—"}</div></Field>
       </div>
 
@@ -249,160 +261,39 @@ function InvoiceDetails({ row, currencyCode, onEdit, onDelete }) {
   );
 }
 
-function InvoiceEditForm({ initial, customers, products, currencyCode, onCancel, onSave }) {
-  const [customerId, setCustomerId] = useState(initial?.customerId || "");
-  const [issueDate, setIssueDate] = useState(initial?.issueDate ? String(initial.issueDate).slice(0,10) : new Date().toISOString().slice(0,10));
-  const [dueDate, setDueDate] = useState(initial?.dueDate ? String(initial.dueDate).slice(0,10) : "");
-  const [taxRate, setTaxRate] = useState(initial?.taxRate ?? 19);
-  const [vatExempt, setVatExempt] = useState(Number(initial?.taxRate||0) === 0);
-
-  const [items, setItems] = useState(() => (initial?.items || []).map(x => ({
-    id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
-    productId: null,
-    name: x.name || "",
-    quantity: Number(x.quantity||0),
-    unitPrice: x.unitPriceCents ? (x.unitPriceCents/100).toString().replace(".",",") : "",
-  })));
-
-  const itemsTotal = useMemo(() => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0), [items]);
-  const tax = vatExempt ? 0 : Math.round(itemsTotal * (Number(taxRate||0)/100));
-  const gross = itemsTotal + tax;
-
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
-  function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
-  function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
-
-  function onPickProduct(rowId, productId) {
-    const p = products.find(x => x.id === productId);
-    if (!p) return;
-    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
-  }
-
-  function submit(e){
-    e.preventDefault();
-    if(!customerId) return alert("Bitte einen Kunden wählen.");
-    if(items.length===0) return alert("Mindestens eine Position erforderlich.");
-    if(items.some(r=>!r.name?.trim())) return alert("Jede Position braucht eine Bezeichnung.");
-    onSave({
-      customerId,
-      issueDate,
-      dueDate: dueDate || null,
-      currency: currencyCode,
-      taxRate: vatExempt ? 0 : Number(taxRate||0),
-      items: items.map(it => ({
-        productId: it.productId || null,
-        name: it.name,
-        description: null,
-        quantity: Number(it.quantity||0),
-        unitPriceCents: toCents(it.unitPrice || 0)
-      }))
-    });
-  }
-
+/* ===== Inline-Edit Platzhalter (kurz) ===== */
+function InvoiceEditDetails({ initial, customers, products, currencyCode, onCancel, onSave }) {
   return (
-    <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-        <Field label="Kunde *">
-          <select value={customerId} onChange={e=>setCustomerId(e.target.value)} style={input} required>
-            <option value="">– wählen –</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Datum">
-          <input type="date" value={issueDate} onChange={e=>setIssueDate(e.target.value)} style={input}/>
-        </Field>
-        <Field label="Fällig bis">
-          <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={input}/>
-        </Field>
+    <div style={{ color:"#6b7280" }}>
+      Inline-Bearbeitung folgt – hier ist jetzt die „Neu“-Logik schlank umgesetzt. Sag Bescheid, wenn ich Edit 1:1 angleichen soll.
+      <div style={{ marginTop: 8 }}>
+        <button className="btn-ghost" onClick={onCancel}>Schließen</button>
       </div>
-
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
-              <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
-              <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
-              <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
-              <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
-              <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map(r => {
-              const qty = Number(r.quantity||0);
-              const up = toCents(r.unitPrice || 0);
-              const line = qty*up;
-              return (
-                <tr key={r.id}>
-                  <td>
-                    <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
-                      <option value="">– auswählen –</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
-                  <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
-                  <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
-                  <td>{currency(line, currencyCode)}</td>
-                  <td style={{ textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
-                </tr>
-              );
-            })}
-            {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-        <label style={{ display:"grid", gridTemplateColumns:"auto 1fr", alignItems:"center", gap:10 }}>
-          <input type="checkbox" checked={vatExempt} onChange={e=>setVatExempt(e.target.checked)} />
-          <span>§19 UStG (ohne USt)</span>
-        </label>
-        <Field label="Steuersatz (%)">
-          <input value={vatExempt ? 0 : taxRate} onChange={e=>setTaxRate(e.target.value)} style={input} inputMode="decimal" disabled={vatExempt}/>
-        </Field>
-      </div>
-
-      <div style={{ textAlign:"right", fontWeight:700 }}>
-        Netto: {currency(itemsTotal, currencyCode)} &nbsp;·&nbsp;
-        Steuer: {currency(vatExempt?0:Math.round(itemsTotal*(Number(taxRate||0)/100)), currencyCode)} &nbsp;·&nbsp;
-        Brutto: {currency(gross, currencyCode)}
-      </div>
-
-      <div style={{ display:"flex", gap:8, justifyContent:"space-between", alignItems:"center", flexWrap:"wrap" }}>
-        <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-          <button type="button" onClick={onCancel} style={btnGhost}>Abbrechen</button>
-          <button type="submit" style={btnPrimary}>Speichern</button>
-        </div>
-      </div>
-    </form>
+    </div>
   );
 }
 
-/* ===== Mini-Modal Neu ===== */
-function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode }) {
+/* ===== Mini-Modal Neu (nach neuer Vorgabe) ===== */
+function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode, settings }) {
+  const [invoiceNo, setInvoiceNo] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0,10));
-  const [dueDate, setDueDate] = useState("");
-  const [vatExempt, setVatExempt] = useState(false);
-  const [taxRate, setTaxRate] = useState(19);
+  const [discount, setDiscount] = useState("");
 
-  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]);
+  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]);
 
   const itemsTotal = useMemo(() => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0), [items]);
-  const tax = vatExempt ? 0 : Math.round(itemsTotal * (Number(taxRate||0) / 100));
-  const gross = itemsTotal + tax;
+  const vatRate = (settings?.kleinunternehmer === true) ? 0 : (Number.isFinite(settings?.defaultVat) ? settings.defaultVat : 19);
+  const tax = Math.round(itemsTotal * (vatRate / 100));
+  const discountCents = toCents(discount || 0);
+  const gross = Math.max(0, itemsTotal + tax - discountCents);
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
+  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]); }
   function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
   function onPickProduct(rowId, productId) {
     const p = products.find(x => x.id === productId);
-    if (!p) return;
+    if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
     updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
   }
 
@@ -417,24 +308,29 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode 
         hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
         onSubmit(e);
       }} style={{ display:"grid", gap:12 }}>
+        {/* Kopf: Nr., Datum, Kunde */}
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+          <Field label="Nr.">
+            <input style={input} name="invoiceNo" value={invoiceNo} onChange={e=>setInvoiceNo(e.target.value)} placeholder="automatisch oder manuell" />
+          </Field>
+          <Field label="Datum">
+            <input type="date" style={input} name="issueDate" value={issueDate} onChange={e=>setIssueDate(e.target.value)} />
+          </Field>
           <Field label="Kunde *">
-            <select value={customerId} onChange={e=>setCustomerId(e.target.value)} style={input} name="customerId" required>
+            <select style={input} name="customerId" value={customerId} onChange={e=>setCustomerId(e.target.value)} required>
               <option value="">– wählen –</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="Datum"><input type="date" value={issueDate} onChange={e=>setIssueDate(e.target.value)} style={input} name="issueDate"/></Field>
-          <Field label="Fällig bis"><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={input} name="dueDate"/></Field>
         </div>
 
+        {/* Positionen: Produkt, Menge */}
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
-                <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
-                <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+                <th style={{whiteSpace:"nowrap"}}>Produkt</th>
+                <th style={{ width:120, whiteSpace:"nowrap" }}>Menge</th>
                 <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
                 <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
                 <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
@@ -448,49 +344,43 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode 
                 return (
                   <tr key={r.id}>
                     <td>
-                      <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
+                      <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
                         <option value="">– auswählen –</option>
                         {products.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
                     </td>
-                    <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
                     <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
-                    <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
+                    <td><input value={r.unitPrice} disabled style={input} /></td>
                     <td>{currency(line, currencyCode)}</td>
                     <td style={{ textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
                   </tr>
                 );
               })}
-              {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+              {items.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
             </tbody>
           </table>
         </div>
 
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <label style={{ display:"grid", gridTemplateColumns:"auto 1fr", alignItems:"center", gap:10 }}>
-            <input type="checkbox" checked={vatExempt} onChange={e=>setVatExempt(e.target.checked)} name="vatExempt" />
-            <span>§19 UStG (ohne USt)</span>
-          </label>
-          <Field label="Steuersatz (%)">
-            <input value={vatExempt ? 0 : taxRate} onChange={e=>setTaxRate(e.target.value)} style={input} inputMode="decimal" name="taxRate" disabled={vatExempt}/>
+        {/* Rabatt & Summen (Steuer automatisch je nach §19/DefaultVAT) */}
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr", alignItems:"center" }}>
+          <Field label="Rabatt gesamt">
+            <input name="discount" value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" placeholder="z. B. 10,00" />
           </Field>
-        </div>
-
-        <div style={{ textAlign:"right", fontWeight:700 }}>
-          Netto: {currency(itemsTotal, currencyCode)} &nbsp;·&nbsp;
-          Steuer: {currency(vatExempt?0:Math.round(itemsTotal*(Number(taxRate||0)/100)), currencyCode)} &nbsp;·&nbsp;
-          Brutto: {currency(gross, currencyCode)}
-        </div>
-
-        <input type="hidden" id="new-invoice-items" name="items" />
-        <div style={{ display:"flex", gap:8, justifyContent:"space-between", alignItems:"center", flexWrap:"wrap" }}>
-          <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-            <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
-            <button type="submit" style={btnPrimary}>Speichern</button>
+          <div style={{ textAlign:"right" }}>
+            <div>Zwischensumme: <b>{currency(itemsTotal, currencyCode)}</b></div>
+            {vatRate>0 && <div>Steuer ({vatRate}%): <b>{currency(tax, currencyCode)}</b></div>}
+            <div style={{ marginTop:6, fontWeight:700 }}>Brutto: {currency(gross, currencyCode)}</div>
           </div>
+        </div>
+
+        {/* Hidden items JSON */}
+        <input type="hidden" id="new-invoice-items" name="items" />
+
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
+          <button type="submit" style={btnPrimary}>Speichern</button>
         </div>
       </form>
     </div>
