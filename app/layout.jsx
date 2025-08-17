@@ -4,6 +4,11 @@ import HeaderTop from "./components/HeaderTop";
 export const metadata = {
   title: "BuZiness",
   description: "Schnell erfassen, sicher verwalten.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
