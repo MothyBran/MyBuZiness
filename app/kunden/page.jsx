@@ -25,7 +25,8 @@ export default function CustomersPage() {
   const [q, setQ] = useState("");
 
   const [openNew, setOpenNew] = useState(false);
-  const [editRow, setEditRow] = useState(null);
+  const [detailRow, setDetailRow] = useState(null);   // zeigt Detail-Modal
+  const [editRow, setEditRow] = useState(null);       // zeigt Bearbeiten-Modal
 
   async function load() {
     setLoading(true);
@@ -36,11 +37,13 @@ export default function CustomersPage() {
   }
   useEffect(() => { load(); }, []);
 
-  async function remove(id) {
+  async function removeCustomer(id) {
     if (!confirm("Diesen Kunden wirklich löschen?")) return;
     const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
     const js = await res.json().catch(() => ({}));
     if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
+    setDetailRow(null);
+    setEditRow(null);
     load();
   }
 
@@ -66,38 +69,68 @@ export default function CustomersPage() {
                 <th className="hide-sm">E-Mail</th>
                 <th className="hide-sm">Telefon</th>
                 <th>Ort</th>
-                <th style={{ textAlign:"right" }}>Aktionen</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  className="row-clickable"
+                  onClick={() => setDetailRow(r)}
+                  style={{ cursor:"pointer" }}
+                >
                   <td className="ellipsis">{r.name}</td>
                   <td className="hide-sm ellipsis">{r.email || "—"}</td>
                   <td className="hide-sm ellipsis">{r.phone || "—"}</td>
                   <td className="ellipsis">{[r.zip, r.city].filter(Boolean).join(" ") || "—"}</td>
-                  <td style={{ textAlign:"right", whiteSpace:"nowrap" }}>
-                    <Link href={`/kunden/${r.id}`} className="btn-ghost" style={{ marginRight: 8 }}>Details</Link>
-                    <button className="btn-ghost" onClick={()=>setEditRow(r)} style={{ marginRight: 8 }}>Bearbeiten</button>
-                    <button className="btn-ghost" onClick={()=>remove(r.id)} style={{ borderColor:"#c00", color:"#c00" }}>Löschen</button>
-                  </td>
                 </tr>
               ))}
               {rows.length===0 && (
-                <tr><td colSpan={5} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Kunden vorhanden."}</td></tr>
+                <tr><td colSpan={4} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Kunden vorhanden."}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modal: Neu */}
       <CustomerModal
         title="Neuen Kunden anlegen"
         open={openNew}
         onClose={()=>setOpenNew(false)}
         onSaved={()=>{ setOpenNew(false); load(); }}
       />
+
+      {/* Modal: Details */}
+      {detailRow && (
+        <Modal open={!!detailRow} onClose={()=>setDetailRow(null)} title="Kundendetails" maxWidth={760}>
+          <div style={{ display:"grid", gap:12 }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+              <Field label="Name"><div>{detailRow.name}</div></Field>
+              <Field label="E-Mail"><div>{detailRow.email || "—"}</div></Field>
+            </div>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+              <Field label="Telefon"><div>{detailRow.phone || "—"}</div></Field>
+              <Field label="Straße"><div>{detailRow.street || "—"}</div></Field>
+            </div>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr" }}>
+              <Field label="PLZ"><div>{detailRow.zip || "—"}</div></Field>
+              <Field label="Ort"><div>{detailRow.city || "—"}</div></Field>
+            </div>
+            <Field label="Notizen"><div style={{ whiteSpace:"pre-wrap" }}>{detailRow.notes || "—"}</div></Field>
+
+            <div style={{ display:"flex", gap:8, justifyContent:"space-between", flexWrap:"wrap", marginTop:4 }}>
+              <Link href={`/kunden/${detailRow.id}`} className="btn-ghost">Zur Detailseite</Link>
+              <div style={{ display:"flex", gap:8 }}>
+                <button className="btn-ghost" onClick={()=>{ setEditRow(detailRow); setDetailRow(null); }}>Bearbeiten</button>
+                <button className="btn-ghost" onClick={()=>removeCustomer(detailRow.id)} style={{ borderColor:"#c00", color:"#c00" }}>Löschen</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Bearbeiten */}
       {editRow && (
         <CustomerModal
           title="Kunden bearbeiten"
@@ -135,7 +168,6 @@ function CustomerModal({ title, open, onClose, onSaved, initial }) {
     e.preventDefault();
     if (!name.trim()) return alert("Name ist erforderlich.");
     const payload = { name, email: email || null, phone: phone || null, street: street || null, zip: zip || null, city: city || null, notes: notes || null };
-
     let res;
     if (initial?.id) {
       res = await fetch(`/api/customers/${initial.id}`, { method:"PUT", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
