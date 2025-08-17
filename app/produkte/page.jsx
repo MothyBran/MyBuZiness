@@ -5,61 +5,42 @@ import { useEffect, useMemo, useState } from "react";
 /* =========================
    Geld-Utils (robust)
    ========================= */
-/**
- * Nimmt Eingaben wie:
- *  "20", "20.00", "20,00", "1.234,56", "1,234.56"
- * und liefert Integer-Cents.
- */
 function toCents(input) {
   if (input === null || input === undefined) return 0;
   if (typeof input === "number") return Math.round(input * 100);
 
   let s = String(input).trim();
 
-  // If it already looks like pure cents number (e.g., "2000"), keep it numeric
+  // Nur Ziffern -> vermutlich Cent? Wir interpretieren es als Ganzzahl-Betrag in der Eingabe (Euro),
+  // außer es ist sehr groß – deshalb normaler Weg unten:
   if (/^\d+$/.test(s)) {
-    const n = parseInt(s, 10);
-    return Number.isFinite(n) ? n : 0;
+    // „20“ => 2000
+    const n = Number.parseInt(s, 10);
+    return Number.isFinite(n) ? n * 100 : 0;
   }
 
-  // Entferne alle Nicht-Ziffern, außer Punkt & Komma
+  // Erlaube . und , als Dezimaltrenner, entferne Tausender
   s = s.replace(/[^\d.,]/g, "");
-
-  // Beide Separatoren vorhanden → entscheide Dezimaltrennzeichen heuristisch
   if (s.includes(",") && s.includes(".")) {
-    // Nimm das letzte Vorkommen als Dezimaltrenner
+    // letztes Vorkommen ist Dezimaltrenner
     const lastComma = s.lastIndexOf(",");
     const lastDot = s.lastIndexOf(".");
-    const decSep = lastComma > lastDot ? "," : ".";
-    const thouSep = decSep === "," ? "." : ",";
-
-    s = s.replace(new RegExp("\\" + thouSep, "g"), ""); // alle Tausender weg
-    s = s.replace(decSep, "."); // Dezimal auf Punkt
-  } else {
-    // Nur Komma → ersetze durch Punkt
-    if (s.includes(",") && !s.includes(".")) {
-      s = s.replace(",", ".");
-    }
-    // Nur Punkte → ok
-    // Weder Komma noch Punkt → ist bereits ganzzahlig (z.B. "20") → ok
+    const dec = lastComma > lastDot ? "," : ".";
+    const thou = dec === "," ? "." : ",";
+    s = s.replace(new RegExp("\\" + thou, "g"), "");
+    s = s.replace(dec, ".");
+  } else if (s.includes(",") && !s.includes(".")) {
+    s = s.replace(",", ".");
   }
-
   const n = Number.parseFloat(s);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
-
 function fromCents(cents) {
   const n = (Number(cents || 0) / 100);
-  // Für Eingabefeld lieber "de" mit Komma anzeigen
   return n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function fmtMoney(cents, currencyCode = "EUR") {
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: currencyCode || "EUR",
-  }).format((Number(cents || 0) / 100));
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: currencyCode || "EUR" }).format((Number(cents || 0) / 100));
 }
 
 /* =========================
@@ -82,13 +63,14 @@ const card = { background: "#fff", border: "1px solid #eee", borderRadius: 14, p
 const modalWrap = { position: "fixed", left: "50%", top: "8%", transform: "translateX(-50%)", width: "min(900px,94vw)", maxHeight: "84vh", overflow: "auto", background: "#fff", borderRadius: 14, padding: 16, zIndex: 1000, boxShadow: "0 10px 40px rgba(0,0,0,.15)" };
 
 /* =========================
-   Seite: Produkte
+   Seite: Produkte (mit Zeilen-Aufklappen)
    ========================= */
 export default function ProductsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currencyCode, setCurrencyCode] = useState("EUR");
 
+  const [expandedId, setExpandedId] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
@@ -104,11 +86,16 @@ export default function ProductsPage() {
   }
   useEffect(() => { load(); }, []);
 
+  function toggleExpand(id) {
+    setExpandedId(prev => prev === id ? null : id);
+  }
+
   async function removeRow(id) {
     if (!confirm("Dieses Produkt wirklich löschen?")) return;
     const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
     const js = await res.json().catch(()=>({}));
     if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
+    if (expandedId === id) setExpandedId(null);
     await load();
   }
 
@@ -128,29 +115,41 @@ export default function ProductsPage() {
                 <th>Art</th>
                 <th>Kategorie</th>
                 <th style={{ whiteSpace:"nowrap" }}>Preis</th>
-                <th className="hide-sm" style={{ whiteSpace:"nowrap" }}>Fahrtkosten (pro Einheit)</th>
-                <th style={{ textAlign:"right" }}>Aktion</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.id}>
-                  <td className="ellipsis">{r.name}</td>
-                  <td>{r.kind || "—"}</td>
-                  <td>{r.categoryCode || "—"}</td>
-                  <td>{fmtMoney(r.priceCents, r.currency || currencyCode)}</td>
-                  <td className="hide-sm">
-                    {r.travelEnabled ? fmtMoney(r.travelRateCents, r.currency || currencyCode) + ` / ${r.travelUnit || "km"}` : "—"}
-                  </td>
-                  <td style={{ textAlign:"right" }}>
-                    <button style={btnGhost} onClick={()=>setEditRow(r)}>Bearbeiten</button>{" "}
-                    <button style={btnDanger} onClick={()=>removeRow(r.id)}>Löschen</button>
-                  </td>
-                </tr>
+                <>
+                  <tr
+                    key={r.id}
+                    className="row-clickable"
+                    style={{ cursor:"pointer" }}
+                    onClick={() => toggleExpand(r.id)}
+                  >
+                    <td className="ellipsis">{r.name}</td>
+                    <td>{r.kind || "—"}</td>
+                    <td>{r.categoryCode || "—"}</td>
+                    <td>{fmtMoney(r.priceCents, r.currency || currencyCode)}</td>
+                  </tr>
+
+                  {expandedId === r.id && (
+                    <tr key={r.id + "-details"}>
+                      <td colSpan={4} style={{ background:"#fafafa", padding:12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                        <ProductDetails row={r} currencyCode={r.currency || currencyCode} />
+                        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:12 }}>
+                          <button style={btnGhost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>⚙️ Bearbeiten</button>
+                          <button style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
               {!rows.length && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign:"center", color:"#999" }}>{loading ? "Lade…" : "Keine Produkte vorhanden."}</td>
+                  <td colSpan={4} style={{ textAlign:"center", color:"#999" }}>
+                    {loading ? "Lade…" : "Keine Produkte vorhanden."}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -181,6 +180,38 @@ export default function ProductsPage() {
 }
 
 /* =========================
+   Detailansicht unter der Zeile
+   ========================= */
+function ProductDetails({ row, currencyCode }) {
+  return (
+    <div style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+        <Field label="Name"><div>{row.name || "—"}</div></Field>
+        <Field label="Art"><div>{row.kind || "—"}</div></Field>
+        <Field label="Kategorie-Code"><div>{row.categoryCode || "—"}</div></Field>
+        <Field label="SKU"><div>{row.sku || "—"}</div></Field>
+      </div>
+
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+        <Field label="Preis"><div>{fmtMoney(row.priceCents, currencyCode)}</div></Field>
+        <Field label="Währung"><div>{row.currency || currencyCode}</div></Field>
+        <Field label="Fahrtkosten">
+          <div>
+            {row.travelEnabled
+              ? `${fmtMoney(row.travelRateCents, row.currency || currencyCode)} / ${row.travelUnit || "km"}`
+              : "—"}
+          </div>
+        </Field>
+      </div>
+
+      <Field label="Beschreibung">
+        <div style={{ whiteSpace:"pre-wrap" }}>{row.description || "—"}</div>
+      </Field>
+    </div>
+  );
+}
+
+/* =========================
    Modal: Produkt anlegen / bearbeiten
    ========================= */
 function ProductModal({ title, currencyDefault = "EUR", initial, onClose, onSaved }) {
@@ -190,7 +221,7 @@ function ProductModal({ title, currencyDefault = "EUR", initial, onClose, onSave
   const [categoryCode, setCategoryCode] = useState(initial?.categoryCode || "");
   const [currencyCode] = useState(initial?.currency || currencyDefault || "EUR");
 
-  // Preis & Fahrtkosten als String im Eingabefeld, aber intern in Cents rechnen
+  // Preis & Fahrtkosten als String im Eingabefeld, intern Cents
   const [priceInput, setPriceInput] = useState(
     initial ? fromCents(initial.priceCents || 0) : ""
   );
@@ -202,7 +233,6 @@ function ProductModal({ title, currencyDefault = "EUR", initial, onClose, onSave
 
   const [description, setDescription] = useState(initial?.description || "");
 
-  // Für Anzeige
   const priceCents = useMemo(() => toCents(priceInput), [priceInput]);
   const travelRateCents = useMemo(() => toCents(travelRateInput), [travelRateInput]);
 
