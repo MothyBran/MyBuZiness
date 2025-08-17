@@ -1,344 +1,304 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-/* =========================
-   Utils & Styles
-   ========================= */
-function toCents(v) {
-  if (v === null || v === undefined) return 0;
-  const str = String(v).replace(/\./g, "").replace(/,/g, ".");
-  const n = parseFloat(str);
-  return Math.round((Number.isFinite(n) ? n : 0) * 100);
+/** Money helpers */
+function toCents(input) {
+  if (input === null || input === undefined) return 0;
+  const s = String(input).replace(/\./g, "").replace(/,/g, ".");
+  const n = Number.parseFloat(s);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
 }
-function currency(cents, code = "EUR") {
-  return new Intl.NumberFormat("de-DE", { style: "currency", currency: code }).format((cents || 0) / 100);
+function currency(cents, cur = "EUR") {
+  const n = (Number(cents || 0) / 100);
+  return new Intl.NumberFormat("de-DE", { style:"currency", currency: cur }).format(n);
 }
+
+/** UI */
 function Field({ label, children }) {
   return (
-    <label style={{ display: "grid", gap: 4 }}>
-      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
+    <div style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 12, color: "#666" }}>{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
-const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 8, width: "100%" };
-const btnPrimary = { padding: "10px 12px", borderRadius: 8, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" };
-const btnGhost = { padding: "10px 12px", borderRadius: 8, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" };
-const btnDanger = { padding: "8px 10px", borderRadius: 8, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" };
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 16 };
-const modalWrap = { position: "fixed", left: "50%", top: "8%", transform: "translateX(-50%)", width: "min(900px,94vw)", maxHeight: "84vh", overflow: "auto", background: "#fff", borderRadius: 14, padding: 16, zIndex: 1000, boxShadow: "0 10px 40px rgba(0,0,0,.15)" };
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16 };
+const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%" };
+const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"#fff", color:"var(--color-primary)", cursor:"pointer" };
+const btnDanger = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
 
-/* =========================
-   Seite: Rechnungen
-   ========================= */
-export default function InvoicesPage() {
+export default function ProductsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState("EUR");
-  const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [q, setQ] = useState("");
 
+  const [openNew, setOpenNew] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-  const [showNew, setShowNew] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [currencyCode, setCurrencyCode] = useState("EUR");
 
   async function load() {
     setLoading(true);
-    const [listRes, prodRes, custRes] = await Promise.all([
-      fetch("/api/invoices", { cache: "no-store" }),
-      fetch("/api/products", { cache: "no-store" }),
-      fetch("/api/customers", { cache: "no-store" }),
+    const [res, st] = await Promise.all([
+      fetch(q ? `/api/products?q=${encodeURIComponent(q)}` : "/api/products", { cache: "no-store" }),
+      fetch("/api/settings", { cache: "no-store" }),
     ]);
-
-    const list = await listRes.json().catch(() => ({ data: [] }));
-    const pr = await prodRes.json().catch(() => ({ data: [] }));
-    const cs = await custRes.json().catch(() => ({ data: [] }));
-
-    setRows(list.data || []);
-
-    const mappedProducts = (pr.data || []).map(p => ({
-      id: p.id,
-      name: p.name,
-      priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
-      currency: p.currency || "EUR",
-    }));
-    setProducts(mappedProducts);
-    setCustomers(cs.data || []);
-    if (mappedProducts.length) setCurrencyCode(mappedProducts[0].currency);
-
+    const js = await res.json().catch(() => ({ data: [] }));
+    const settings = await st.json().catch(() => ({ data: { currencyDefault: "EUR" } }));
+    setCurrencyCode(settings?.data?.currencyDefault || "EUR");
+    setRows(js.data || []);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) { setExpandedId(prev => prev === id ? null : id); }
+  function toggleExpand(id) {
+    setExpandedId(prev => prev === id ? null : id);
+    setEditId(null);
+  }
 
-  async function removeRow(id) {
-    if (!confirm("Diese Rechnung wirklich löschen?")) return;
-    const res = await fetch(`/api/invoices/${id}`, { method:"DELETE" });
-    const js = await res.json().catch(()=>({}));
+  async function removeProduct(id) {
+    if (!confirm("Diesen Eintrag wirklich löschen?")) return;
+    const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+    const js = await res.json().catch(() => ({}));
     if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
-    if (expandedId === id) setExpandedId(null);
+    setExpandedId(null);
+    setEditId(null);
     load();
   }
 
-  async function createInvoice(e) {
+  async function saveProduct(id, values) {
+    const res = await fetch(`/api/products/${id}`, {
+      method:"PUT",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify(values)
+    });
+    const js = await res.json().catch(()=>({}));
+    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    setEditId(null);
+    load();
+  }
+
+  async function createProduct(e) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const itemsRaw = JSON.parse(fd.get("items") || "[]");
-    if (!itemsRaw.length) return alert("Mindestens eine Position erforderlich.");
-    if (!fd.get("customerId")) return alert("Bitte einen Kunden wählen.");
-
     const payload = {
-      invoiceNo: fd.get("invoiceNo") || null,
-      issueDate: fd.get("issueDate"),
-      customerId: fd.get("customerId"),
-      discountCents: toCents(fd.get("discount") || 0),
+      name: fd.get("name"),
+      type: fd.get("type"),
+      categoryCode: fd.get("categoryCode") || null,
+      unitPriceCents: toCents(fd.get("unitPrice") || 0),
+      travelRateCents: fd.get("travelRate") ? toCents(fd.get("travelRate")) : null,
       currency: currencyCode,
-      items: itemsRaw.map(it => ({
-        productId: it.productId || null,
-        name: it.name,
-        quantity: Number(it.quantity || 0),
-        unitPriceCents: toCents(it.unitPrice || 0),
-      })),
     };
-
-    const res = await fetch("/api/invoices", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    if (!payload.name?.trim()) return alert("Name ist erforderlich.");
+    const res = await fetch("/api/products", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
     const js = await res.json().catch(()=>({}));
     if (!js?.ok) return alert(js?.error || "Erstellen fehlgeschlagen.");
-    setShowNew(false);
+    setOpenNew(false);
     load();
   }
 
   return (
     <main>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-        <h1 style={{ margin:0 }}>Rechnungen</h1>
-        <button style={btnPrimary} onClick={()=>setShowNew(true)}>+ Neue Rechnung</button>
+        <h1 style={{ margin:0 }}>Produkte & Dienstleistungen</h1>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/Kategorie)…" style={input} />
+          <button onClick={load} style={btnGhost}>Suchen</button>
+          <button onClick={()=>setOpenNew(true)} style={btnPrimary}>+ Neuer Eintrag</button>
+        </div>
       </div>
 
-      <div style={{ ...card, marginTop:12 }}>
+      <div style={{ ...card, marginTop: 12 }}>
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th style={{whiteSpace:"nowrap"}}>Nr.</th>
-                <th style={{whiteSpace:"nowrap"}}>Kunde</th>
-                <th className="hide-sm" style={{whiteSpace:"nowrap"}}>Datum</th>
-                <th style={{whiteSpace:"nowrap"}}>Betrag</th>
+                <th>Name</th>
+                <th className="hide-sm">Typ</th>
+                <th>Kategorie</th>
+                <th className="hide-sm">Fahrt €/km</th>
+                <th>Preis</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
-                const d = r.issueDate ? new Date(r.issueDate) : (r.date ? new Date(r.date) : null);
-                return (
-                  <>
-                    <tr key={r.id} className="row-clickable" style={{ cursor:"pointer" }} onClick={()=>toggleExpand(r.id)}>
-                      <td className="ellipsis">{r.invoiceNo}</td>
-                      <td className="ellipsis">{r.customerName || r.customer?.name || "—"}</td>
-                      <td className="hide-sm">{d ? d.toLocaleDateString() : "—"}</td>
-                      <td>{currency(r.grossCents ?? r.totalCents, r.currency || currencyCode)}</td>
+              {rows.map(r => (
+                <>
+                  <tr
+                    key={r.id}
+                    className="row-clickable"
+                    onClick={() => toggleExpand(r.id)}
+                    style={{ cursor:"pointer" }}
+                  >
+                    <td className="ellipsis">{r.name}</td>
+                    <td className="hide-sm">{r.type === "service" ? "Dienstleistung" : "Produkt"}</td>
+                    <td className="ellipsis">{r.categoryCode || "—"}</td>
+                    <td className="hide-sm">{r.travelRateCents ? currency(r.travelRateCents, r.currency || currencyCode) : "—"}</td>
+                    <td>{currency(r.unitPriceCents, r.currency || currencyCode)}</td>
+                  </tr>
+
+                  {expandedId === r.id && (
+                    <tr key={r.id + "-details"}>
+                      <td colSpan={5} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                        {editId === r.id ? (
+                          <ProductEditForm
+                            initial={r}
+                            currencyCode={r.currency || currencyCode}
+                            onCancel={() => setEditId(null)}
+                            onSave={(values) => saveProduct(r.id, values)}
+                          />
+                        ) : (
+                          <ProductDetails
+                            row={r}
+                            currencyCode={r.currency || currencyCode}
+                            onEdit={() => setEditId(r.id)}
+                            onDelete={() => removeProduct(r.id)}
+                          />
+                        )}
+                      </td>
                     </tr>
-                    {expandedId === r.id && (
-                      <tr key={r.id + "-details"}>
-                        <td colSpan={4} style={{ background:"#fafafa", padding:12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
-                          <InvoiceDetails row={r} currencyCode={r.currency || currencyCode} />
-                          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
-                            <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
+                  )}
+                </>
+              ))}
               {rows.length===0 && (
-                <tr><td colSpan={4} style={{ textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Rechnungen vorhanden."}</td></tr>
+                <tr><td colSpan={5} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {showNew && (
-        <NewInvoiceSheet
-          currencyCode={currencyCode}
-          products={products}
-          customers={customers}
-          onClose={()=>setShowNew(false)}
-          onSubmit={createInvoice}
-        />
+      {/* Mini-Modal: Neu */}
+      {openNew && (
+        <div className="surface" style={modalWrap}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 800 }}>Neuen Eintrag anlegen</div>
+            <button onClick={()=>setOpenNew(false)} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
+          </div>
+          <form onSubmit={createProduct} style={{ display:"grid", gap:12 }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
+              <Field label="Name *"><input style={input} name="name" required /></Field>
+              <Field label="Typ">
+                <select style={input} name="type" defaultValue="service">
+                  <option value="service">Dienstleistung</option>
+                  <option value="product">Produkt</option>
+                </select>
+              </Field>
+              <Field label="Kategorie-Code (z. B. 1.1)">
+                <input style={input} name="categoryCode" placeholder="1.1" />
+              </Field>
+            </div>
+
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+              <Field label={`Preis (${currencyCode})`}>
+                <input style={input} name="unitPrice" inputMode="decimal" placeholder="z. B. 49,90" />
+              </Field>
+              <Field label={`Fahrtkosten €/km (${currencyCode})`}>
+                <input style={input} name="travelRate" inputMode="decimal" placeholder="optional, z. B. 0,35" />
+              </Field>
+              <Field label="Währung">
+                <input style={input} value={currencyCode} disabled />
+              </Field>
+            </div>
+
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+              <button type="button" onClick={()=>setOpenNew(false)} style={btnGhost}>Abbrechen</button>
+              <button type="submit" style={btnPrimary}>Speichern</button>
+            </div>
+          </form>
+        </div>
       )}
     </main>
   );
 }
 
-/* ========= Details-Bereich (aufklappbar) ========= */
-function InvoiceDetails({ row, currencyCode }) {
-  const items = row.items || [];
+/** Details – read-only */
+function ProductDetails({ row, currencyCode, onEdit, onDelete }) {
   return (
     <div style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
+        <Field label="Kategorie-Code"><div>{row.categoryCode || "—"}</div></Field>
+        <Field label="Name"><div>{row.name}</div></Field>
+        <Field label="Typ"><div>{row.type === "service" ? "Dienstleistung" : "Produkt"}</div></Field>
+      </div>
+
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-        <Field label="Rechnungs-Nr."><div>{row.invoiceNo}</div></Field>
-        <Field label="Datum"><div>{row.issueDate ? new Date(row.issueDate).toLocaleDateString() : (row.date ? new Date(row.date).toLocaleDateString() : "—")}</div></Field>
-        <Field label="Kunde"><div>{row.customerName || row.customer?.name || "—"}</div></Field>
+        <Field label={`Preis (${currencyCode})`}><div>{currency(row.unitPriceCents, currencyCode)}</div></Field>
+        <Field label={`Fahrt €/km (${currencyCode})`}><div>{row.travelRateCents ? currency(row.travelRateCents, currencyCode) : "—"}</div></Field>
+        <Field label="Währung"><div>{currencyCode}</div></Field>
       </div>
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Bezeichnung</th>
-              <th style={{ width:110 }}>Menge</th>
-              <th style={{ width:160 }}>Einzelpreis</th>
-              <th style={{ width:160 }}>Summe</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, idx) => {
-              const sum = Number(it.quantity||0) * Number(it.unitPriceCents||0);
-              return (
-                <tr key={idx}>
-                  <td className="ellipsis">{it.name}</td>
-                  <td>{it.quantity}</td>
-                  <td>{currency(it.unitPriceCents, currencyCode)}</td>
-                  <td>{currency(sum, currencyCode)}</td>
-                </tr>
-              );
-            })}
-            {items.length===0 && <tr><td colSpan={4} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ textAlign:"right", fontWeight:800 }}>
-        Gesamt: {currency(row.grossCents ?? row.totalCents, currencyCode)}
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
+        <button className="btn-ghost" onClick={onEdit}>⚙️ Bearbeiten</button>
+        <button className="btn-ghost" onClick={onDelete} style={{ borderColor:"#c00", color:"#c00" }}>❌ Löschen</button>
       </div>
     </div>
   );
 }
 
-/* ========= Modal: Neue Rechnung ========= */
-function NewInvoiceSheet({ currencyCode, products, customers, onClose, onSubmit }) {
-  const [invoiceNo, setInvoiceNo] = useState("");
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0,10));
-  const [customerId, setCustomerId] = useState("");
-  const [discount, setDiscount] = useState("");
-
-  const [localProducts, setLocalProducts] = useState(Array.isArray(products)? products : []);
-  useEffect(() => {
-    let ignore = false;
-    async function ensureProducts() {
-      if (Array.isArray(products) && products.length > 0) { setLocalProducts(products); return; }
-      const res = await fetch("/api/products", { cache: "no-store" });
-      const js = await res.json().catch(()=>({ data:[] }));
-      const mapped = (js.data||[]).map(p => ({
-        id: p.id, name: p.name,
-        priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
-        currency: p.currency || "EUR",
-      }));
-      if (!ignore) setLocalProducts(mapped);
-    }
-    ensureProducts();
-    return ()=>{ ignore = true; };
-  }, [products]);
-
-  const [items, setItems] = useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }
-  ]);
-
-  const itemsTotal = useMemo(
-    () => items.reduce((s,it)=> s + toCents(it.unitPrice||0)*Number(it.quantity||0), 0),
-    [items]
+/** Inline-Edit */
+function ProductEditForm({ initial, currencyCode, onCancel, onSave }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [type, setType] = useState(initial?.type || "service");
+  const [categoryCode, setCategoryCode] = useState(initial?.categoryCode || "");
+  const [unitPrice, setUnitPrice] = useState(
+    initial ? (initial.unitPriceCents/100).toString().replace(".", ",") : ""
   );
-  // (Wenn du §19 UStG berücksichtigst, könntest du hier Tax rechnen – aktuell nur Brutto = Netto - Rabatt)
-  const gross = Math.max(0, itemsTotal - toCents(discount||0));
+  const [travelRate, setTravelRate] = useState(
+    initial?.travelRateCents ? (initial.travelRateCents/100).toString().replace(".", ",") : ""
+  );
 
-  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]); }
-  function updateRow(id, patch){ setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r)); }
-  function removeRow(id){ setItems(prev => prev.filter(r => r.id !== id)); }
-  function onPickProduct(rowId, productId) {
-    const p = localProducts.find(x => x.id === productId);
-    if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
-    updateRow(rowId, { productId, name: p.name, unitPrice: String((p.priceCents/100).toFixed(2)).replace(".", ",") });
+  function submit(e){
+    e.preventDefault();
+    if (!name.trim()) return alert("Name ist erforderlich.");
+    onSave({
+      name,
+      type,
+      categoryCode: categoryCode || null,
+      unitPriceCents: toCents(unitPrice || 0),
+      travelRateCents: travelRate ? toCents(travelRate) : null,
+      currency: currencyCode,
+    });
   }
 
   return (
-    <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-        <b>Neue Rechnung erstellen</b>
-        <button onClick={onClose} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
+    <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
+        <Field label="Name *"><input style={input} value={name} onChange={e=>setName(e.target.value)} required /></Field>
+        <Field label="Typ">
+          <select style={input} value={type} onChange={e=>setType(e.target.value)}>
+            <option value="service">Dienstleistung</option>
+            <option value="product">Produkt</option>
+          </select>
+        </Field>
+        <Field label="Kategorie-Code (z. B. 1.1)">
+          <input style={input} value={categoryCode} onChange={e=>setCategoryCode(e.target.value)} placeholder="1.1" />
+        </Field>
       </div>
 
-      <form
-        onSubmit={(e)=>{ 
-          const hidden = document.querySelector("#new-invoice-items");
-          hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
-          onSubmit(e);
-        }}
-        style={{ display:"grid", gap:12 }}
-      >
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-          <Field label="Nr."><input style={input} name="invoiceNo" value={invoiceNo} onChange={e=>setInvoiceNo(e.target.value)} /></Field>
-          <Field label="Datum"><input type="date" style={input} name="issueDate" value={issueDate} onChange={e=>setIssueDate(e.target.value)} /></Field>
-          <Field label="Kunde *">
-            <select style={input} name="customerId" value={customerId} onChange={e=>setCustomerId(e.target.value)} required>
-              <option value="">– wählen –</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-        </div>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+        <Field label={`Preis (${currencyCode})`}>
+          <input style={input} value={unitPrice} onChange={e=>setUnitPrice(e.target.value)} inputMode="decimal" placeholder="z. B. 49,90" />
+        </Field>
+        <Field label={`Fahrtkosten €/km (${currencyCode})`}>
+          <input style={input} value={travelRate} onChange={e=>setTravelRate(e.target.value)} inputMode="decimal" placeholder="optional, z. B. 0,35" />
+        </Field>
+        <Field label="Währung">
+          <input style={input} value={currencyCode} disabled />
+        </Field>
+      </div>
 
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Produkt</th>
-                <th style={{ width:120 }}>Menge</th>
-                <th style={{ width:160 }}>Einzelpreis</th>
-                <th style={{ width:160 }}>Summe</th>
-                <th style={{ width:120, textAlign:"right" }}>Aktion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {localProducts.length===0 && (
-                <tr><td colSpan={5} style={{ textAlign:"center", color:"#777" }}>Keine Produkte vorhanden. Bitte unter <a href="/produkte">/produkte</a> anlegen.</td></tr>
-              )}
-              {items.map(r => {
-                const qty = Number(r.quantity||0);
-                const upCents = toCents(r.unitPrice||0);
-                const line = qty * upCents;
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
-                        <option value="">– auswählen –</option>
-                        {localProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </td>
-                    <td><input value={r.quantity} onChange={e=>updateRow(r.id,{ quantity: parseInt(e.target.value||"1",10) })} style={input} inputMode="numeric" /></td>
-                    <td>{currency(upCents, currencyCode)}</td>
-                    <td>{currency(line, currencyCode)}</td>
-                    <td style={{ textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ marginTop:8 }}><button type="button" onClick={addRow} style={btnGhost}>+ Position</button></div>
-        </div>
-
-        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-          <Field label="Rabatt gesamt"><input name="discount" value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" placeholder="z. B. 10,00" /></Field>
-          <div style={{ fontWeight:800 }}>Gesamt: {currency(gross, currencyCode)}</div>
-        </div>
-
-        <input type="hidden" id="new-invoice-items" name="items" />
-
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
-          <button type="submit" style={btnPrimary}>Speichern</button>
-        </div>
-      </form>
-    </div>
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+        <button type="button" onClick={onCancel} style={btnGhost}>Abbrechen</button>
+        <button type="submit" style={btnPrimary}>Speichern</button>
+      </div>
+    </form>
   );
 }
+
+const modalWrap = {
+  position:"fixed", left:"50%", top:"10%", transform:"translateX(-50%)",
+  width:"min(760px, 92vw)", maxHeight:"80vh", overflow:"auto", padding:16, zIndex:1000
+};
