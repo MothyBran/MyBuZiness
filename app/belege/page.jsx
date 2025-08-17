@@ -319,6 +319,30 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState("");
+
+  // Lokale, robuste Produktliste (fällt zurück auf Fetch, falls products leer ist)
+  const [localProducts, setLocalProducts] = useState(Array.isArray(products) ? products : []);
+  useEffect(() => {
+    let ignore = false;
+    async function ensureProducts() {
+      if (Array.isArray(products) && products.length > 0) {
+        setLocalProducts(products);
+        return;
+      }
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const js = await res.json().catch(() => ({ data: [] }));
+      const mapped = (js.data || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        priceCents: Number.isFinite(p.unitPriceCents) ? p.unitPriceCents : 0,
+        currency: p.currency || "EUR",
+      }));
+      if (!ignore) setLocalProducts(mapped);
+    }
+    ensureProducts();
+    return () => { ignore = true; };
+  }, [products]);
+
   const [items, setItems] = useState([
     { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId: "", name: "", quantity: 1, unitPrice: "" },
   ]);
@@ -331,14 +355,14 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
   const gross = Math.max(0, itemsTotal - discountCents);
 
   function addRow() {
-    setItems((prev) => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId: "", name: "", quantity: 1, unitPrice: "" }]);
+    setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId: "", name: "", quantity: 1, unitPrice: "" }]);
   }
   function updateRow(id, patch) {
-    setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setItems(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
   }
-  function removeRow(id) { setItems((prev) => prev.filter((r) => r.id !== id)); }
+  function removeRow(id) { setItems(prev => prev.filter(r => r.id !== id)); }
   function onPickProduct(rowId, productId) {
-    const p = products.find((x) => x.id === productId);
+    const p = localProducts.find(x => x.id === productId);
     if (!p) return updateRow(rowId, { productId: "", name: "", unitPrice: "" });
     updateRow(rowId, {
       productId,
@@ -373,7 +397,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
           <Field label="Kunde (optional)">
             <select style={input} name="customerId" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
               <option value="">– kein Kunde –</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
         </div>
@@ -391,14 +415,14 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
               </tr>
             </thead>
             <tbody>
-              {products.length === 0 && (
+              {localProducts.length === 0 && (
                 <tr>
                   <td colSpan={5} style={{ color: "#666", textAlign: "center" }}>
                     Keine Produkte gefunden. Lege zuerst Produkte unter <a href="/produkte">/produkte</a> an.
                   </td>
                 </tr>
               )}
-              {items.map((r) => {
+              {items.map(r => {
                 const qty = Number(r.quantity || 0);
                 const upCents = toCents(r.unitPrice || 0);
                 const line = qty * upCents;
@@ -407,7 +431,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
                     <td>
                       <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={input}>
                         <option value="">– auswählen –</option>
-                        {products.map((p) => (
+                        {localProducts.map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
@@ -430,6 +454,9 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
               })}
             </tbody>
           </table>
+          <div style={{ marginTop: 8 }}>
+            <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
+          </div>
         </div>
 
         {/* Rabatt & Summe */}
