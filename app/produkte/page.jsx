@@ -37,6 +37,7 @@ export default function ProductsPage() {
   const [q, setQ] = useState("");
 
   const [openNew, setOpenNew] = useState(false);
+  const [detailRow, setDetailRow] = useState(null);
   const [editRow, setEditRow] = useState(null);
   const [currencyCode, setCurrencyCode] = useState("EUR");
 
@@ -54,11 +55,13 @@ export default function ProductsPage() {
   }
   useEffect(() => { load(); }, []);
 
-  async function remove(id) {
+  async function removeProduct(id) {
     if (!confirm("Diesen Eintrag wirklich löschen?")) return;
     const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
     const js = await res.json().catch(() => ({}));
     if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
+    setDetailRow(null);
+    setEditRow(null);
     load();
   }
 
@@ -85,32 +88,32 @@ export default function ProductsPage() {
                 <th>Kategorie</th>
                 <th className="hide-sm">Fahrt €/km</th>
                 <th>Preis</th>
-                <th style={{ textAlign:"right" }}>Aktionen</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  className="row-clickable"
+                  onClick={() => setDetailRow(r)}
+                  style={{ cursor:"pointer" }}
+                >
                   <td className="ellipsis">{r.name}</td>
                   <td className="hide-sm">{r.type === "service" ? "Dienstleistung" : "Produkt"}</td>
                   <td className="ellipsis">{r.categoryCode || "—"}</td>
                   <td className="hide-sm">{r.travelRateCents ? currency(r.travelRateCents, currencyCode) : "—"}</td>
                   <td>{currency(r.unitPriceCents, r.currency || currencyCode)}</td>
-                  <td style={{ textAlign:"right", whiteSpace:"nowrap" }}>
-                    <button className="btn-ghost" onClick={()=>setEditRow(r)} style={{ marginRight: 8 }}>Bearbeiten</button>
-                    <button className="btn-ghost" onClick={()=>remove(r.id)} style={{ borderColor:"#c00", color:"#c00" }}>Löschen</button>
-                  </td>
                 </tr>
               ))}
               {rows.length===0 && (
-                <tr><td colSpan={6} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
+                <tr><td colSpan={5} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modal: Neu */}
       <ProductModal
         title="Neuen Eintrag anlegen"
         open={openNew}
@@ -118,6 +121,32 @@ export default function ProductsPage() {
         onSaved={()=>{ setOpenNew(false); load(); }}
         currencyCode={currencyCode}
       />
+
+      {/* Modal: Details */}
+      {detailRow && (
+        <Modal open={!!detailRow} onClose={()=>setDetailRow(null)} title="Details" maxWidth={760}>
+          <div style={{ display:"grid", gap:12 }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
+              <Field label="Name"><div>{detailRow.name}</div></Field>
+              <Field label="Typ"><div>{detailRow.type === "service" ? "Dienstleistung" : "Produkt"}</div></Field>
+              <Field label="Kategorie-Code"><div>{detailRow.categoryCode || "—"}</div></Field>
+            </div>
+
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+              <Field label={`Preis (${detailRow.currency || currencyCode})`}><div>{currency(detailRow.unitPriceCents, detailRow.currency || currencyCode)}</div></Field>
+              <Field label={`Fahrt €/km (${detailRow.currency || currencyCode})`}><div>{detailRow.travelRateCents ? currency(detailRow.travelRateCents, detailRow.currency || currencyCode) : "—"}</div></Field>
+              <Field label="Währung"><div>{detailRow.currency || currencyCode}</div></Field>
+            </div>
+
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
+              <button className="btn-ghost" onClick={()=>{ setEditRow(detailRow); setDetailRow(null); }}>Bearbeiten</button>
+              <button className="btn-ghost" onClick={()=>removeProduct(detailRow.id)} style={{ borderColor:"#c00", color:"#c00" }}>Löschen</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Bearbeiten */}
       {editRow && (
         <ProductModal
           title="Eintrag bearbeiten"
