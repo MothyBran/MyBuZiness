@@ -128,3 +128,87 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 /* Module-Pills: sanfter Hover auch touch-freundlich */
 .module-pill { will-change: transform; }
 .module-pill:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
+
+/* ... deine bisherigen Styles bleiben oben ... */
+
+
+/* ============================= */
+/* HEADER & BUTTONS              */
+/* ============================= */
+
+/* Header-Zeile: Menü ganz links, Login ganz rechts */
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%; /* volle Breite */
+}
+
+/* Einheitliche Header-Buttons */
+.header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;    /* gleiche Breite */
+  height: 44px;        /* gleiche Höhe */
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(0,0,0,.15);
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  transition: background .2s ease, box-shadow .2s ease, transform .1s ease;
+  text-decoration: none; /* für <a> */
+}
+
+/* Hover/Focus Effekt */
+.header-btn:hover,
+.header-btn:focus {
+  background: #f3f4f6; /* hellgrau */
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+
+/* Active Effekt (Klick) */
+.header-btn:active {
+  background: #e5e7eb;
+  transform: scale(0.97);
+}
+
+/* Hamburger Symbol */
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 22px;
+  height: 16px;
+}
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #111; /* sichtbar auf allen Hintergründen */
+  border-radius: 2px;
+  transition: background .2s ease;
+}
+.header-btn:hover .hamburger span {
+  background: #000; /* bei Hover etwas dunkler */
+}
+
+/* ============================= */
+/* RESPONSIVE FIXES              */
+/* ============================= */
+
+/* Buttons bei Mobile volle Breite (außer Hamburger) */
+@media (max-width: 640px) {
+  .header-row .header-btn {
+    min-width: auto;
+    flex: 1; /* Login-Button füllt den Rest */
+  }
+  .header-row .header-btn:first-child {
+    flex: 0 0 44px; /* Hamburger bleibt kompakt */
+    min-width: 44px;
+  }
+}
