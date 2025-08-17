@@ -219,9 +219,9 @@ function ProductDetails({ row, currencyCode, onEdit, onDelete }) {
   return (
     <div style={{ display:"grid", gap:12 }}>
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
+        <Field label="Kategorie-Code"><div>{row.categoryCode || "—"}</div></Field>
         <Field label="Name"><div>{row.name}</div></Field>
         <Field label="Typ"><div>{row.type === "service" ? "Dienstleistung" : "Produkt"}</div></Field>
-        <Field label="Kategorie-Code"><div>{row.categoryCode || "—"}</div></Field>
       </div>
 
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
