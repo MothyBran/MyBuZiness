@@ -239,3 +239,26 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 @media (max-width: 420px) {
   .table th { font-size: 12px; }
 }
+
+/* ---- Responsive Positions-Tabelle (nur im Modal) ---- */
+.table-wrap {
+  overflow-x: auto;           /* wichtig: Slide links/rechts */
+  -webkit-overflow-scrolling: touch;
+}
+
+table.pos-table {
+  min-width: 640px;           /* sorgt dafür, dass "Produkt" nicht verschwindet */
+}
+
+@media (max-width: 640px) {
+  table.pos-table th,
+  table.pos-table td {
+    padding: 6px 8px;         /* kompakter auf Handy */
+    white-space: nowrap;      /* keine hässlichen Umbrüche */
+  }
+  table.pos-table select,
+  table.pos-table input {
+    padding: 8px 10px;        /* fingerfreundlich, aber kompakt */
+    font-size: 14px;
+  }
+}
