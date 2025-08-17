@@ -10,32 +10,16 @@ export default function RootLayout({ children }) {
   return (
     <html lang="de">
       <body style={{ overflowX: "hidden", width: "100%", maxWidth: "100%" }}>
-        {/* Neuer Header mit Logo, Claim, Auth-Buttons & Modul-Panel */}
         <HeaderTop />
-
-        {/* Hauptinhalt (kein horizontales Scrollen) */}
         <main style={{ flex: 1, width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
           {children}
         </main>
-
-        {/* Footer */}
         <footer
           className="container"
-          style={{
-            paddingTop: 30,
-            paddingBottom: 30,
-            color: "var(--muted)",
-            fontSize: 13,
-          }}
+          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--muted)", fontSize: 13 }}
         >
-          <div
-            style={{
-              borderTop: "1px solid rgba(0,0,0,.06)",
-              paddingTop: 14,
-            }}
-          >
-            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte
-            vorbehalten.
+          <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 14 }}>
+            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte vorbehalten.
             <br />
             Kleinunternehmerregelung gem. § 19 UStG: Es erfolgt kein Ausweis der Umsatzsteuer.
           </div>
