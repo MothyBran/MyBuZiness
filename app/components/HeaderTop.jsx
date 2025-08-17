@@ -9,11 +9,11 @@ export default function HeaderTop() {
 
   return (
     <header className="hero" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
-      <div className="container" style={{ paddingTop: 14, paddingBottom: 10 }}>
+      <div className="container" style={{ paddingTop: 10, paddingBottom: 10 }}>
         
         {/* Logo + Überschrift */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <Image src="/logo.png" alt="BuZiness Logo" width={56} height={56} priority style={{ borderRadius: 10 }} />
+          <Image src="/logo.png" alt="BuZiness Logo" width={64} height={64} priority style={{ borderRadius: 6 }} />
           <div style={{ lineHeight: 1.2, minWidth: 0 }}>
             <h1 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>BuZiness</h1>
             <p className="subtle" style={{ marginTop: 2 }}>„Schnell erfassen, sicher verwalten.“</p>
