@@ -11,21 +11,32 @@ export default function RootLayout({ children }) {
   return (
     <html lang="de">
       <body>
-        {/* Top-Header mit Logo, Claim, Auth-Buttons & Module-Panel */}
+        {/* Neuer Header mit Logo, Claim, Auth-Buttons & Modul-Panel */}
         <HeaderTop />
 
-        {/* Seiteninhalt */}
-        <div className="container" style={{ paddingTop: 18 }}>
+        {/* Hauptinhalt */}
+        <main style={{ flex: 1, width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
           {children}
-        </div>
+        </main>
 
-        {/* Footer (falls vorhanden), sonst minimaler Footer */}
+        {/* Footer mit Firmendaten */}
         <footer
           className="container"
-          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--muted)", fontSize: 13 }}
+          style={{
+            paddingTop: 30,
+            paddingBottom: 30,
+            color: "var(--muted)",
+            fontSize: 13,
+          }}
         >
-          <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 14 }}>
-            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte vorbehalten.
+          <div
+            style={{
+              borderTop: "1px solid rgba(0,0,0,.06)",
+              paddingTop: 14,
+            }}
+          >
+            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte
+            vorbehalten.
             <br />
             Kleinunternehmerregelung gem. § 19 UStG: Es erfolgt kein Ausweis der Umsatzsteuer.
           </div>
