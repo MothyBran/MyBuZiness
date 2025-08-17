@@ -84,13 +84,14 @@ export default function InvoicesPage() {
 
     setCustomers(cst?.data || []);
 
-    const mappedProducts = (prj?.data || []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      priceCents: Number.isFinite(p.unitPriceCents) ? p.unitPriceCents : 0,
-      currency: p.currency || "EUR",
-    }));
-    setProducts(mappedProducts);
+    // Produkte exakt nach deiner API mappen: priceCents
+const mappedProducts = (prj?.data || []).map(p => ({
+  id: p.id,
+  name: p.name,
+  priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+  currency: p.currency || "EUR",
+}));
+setProducts(mappedProducts);
 
     setLoading(false);
   }
