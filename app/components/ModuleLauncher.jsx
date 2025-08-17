@@ -7,11 +7,7 @@ import { usePathname } from "next/navigation";
 export default function ModuleLauncher({ open, onClose, id }) {
   const pathname = usePathname();
 
-  // Schließe Panel beim Navigieren
-  useEffect(() => {
-    if (open) onClose?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  useEffect(() => { if (open) onClose?.(); /* schließt bei Navigation */ }, [pathname]); // eslint-disable-line
 
   if (!open) return null;
 
@@ -19,20 +15,9 @@ export default function ModuleLauncher({ open, onClose, id }) {
     <div
       id={id}
       className="surface"
-      style={{
-        marginTop: 12,
-        padding: 12,
-        borderRadius: "var(--radius)",
-        boxShadow: "var(--shadow-md)",
-      }}
+      style={{ marginTop: 12, padding: 12, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)" }}
     >
-      <div
-        style={{
-          display: "grid",
-          gap: 10,
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-        }}
-      >
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <ModuleLink href="/">Dashboard</ModuleLink>
         <ModuleLink href="/kunden">Kunden</ModuleLink>
         <ModuleLink href="/produkte">Produkte & Dienstleistungen</ModuleLink>
