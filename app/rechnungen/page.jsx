@@ -17,7 +17,7 @@ function currency(cents, cur = "EUR") {
 function Field({ label, children }) {
   return (
     <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#666" }}>{label}</span>
+      <span style={{ fontSize: 12, color: "#666", whiteSpace:"nowrap" }}>{label}</span>
       {children}
     </div>
   );
@@ -33,27 +33,30 @@ export default function InvoicesPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-
   const [openNew, setOpenNew] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editId, setEditId] = useState(null);
 
   const [currencyCode, setCurrencyCode] = useState("EUR");
   const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   async function load() {
     setLoading(true);
-    const [res, st, cs] = await Promise.all([
+    const [res, st, cs, pr] = await Promise.all([
       fetch(q ? `/api/invoices?q=${encodeURIComponent(q)}` : "/api/invoices", { cache: "no-store" }),
       fetch("/api/settings", { cache: "no-store" }),
       fetch("/api/customers", { cache: "no-store" }),
+      fetch("/api/products", { cache: "no-store" }),
     ]);
     const js = await res.json().catch(()=>({ data: [] }));
     const stj = await st.json().catch(()=>({ data:{ currencyDefault:"EUR" }}));
     const cst = await cs.json().catch(()=>({ data: [] }));
+    const prj = await pr.json().catch(()=>({ data: [] }));
     setRows(js.data || []);
     setCurrencyCode(stj?.data?.currencyDefault || "EUR");
     setCustomers(cst.data || []);
+    setProducts((prj.data || []).map(p => ({ id: p.id, name: p.name, priceCents: p.unitPriceCents, currency: p.currency })));
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -85,7 +88,7 @@ export default function InvoicesPage() {
       currency: currencyCode,
       taxRate: Number(fd.get("vatExempt")==="on" ? 0 : (fd.get("taxRate")||19)),
       items: JSON.parse(fd.get("items") || "[]").map(it => ({
-        productId: null,
+        productId: it.productId || null,
         name: it.name,
         description: null,
         quantity: Number(it.quantity||0),
@@ -119,10 +122,10 @@ export default function InvoicesPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th>Kunde</th>
-                <th className="hide-sm">Datum</th>
-                <th>Betrag</th>
+                <th style={{whiteSpace:"nowrap"}}>Nr.</th>
+                <th style={{whiteSpace:"nowrap"}}>Kunde</th>
+                <th className="hide-sm" style={{whiteSpace:"nowrap"}}>Datum</th>
+                <th style={{whiteSpace:"nowrap"}}>Betrag</th>
               </tr>
             </thead>
             <tbody>
@@ -149,6 +152,7 @@ export default function InvoicesPage() {
                             <InvoiceEditForm
                               initial={r}
                               customers={customers}
+                              products={products}
                               currencyCode={r.currency || currencyCode}
                               onCancel={() => setEditId(null)}
                               onSave={(values) => saveInvoice(r.id, values)}
@@ -181,6 +185,7 @@ export default function InvoicesPage() {
           onClose={()=>setOpenNew(false)}
           onSubmit={createInvoice}
           customers={customers}
+          products={products}
           currencyCode={currencyCode}
         />
       )}
@@ -207,10 +212,10 @@ function InvoiceDetails({ row, currencyCode, onEdit, onDelete }) {
         <table className="table">
           <thead>
             <tr>
-              <th>Bezeichnung</th>
-              <th style={{ width:110 }}>Menge</th>
-              <th style={{ width:160 }}>Einzelpreis</th>
-              <th style={{ width:160 }}>Summe</th>
+              <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+              <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
             </tr>
           </thead>
           <tbody>
@@ -244,7 +249,7 @@ function InvoiceDetails({ row, currencyCode, onEdit, onDelete }) {
   );
 }
 
-function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave }) {
+function InvoiceEditForm({ initial, customers, products, currencyCode, onCancel, onSave }) {
   const [customerId, setCustomerId] = useState(initial?.customerId || "");
   const [issueDate, setIssueDate] = useState(initial?.issueDate ? String(initial.issueDate).slice(0,10) : new Date().toISOString().slice(0,10));
   const [dueDate, setDueDate] = useState(initial?.dueDate ? String(initial.dueDate).slice(0,10) : "");
@@ -253,6 +258,7 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
 
   const [items, setItems] = useState(() => (initial?.items || []).map(x => ({
     id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
+    productId: null,
     name: x.name || "",
     quantity: Number(x.quantity||0),
     unitPrice: x.unitPriceCents ? (x.unitPriceCents/100).toString().replace(".",",") : "",
@@ -262,9 +268,15 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
   const tax = vatExempt ? 0 : Math.round(itemsTotal * (Number(taxRate||0)/100));
   const gross = itemsTotal + tax;
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]); }
+  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
   function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+
+  function onPickProduct(rowId, productId) {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+  }
 
   function submit(e){
     e.preventDefault();
@@ -278,7 +290,7 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
       currency: currencyCode,
       taxRate: vatExempt ? 0 : Number(taxRate||0),
       items: items.map(it => ({
-        productId: null,
+        productId: it.productId || null,
         name: it.name,
         description: null,
         quantity: Number(it.quantity||0),
@@ -289,7 +301,7 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
 
   return (
     <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
         <Field label="Kunde *">
           <select value={customerId} onChange={e=>setCustomerId(e.target.value)} style={input} required>
             <option value="">– wählen –</option>
@@ -302,18 +314,18 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
         <Field label="Fällig bis">
           <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={input}/>
         </Field>
-        <Field label="Währung"><input value={currencyCode} disabled style={input}/></Field>
       </div>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th>Bezeichnung</th>
-              <th style={{ width:110 }}>Menge</th>
-              <th style={{ width:160 }}>Einzelpreis</th>
-              <th style={{ width:160 }}>Summe</th>
-              <th style={{ width:110, textAlign:"right" }}>Aktion</th>
+              <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
+              <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+              <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
+              <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
             </tr>
           </thead>
           <tbody>
@@ -323,7 +335,15 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
               const line = qty*up;
               return (
                 <tr key={r.id}>
-                  <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                  <td>
+                    <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
+                      <option value="">– auswählen –</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
                   <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
                   <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
                   <td>{currency(line, currencyCode)}</td>
@@ -331,7 +351,7 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
                 </tr>
               );
             })}
-            {items.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+            {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -364,22 +384,27 @@ function InvoiceEditForm({ initial, customers, currencyCode, onCancel, onSave })
 }
 
 /* ===== Mini-Modal Neu ===== */
-function NewInvoiceSheet({ onClose, onSubmit, customers, currencyCode }) {
+function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode }) {
   const [customerId, setCustomerId] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0,10));
   const [dueDate, setDueDate] = useState("");
   const [vatExempt, setVatExempt] = useState(false);
   const [taxRate, setTaxRate] = useState(19);
 
-  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]);
+  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]);
 
   const itemsTotal = useMemo(() => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0), [items]);
   const tax = vatExempt ? 0 : Math.round(itemsTotal * (Number(taxRate||0) / 100));
   const gross = itemsTotal + tax;
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]); }
+  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
   function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+  function onPickProduct(rowId, productId) {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+  }
 
   return (
     <div className="surface" style={modalWrap}>
@@ -392,7 +417,7 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, currencyCode }) {
         hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
         onSubmit(e);
       }} style={{ display:"grid", gap:12 }}>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
           <Field label="Kunde *">
             <select value={customerId} onChange={e=>setCustomerId(e.target.value)} style={input} name="customerId" required>
               <option value="">– wählen –</option>
@@ -401,18 +426,18 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, currencyCode }) {
           </Field>
           <Field label="Datum"><input type="date" value={issueDate} onChange={e=>setIssueDate(e.target.value)} style={input} name="issueDate"/></Field>
           <Field label="Fällig bis"><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} style={input} name="dueDate"/></Field>
-          <Field label="Währung"><input value={currencyCode} disabled style={input}/></Field>
         </div>
 
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>Bezeichnung</th>
-                <th style={{ width:110 }}>Menge</th>
-                <th style={{ width:160 }}>Einzelpreis</th>
-                <th style={{ width:160 }}>Summe</th>
-                <th style={{ width:110, textAlign:"right" }}>Aktion</th>
+                <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
+                <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+                <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+                <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+                <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
+                <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
               </tr>
             </thead>
             <tbody>
@@ -422,7 +447,15 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, currencyCode }) {
                 const line = qty*up;
                 return (
                   <tr key={r.id}>
-                    <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                    <td>
+                      <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
+                        <option value="">– auswählen –</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
                     <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
                     <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
                     <td>{currency(line, currencyCode)}</td>
@@ -430,7 +463,7 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, currencyCode }) {
                   </tr>
                 );
               })}
-              {items.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+              {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
             </tbody>
           </table>
         </div>
