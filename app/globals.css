@@ -214,9 +214,8 @@ body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-ins
 }
 
 /* klickbare Tabellenzeilen */
-.row-clickable:hover {
-  background: #f9fafb;
-}
-.row-clickable:active {
-  background: #f3f4f6;
-}
+.row-clickable:hover { background: #f9fafb; }
+.row-clickable:active { background: #f3f4f6; }
+
+/* Tabellen in Cards sollen nicht überlaufen */
+.table-wrap { overflow-x: auto; }
