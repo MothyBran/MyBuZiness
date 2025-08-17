@@ -204,3 +204,4 @@ function CustomerModal({ title, open, onClose, onSaved, initial }) {
     </Modal>
   );
 }
+
