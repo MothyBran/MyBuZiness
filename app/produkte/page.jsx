@@ -238,3 +238,4 @@ function ProductModal({ title, open, onClose, onSaved, initial, currencyCode="EU
     </Modal>
   );
 }
+
