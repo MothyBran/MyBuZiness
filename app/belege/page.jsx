@@ -84,15 +84,15 @@ export default function ReceiptsPage() {
       defaultVat: Number.isFinite(st.defaultVat) ? st.defaultVat : 19,
     });
 
-    // Striktes Mapping auf unsere Felder
-    const mappedProducts = (prJs?.data || []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      priceCents: Number.isFinite(p.unitPriceCents) ? p.unitPriceCents : 0,
-      currency: p.currency || "EUR",
-    }));
-    setProducts(mappedProducts);
-
+    // Produkte exakt nach deiner API mappen: priceCents
+const mappedProducts = (prJs?.data || []).map(p => ({
+  id: p.id,
+  name: p.name,
+  priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+  currency: p.currency || "EUR",
+}));
+setProducts(mappedProducts);
+    
     setCustomers(csJs?.data || []);
     setLoading(false);
   }
