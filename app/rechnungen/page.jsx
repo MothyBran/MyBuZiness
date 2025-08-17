@@ -375,7 +375,7 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
     updateRow(rowId, {
       productId,
       name: p.name,
-      unitPrice: (p.priceCents / 100).toString().replace(".", ","),
+      unitPrice: (p.priceCents / 100).toFixed(2),
     });
   }
 
@@ -411,15 +411,15 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
         </div>
 
         {/* Positionen */}
-        <div className="table-wrap">
-          <table className="table">
+        <div className="table-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table className="table pos-table">
             <thead>
               <tr>
-                <th style={{ whiteSpace: "nowrap" }}>Produkt</th>
-                <th style={{ width: 120, whiteSpace: "nowrap" }}>Menge</th>
-                <th style={{ width: 160, whiteSpace: "nowrap" }}>Einzelpreis</th>
-                <th style={{ width: 160, whiteSpace: "nowrap" }}>Summe</th>
-                <th style={{ width: 110, textAlign: "right", whiteSpace: "nowrap" }}>Aktion</th>
+                <th>Produkt</th>
+                <th style={{ width: 96, textAlign: "left" }}>Menge</th>
+                <th style={{ width: 140, textAlign: "left" }}>Einzelpreis</th>
+                <th style={{ width: 140, textAlign: "left" }}>Summe</th>
+                <th style={{ width: 110, textAlign: "right" }}>Aktion</th>
               </tr>
             </thead>
             <tbody>
@@ -430,32 +430,44 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
                   </td>
                 </tr>
               )}
-              {items.map(r => {
+              {items.map((r) => {
                 const qty = Number(r.quantity || 0);
                 const upCents = toCents(r.unitPrice || 0);
                 const line = qty * upCents;
                 return (
                   <tr key={r.id}>
                     <td>
-                      <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={input}>
+                      <select
+                        value={r.productId}
+                        onChange={(e) => onPickProduct(r.id, e.target.value)}
+                        style={{ ...input, minWidth: 200 }}
+                      >
                         <option value="">– auswählen –</option>
-                        {localProducts.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                        {localProducts.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
                         ))}
                       </select>
                     </td>
-                    <td>
+                    <td style={{ width: 96 }}>
                       <input
                         value={r.quantity}
-                        onChange={(e) => updateRow(r.id, { quantity: parseInt(e.target.value || "1", 10) })}
+                        onChange={(e) =>
+                          updateRow(r.id, {
+                            quantity: parseInt(e.target.value || "1", 10),
+                          })
+                        }
                         style={input}
                         inputMode="numeric"
                       />
                     </td>
-                    <td>{currency(upCents, currencyCode)}</td>
-                    <td>{currency(line, currencyCode)}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>Entfernen</button>
+                    <td style={{ width: 140, whiteSpace: "nowrap" }}>{currency(upCents, currencyCode)}</td>
+                    <td style={{ width: 140, whiteSpace: "nowrap" }}>{currency(line, currencyCode)}</td>
+                    <td style={{ width: 110, textAlign: "right" }}>
+                      <button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>
+                        Entfernen
+                      </button>
                     </td>
                   </tr>
                 );
@@ -463,9 +475,12 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
             </tbody>
           </table>
           <div style={{ marginTop: 8 }}>
-            <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
+            <button type="button" onClick={addRow} style={btnGhost}>
+              + Position
+            </button>
           </div>
         </div>
+
 
         {/* Rabatt & Summen */}
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", alignItems: "center" }}>
