@@ -1,3 +1,7 @@
+/* =========================================================
+   BuZiness — Global Styles (mobile-first)
+   ========================================================= */
+
 /* ===== Reset & Base ===== */
 *,
 *::before,
@@ -20,7 +24,14 @@ body {
   line-height: 1.45;
 }
 
-/* ===== Theme tokens ===== */
+/* --- WICHTIG: kein horizontales Scrollen site-wide --- */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* ===== Theme Tokens ===== */
 :root {
   --radius: 14px;
   --shadow-xs: 0 1px 2px rgba(0,0,0,.06);
@@ -29,16 +40,31 @@ body {
   --shadow-lg: 0 24px 60px rgba(0,0,0,.14);
   --border: 1px solid rgba(0,0,0,.07);
   --muted: #6b7280;
+
   --color-bg: #fafafa;
   --color-text: #111;
-  --color-primary: #2563eb;
+  --color-primary: #2563eb; /* Blau */
 }
 
-/* ===== Layout helpers ===== */
+/* Optional: Dark mode (auto) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0b0b0d;
+    --color-text: #f3f4f6;
+    --border: 1px solid rgba(255,255,255,.08);
+    --muted: #9aa0aa;
+  }
+  .surface { background: #121317; }
+  .modal-sheet { background: #121317; border-color: rgba(255,255,255,.08); }
+  .btn-ghost { background: transparent; }
+}
+
+/* ===== Layout Helpers ===== */
 .container {
   max-width: 1100px;
   margin: 0 auto;
   padding: 20px;
+  width: 100%;
 }
 @media (min-width: 1024px) {
   .container { padding: 24px; }
@@ -67,7 +93,7 @@ body {
   border-color: rgba(0,0,0,.10);
 }
 
-/* ===== Hero ===== */
+/* ===== Hero / Header-Band ===== */
 .hero {
   background:
     radial-gradient(1200px 600px at 10% -20%, rgba(37,99,235,.14), transparent),
@@ -78,7 +104,7 @@ body {
   backdrop-filter: saturate(120%) blur(2px);
 }
 
-/* ===== Grid ===== */
+/* ===== Grids ===== */
 .grid-3 { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid-2 { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 1020px) {
@@ -88,7 +114,7 @@ body {
   .grid-3, .grid-2 { grid-template-columns: 1fr; }
 }
 
-/* ===== Stat card ===== */
+/* ===== Stat Card ===== */
 .stat { padding: 16px; }
 .stat-title { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .2px; margin-bottom: 8px; }
 .stat-value { font-size: clamp(22px, 3.2vw, 34px); font-weight: 900; letter-spacing: .2px; color: var(--color-primary); }
@@ -100,9 +126,20 @@ body {
 
 /* ===== Table (responsive) ===== */
 .table-wrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; table-layout: fixed; } /* fixed Layout = stabilere Breite */
-.table th, .table td { text-align: left; padding: 10px 10px; border-bottom: 1px solid rgba(0,0,0,.06); vertical-align: top; }
-.table th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+.table { width: 100%; border-collapse: collapse; table-layout: fixed; } /* fixed = stabilere Breite */
+.table th, .table td {
+  text-align: left;
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: top;
+}
+.table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--muted);
+}
+.table tr:hover td { background: rgba(0,0,0,.02); }
 
 /* Utility: weiche Silbentrennung & kein Überlaufen */
 .table td, .table th { word-break: break-word; overflow-wrap: anywhere; }
@@ -114,16 +151,14 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Spalten mobil ausblendbar */
+/* Spalten mobil ausblendbar (siehe UI-Table-Komponente) */
 .hide-sm { display: table-cell; }
 @media (max-width: 640px) {
   .hide-sm { display: none; }
 }
 
-/* ===== Forms & Buttons ===== */
-input, select, textarea, button {
-  font: inherit;
-}
+/* ===== Forms & Inputs ===== */
+input, select, textarea, button { font: inherit; }
 input, select, textarea {
   width: 100%;
   padding: 10px 12px;
@@ -133,8 +168,9 @@ input, select, textarea {
   outline: none;
   min-height: 42px;
 }
+textarea { resize: vertical; }
 
-/* Buttons */
+/* ===== Buttons ===== */
 .btn, .btn-ghost {
   display: inline-flex;
   align-items: center;
@@ -148,8 +184,14 @@ input, select, textarea {
   box-shadow: var(--shadow-xs);
   transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
 }
-.btn { color: #fff; background: var(--color-primary); }
-.btn-ghost { background: #fff; color: var(--color-primary); }
+.btn {
+  color: #fff;
+  background: var(--color-primary);
+}
+.btn-ghost {
+  background: #fff;
+  color: var(--color-primary);
+}
 .btn:hover, .btn-ghost:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); opacity: .95; }
 .btn:active, .btn-ghost:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
 
@@ -158,7 +200,7 @@ input, select, textarea {
   .btn, .btn-ghost { width: 100%; }
 }
 
-/* ===== Modal responsive ===== */
+/* ===== Modal (responsive) ===== */
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.45);
@@ -184,16 +226,31 @@ input, select, textarea {
   cursor: pointer; width: 32px; height: 32px; line-height: 30px; font-size: 20px;
 }
 
-/* Engere Abstände auf sehr kleinen Screens */
-@media (max-width: 400px) {
-  .panel, .stat, .modal-body, .container { padding: 12px; }
-  input, select, textarea { min-height: 40px; }
+/* ===== Module-Panel (Launcher) ===== */
+.module-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+  box-shadow: var(--shadow-xs);
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.module-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  border-color: rgba(0,0,0,.12);
 }
 
-/* ===== Images ===== */
-img { max-width: 100%; height: auto; }
+/* ===== Media ===== */
+img, svg, video, canvas { max-width: 100%; height: auto; display: block; }
 
-/* ===== Motion respect ===== */
+/* ===== Accessibility / Motion ===== */
 @media (prefers-reduced-motion: reduce) {
   .surface, .btn, .btn-ghost { transition: none; }
   .surface:hover { transform: none; }
