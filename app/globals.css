@@ -73,3 +73,58 @@ img, svg, video, canvas { max-width: 100%; height: auto; }
 .table th, .table td { text-align: left; padding: 10px; border-bottom: 1px solid rgba(0,0,0,.06); word-break: break-word; overflow-wrap: anywhere; }
 
 .module-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: rgba(0,0,0,.12); }
+
+/* ===== Mobile polish ===== */
+
+/* Kein horizontales Scrollen & Safe-Area auf iOS */
+html, body { overflow-x: hidden; width: 100%; max-width: 100%; }
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+/* Header-Zeile: Menü links, Login rechts */
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Kompaktes Icon-Button mit großem Tap-Target */
+.btn-icon {
+  width: 44px; height: 44px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: calc(var(--radius) - 6px);
+}
+
+/* Hamburger (3 Striche) */
+.hamburger { display: inline-flex; flex-direction: column; gap: 4px; }
+.hamburger span {
+  display: block; width: 22px; height: 2px;
+  background: currentColor; border-radius: 2px;
+}
+
+/* Login rechts niemals zu schmal */
+.header-login { min-width: 120px; text-align: center; }
+
+/* Module-Panel: Kartenraster auch auf sehr kleinen Screens stabil */
+@media (max-width: 480px) {
+  #module-panel .module-pill { padding: 12px; min-height: 44px; }
+  .container { padding-left: 16px; padding-right: 16px; }
+}
+
+/* Buttons/Inputs: auf Mobile gern volle Breite */
+@media (max-width: 640px) {
+  .btn, .btn-ghost { width: 100%; }
+  .header-row .btn-ghost { width: 44px; } /* Menü-Icon bleibt kompakt */
+  input, select, textarea { min-height: 44px; }
+}
+
+/* Tabellen: stabile Breiten, kein Überlaufen */
+.table { table-layout: fixed; }
+.table th, .table td { word-break: break-word; overflow-wrap: anywhere; }
+
+/* Ellipsis-Helfer (einzeilig) */
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Module-Pills: sanfter Hover auch touch-freundlich */
+.module-pill { will-change: transform; }
+.module-pill:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
