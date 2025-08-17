@@ -2,7 +2,6 @@
 import { initDb, q, uuid } from "@/lib/db";
 import { NextResponse } from "next/server";
 
-// Wir halten genau eine Settings-Zeile (singleton)
 async function fetchOne() {
   const rows = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows;
   return rows[0] || null;
@@ -12,7 +11,8 @@ export async function GET() {
   try {
     await initDb();
     const row = await fetchOne();
-    return NextResponse.json({ ok: true, data: row || {} });
+    const data = row ? { ...row, owner: row.ownerName ?? null } : {};
+    return NextResponse.json({ ok: true, data });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }
@@ -23,9 +23,11 @@ export async function PUT(request) {
     await initDb();
     const body = await request.json().catch(() => ({}));
 
+    const ownerName = body.ownerName ?? body.owner ?? null;
+
     const payload = {
       companyName: body.companyName ?? null,
-      ownerName: body.ownerName ?? null,
+      ownerName,
       address1: body.address1 ?? null,
       address2: body.address2 ?? null,
       postalCode: body.postalCode ?? null,
@@ -81,7 +83,8 @@ export async function PUT(request) {
     }
 
     const fresh = await fetchOne();
-    return NextResponse.json({ ok: true, data: fresh });
+    const data = fresh ? { ...fresh, owner: fresh.ownerName ?? null } : {};
+    return NextResponse.json({ ok: true, data });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 400 });
   }
