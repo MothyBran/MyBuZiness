@@ -278,22 +278,33 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
   const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState("");
   const [items, setItems] = useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice: "" }
+    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }
   ]);
 
-  const itemsTotal = useMemo(() =>
-    items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0)
-  ,[items]);
+  // Summenberechnung
+  const itemsTotal = useMemo(
+    () => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0),
+    [items]
+  );
   const discountCents = toCents(discount || 0);
   const gross = Math.max(0, itemsTotal - discountCents);
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]); }
-  function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
-  function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+  // Helpers
+  function addRow(){
+    setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]);
+  }
+  function updateRow(id, patch){
+    setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
+  }
+  function removeRow(id){ setItems(prev => prev.filter(r => r.id !== id)); }
   function onPickProduct(rowId, productId) {
     const p = products.find(x => x.id === productId);
     if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
-    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+    updateRow(rowId, {
+      productId,
+      name: p.name,
+      unitPrice: (p.priceCents/100).toString().replace(".", ",")
+    });
   }
 
   return (
@@ -302,12 +313,16 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
         <div style={{ fontWeight: 800 }}>Neuen Beleg erfassen</div>
         <button onClick={onClose} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
       </div>
-      <form onSubmit={(e)=>{ 
-        const hidden = document.querySelector("#new-receipt-items");
-        hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
-        onSubmit(e);
-      }} style={{ display:"grid", gap:12 }}>
-        {/* Kopf: Nr., Datum, Kunde */}
+
+      <form
+        onSubmit={(e)=>{ 
+          const hidden = document.querySelector("#new-receipt-items");
+          hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
+          onSubmit(e);
+        }}
+        style={{ display:"grid", gap:12 }}
+      >
+        {/* Kopf: Nr., Datum, Kunde (optional) */}
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
           <Field label="Nr.">
             <input style={input} name="receiptNo" value={receiptNo} onChange={e=>setReceiptNo(e.target.value)} placeholder="automatisch oder manuell" />
@@ -323,7 +338,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
           </Field>
         </div>
 
-        {/* Positionsliste: Produkt, Menge */}
+        {/* Positionen: nur Produkt + Menge; Preis & Summe read-only */}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -338,10 +353,11 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
             <tbody>
               {items.map(r => {
                 const qty = Number(r.quantity||0);
-                const up = toCents(r.unitPrice || 0);
-                const line = qty*up;
+                const upCents = toCents(r.unitPrice || 0);
+                const line = qty * upCents;
                 return (
                   <tr key={r.id}>
+                    {/* Produkt */}
                     <td>
                       <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
                         <option value="">– auswählen –</option>
@@ -350,10 +366,27 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
                         ))}
                       </select>
                     </td>
-                    <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
-                    <td><input value={r.unitPrice} disabled style={input} /></td>
+
+                    {/* Menge */}
+                    <td>
+                      <input
+                        value={r.quantity}
+                        onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})}
+                        style={input}
+                        inputMode="numeric"
+                      />
+                    </td>
+
+                    {/* Einzelpreis (nur Anzeige) */}
+                    <td>{currency(upCents, currencyCode)}</td>
+
+                    {/* Summe (nur Anzeige) */}
                     <td>{currency(line, currencyCode)}</td>
-                    <td style={{ textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
+
+                    {/* Entfernen */}
+                    <td style={{ textAlign:"right" }}>
+                      <button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button>
+                    </td>
                   </tr>
                 );
               })}
@@ -367,7 +400,9 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
           <Field label="Rabatt gesamt">
             <input name="discount" value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" placeholder="z. B. 10,00" />
           </Field>
-          <div style={{ fontWeight:700, minWidth:220, textAlign:"right" }}>Gesamt: {currency(gross, currencyCode)}</div>
+          <div style={{ fontWeight:700, minWidth:220, textAlign:"right" }}>
+            Gesamt: {currency(gross, currencyCode)}
+          </div>
         </div>
 
         {/* Hidden items JSON */}
