@@ -190,12 +190,12 @@ export default function ReceiptsPage() {
       {/* Mini-Modal Neu */}
       {openNew && (
         <NewReceiptSheet
-          currencyCode={currencyCode}
-          products={products}
-          customers={customers}
-          kleinunternehmer={settings.kleinunternehmer}
-          onClose={()=>setOpenNew(false)}
-          onSubmit={createReceipt}
+          onClose={()=>setShowNew(false)}
+    onSubmit={createReceipt}
+    products={products}          // ✅ hinzufügen
+    customers={customers}        // falls Kunden optional
+    currencyCode={settings.currency}
+    kleinunternehmer={settings.kleinunternehmer}
         />
       )}
     </main>
