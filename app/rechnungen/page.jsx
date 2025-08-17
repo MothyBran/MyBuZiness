@@ -194,12 +194,12 @@ export default function InvoicesPage() {
       {/* Mini-Modal Neu */}
       {openNew && (
         <NewInvoiceSheet
-          onClose={()=>setOpenNew(false)}
-          onSubmit={createInvoice}
-          customers={customers}
-          products={products}
-          currencyCode={currencyCode}
-          settings={settings}
+          onClose={()=>setShowNew(false)}
+    onSubmit={createInvoice}
+    products={products}          // ✅ hinzufügen
+    customers={customers}
+    currencyCode={settings.currency}
+    settings={settings}
         />
       )}
     </main>
