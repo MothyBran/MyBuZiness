@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import Modal from "@/app/components/Modal";
 
 /** Helpers */
 function Field({ label, children }) {
@@ -24,9 +22,9 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  const [openNew, setOpenNew] = useState(false);
-  const [detailRow, setDetailRow] = useState(null);   // zeigt Detail-Modal
-  const [editRow, setEditRow] = useState(null);       // zeigt Bearbeiten-Modal
+  const [openNew, setOpenNew] = useState(false); // bleibt: Neu-Modal
+  const [expandedId, setExpandedId] = useState(null); // welche Zeile ist aufgeklappt
+  const [editId, setEditId] = useState(null); // welche Zeile ist im Edit-Modus
 
   async function load() {
     setLoading(true);
@@ -37,19 +35,57 @@ export default function CustomersPage() {
   }
   useEffect(() => { load(); }, []);
 
+  function toggleExpand(id) {
+    setExpandedId(prev => prev === id ? null : id);
+    setEditId(null);
+  }
+
   async function removeCustomer(id) {
     if (!confirm("Diesen Kunden wirklich löschen?")) return;
     const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
     const js = await res.json().catch(() => ({}));
     if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
-    setDetailRow(null);
-    setEditRow(null);
+    setExpandedId(null);
+    setEditId(null);
     load();
   }
 
+  async function saveCustomer(id, values) {
+    const res = await fetch(`/api/customers/${id}`, {
+      method:"PUT",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify(values)
+    });
+    const js = await res.json().catch(()=>({}));
+    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    setEditId(null);
+    load();
+  }
+
+  // Neu-Modal simpel gehalten (optional): du kannst gern dein bestehendes Modal weiterverwenden
+  async function createCustomer(e) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name: fd.get("name"),
+      email: fd.get("email") || null,
+      phone: fd.get("phone") || null,
+      street: fd.get("street") || null,
+      zip: fd.get("zip") || null,
+      city: fd.get("city") || null,
+      notes: fd.get("notes") || null,
+    };
+    if (!payload.name?.trim()) return alert("Name ist erforderlich.");
+    const res = await fetch("/api/customers", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    const js = await res.json().catch(()=>({}));
+    if (!js?.ok) return alert(js?.error || "Erstellen fehlgeschlagen.");
+    setOpenNew(false);
+    load();
+  }
+
+  // Kopf + Tabelle
   return (
     <main>
-      {/* Kopfzeile */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
         <h1 style={{ margin:0 }}>Kunden</h1>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -59,7 +95,6 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Liste */}
       <div style={{ ...card, marginTop: 12 }}>
         <div className="table-wrap">
           <table className="table">
@@ -73,17 +108,39 @@ export default function CustomersPage() {
             </thead>
             <tbody>
               {rows.map(r => (
-                <tr
-                  key={r.id}
-                  className="row-clickable"
-                  onClick={() => setDetailRow(r)}
-                  style={{ cursor:"pointer" }}
-                >
-                  <td className="ellipsis">{r.name}</td>
-                  <td className="hide-sm ellipsis">{r.email || "—"}</td>
-                  <td className="hide-sm ellipsis">{r.phone || "—"}</td>
-                  <td className="ellipsis">{[r.zip, r.city].filter(Boolean).join(" ") || "—"}</td>
-                </tr>
+                <>
+                  <tr
+                    key={r.id}
+                    className="row-clickable"
+                    onClick={() => toggleExpand(r.id)}
+                    style={{ cursor:"pointer" }}
+                  >
+                    <td className="ellipsis">{r.name}</td>
+                    <td className="hide-sm ellipsis">{r.email || "—"}</td>
+                    <td className="hide-sm ellipsis">{r.phone || "—"}</td>
+                    <td className="ellipsis">{[r.zip, r.city].filter(Boolean).join(" ") || "—"}</td>
+                  </tr>
+
+                  {expandedId === r.id && (
+                    <tr key={r.id + "-details"}>
+                      <td colSpan={4} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                        {editId === r.id ? (
+                          <CustomerEditForm
+                            initial={r}
+                            onCancel={() => setEditId(null)}
+                            onSave={(values) => saveCustomer(r.id, values)}
+                          />
+                        ) : (
+                          <CustomerDetails
+                            row={r}
+                            onEdit={() => setEditId(r.id)}
+                            onDelete={() => removeCustomer(r.id)}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
               {rows.length===0 && (
                 <tr><td colSpan={4} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Kunden vorhanden."}</td></tr>
@@ -93,58 +150,67 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Modal: Neu */}
-      <CustomerModal
-        title="Neuen Kunden anlegen"
-        open={openNew}
-        onClose={()=>setOpenNew(false)}
-        onSaved={()=>{ setOpenNew(false); load(); }}
-      />
-
-      {/* Modal: Details */}
-      {detailRow && (
-        <Modal open={!!detailRow} onClose={()=>setDetailRow(null)} title="Kundendetails" maxWidth={760}>
-          <div style={{ display:"grid", gap:12 }}>
+      {/* Mini-Modal für Neu anlegen */}
+      {openNew && (
+        <div className="surface" style={modalWrap}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 800 }}>Neuen Kunden anlegen</div>
+            <button onClick={()=>setOpenNew(false)} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
+          </div>
+          <form onSubmit={createCustomer} style={{ display:"grid", gap:12 }}>
             <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-              <Field label="Name"><div>{detailRow.name}</div></Field>
-              <Field label="E-Mail"><div>{detailRow.email || "—"}</div></Field>
+              <Field label="Name *"><input style={input} name="name" required /></Field>
+              <Field label="E-Mail"><input style={input} type="email" name="email" /></Field>
             </div>
             <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-              <Field label="Telefon"><div>{detailRow.phone || "—"}</div></Field>
-              <Field label="Straße"><div>{detailRow.street || "—"}</div></Field>
+              <Field label="Telefon"><input style={input} name="phone" /></Field>
+              <Field label="Straße"><input style={input} name="street" /></Field>
             </div>
             <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr" }}>
-              <Field label="PLZ"><div>{detailRow.zip || "—"}</div></Field>
-              <Field label="Ort"><div>{detailRow.city || "—"}</div></Field>
+              <Field label="PLZ"><input style={input} name="zip" /></Field>
+              <Field label="Ort"><input style={input} name="city" /></Field>
             </div>
-            <Field label="Notizen"><div style={{ whiteSpace:"pre-wrap" }}>{detailRow.notes || "—"}</div></Field>
+            <Field label="Notizen"><textarea style={{ ...input, minHeight: 90 }} name="notes" /></Field>
 
-            <div style={{ display:"flex", gap:8, justifyContent:"space-between", flexWrap:"wrap", marginTop:4 }}>
-              <Link href={`/kunden/${detailRow.id}`} className="btn-ghost">Zur Detailseite</Link>
-              <div style={{ display:"flex", gap:8 }}>
-                <button className="btn-ghost" onClick={()=>{ setEditRow(detailRow); setDetailRow(null); }}>Bearbeiten</button>
-                <button className="btn-ghost" onClick={()=>removeCustomer(detailRow.id)} style={{ borderColor:"#c00", color:"#c00" }}>Löschen</button>
-              </div>
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+              <button type="button" onClick={()=>setOpenNew(false)} style={btnGhost}>Abbrechen</button>
+              <button type="submit" style={btnPrimary}>Speichern</button>
             </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal: Bearbeiten */}
-      {editRow && (
-        <CustomerModal
-          title="Kunden bearbeiten"
-          initial={editRow}
-          open={!!editRow}
-          onClose={()=>setEditRow(null)}
-          onSaved={()=>{ setEditRow(null); load(); }}
-        />
+          </form>
+        </div>
       )}
     </main>
   );
 }
 
-function CustomerModal({ title, open, onClose, onSaved, initial }) {
+/** Details-Ansicht im aufgeklappten Bereich */
+function CustomerDetails({ row, onEdit, onDelete }) {
+  return (
+    <div style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+        <Field label="Name"><div>{row.name}</div></Field>
+        <Field label="E-Mail"><div>{row.email || "—"}</div></Field>
+      </div>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+        <Field label="Telefon"><div>{row.phone || "—"}</div></Field>
+        <Field label="Straße"><div>{row.street || "—"}</div></Field>
+      </div>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr" }}>
+        <Field label="PLZ"><div>{row.zip || "—"}</div></Field>
+        <Field label="Ort"><div>{row.city || "—"}</div></Field>
+      </div>
+      <Field label="Notizen"><div style={{ whiteSpace:"pre-wrap" }}>{row.notes || "—"}</div></Field>
+
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
+        <button className="btn-ghost" onClick={onEdit}>⚙️ Bearbeiten</button>
+        <button className="btn-ghost" onClick={onDelete} style={{ borderColor:"#c00", color:"#c00" }}>❌ Löschen</button>
+      </div>
+    </div>
+  );
+}
+
+/** Inline-Edit-Formular im aufgeklappten Bereich */
+function CustomerEditForm({ initial, onCancel, onSave }) {
   const [name, setName] = useState(initial?.name || "");
   const [email, setEmail] = useState(initial?.email || "");
   const [phone, setPhone] = useState(initial?.phone || "");
@@ -153,55 +219,43 @@ function CustomerModal({ title, open, onClose, onSaved, initial }) {
   const [city, setCity] = useState(initial?.city || "");
   const [notes, setNotes] = useState(initial?.notes || "");
 
-  useEffect(() => {
-    if (!open) return;
-    setName(initial?.name || "");
-    setEmail(initial?.email || "");
-    setPhone(initial?.phone || "");
-    setStreet(initial?.street || "");
-    setZip(initial?.zip || "");
-    setCity(initial?.city || "");
-    setNotes(initial?.notes || "");
-  }, [open, initial]);
-
-  async function submit(e) {
+  function submit(e){
     e.preventDefault();
     if (!name.trim()) return alert("Name ist erforderlich.");
-    const payload = { name, email: email || null, phone: phone || null, street: street || null, zip: zip || null, city: city || null, notes: notes || null };
-    let res;
-    if (initial?.id) {
-      res = await fetch(`/api/customers/${initial.id}`, { method:"PUT", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
-    } else {
-      res = await fetch("/api/customers", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
-    }
-    const js = await res.json().catch(()=>({}));
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
-    onSaved?.();
+    onSave({
+      name,
+      email: email || null, phone: phone || null,
+      street: street || null, zip: zip || null, city: city || null,
+      notes: notes || null
+    });
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={title} maxWidth={760}>
-      <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <Field label="Name *"><input style={input} value={name} onChange={e=>setName(e.target.value)} required /></Field>
-          <Field label="E-Mail"><input style={input} type="email" value={email} onChange={e=>setEmail(e.target.value)} /></Field>
-        </div>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <Field label="Telefon"><input style={input} value={phone} onChange={e=>setPhone(e.target.value)} /></Field>
-          <Field label="Straße"><input style={input} value={street} onChange={e=>setStreet(e.target.value)} /></Field>
-        </div>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr" }}>
-          <Field label="PLZ"><input style={input} value={zip} onChange={e=>setZip(e.target.value)} /></Field>
-          <Field label="Ort"><input style={input} value={city} onChange={e=>setCity(e.target.value)} /></Field>
-        </div>
-        <Field label="Notizen"><textarea style={{ ...input, minHeight: 90 }} value={notes} onChange={e=>setNotes(e.target.value)} /></Field>
+    <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+        <Field label="Name *"><input style={input} value={name} onChange={e=>setName(e.target.value)} required /></Field>
+        <Field label="E-Mail"><input style={input} type="email" value={email} onChange={e=>setEmail(e.target.value)} /></Field>
+      </div>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+        <Field label="Telefon"><input style={input} value={phone} onChange={e=>setPhone(e.target.value)} /></Field>
+        <Field label="Straße"><input style={input} value={street} onChange={e=>setStreet(e.target.value)} /></Field>
+      </div>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr" }}>
+        <Field label="PLZ"><input style={input} value={zip} onChange={e=>setZip(e.target.value)} /></Field>
+        <Field label="Ort"><input style={input} value={city} onChange={e=>setCity(e.target.value)} /></Field>
+      </div>
+      <Field label="Notizen"><textarea style={{ ...input, minHeight: 90 }} value={notes} onChange={e=>setNotes(e.target.value)} /></Field>
 
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
-          <button type="submit" style={btnPrimary}>Speichern</button>
-        </div>
-      </form>
-    </Modal>
+      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+        <button type="button" onClick={onCancel} style={btnGhost}>Abbrechen</button>
+        <button type="submit" style={btnPrimary}>Speichern</button>
+      </div>
+    </form>
   );
 }
 
+/* kleines Sheet-Modal ohne Portal (für "Neu") */
+const modalWrap = {
+  position:"fixed", left:"50%", top:"10%", transform:"translateX(-50%)",
+  width:"min(760px, 92vw)", maxHeight:"80vh", overflow:"auto", padding:16, zIndex:1000
+};
