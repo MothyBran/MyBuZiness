@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fromCents } from "@/lib/money";
-import { Section, StatCard, Panel, Table, Muted } from "@/app/components/UI";
+
+function currency(cents, cur = "EUR") {
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format((cents || 0) / 100);
+}
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [receipts, setReceipts] = useState([]);
-  const [currency, setCurrency] = useState("EUR");
+  const [currencyCode, setCurrencyCode] = useState("EUR");
 
   useEffect(() => {
     (async () => {
@@ -23,75 +25,111 @@ export default function DashboardPage() {
         setCustomers(cs.data || []);
         setInvoices(iv.data || []);
         setReceipts(rc.data || []);
-        setCurrency(st?.data?.currencyDefault || "EUR");
+        setCurrencyCode(st?.data?.currencyDefault || "EUR");
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const today = new Date();
   const ym = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-  const currentYM = ym(today);
+  const nowYM = ym(new Date());
 
-  const invoicesThisMonth = useMemo(() => invoices.filter(i => ym(new Date(i.issueDate)) === currentYM), [invoices, currentYM]);
-  const receiptsThisMonth = useMemo(() => receipts.filter(r => ym(new Date(r.date)) === currentYM), [receipts, currentYM]);
+  const invThisMonth = useMemo(() => invoices.filter(i => ym(new Date(i.issueDate)) === nowYM), [invoices]);
+  const rcpThisMonth = useMemo(() => receipts.filter(r => ym(new Date(r.date)) === nowYM), [receipts]);
 
-  const turnoverInvoicesMonth = invoicesThisMonth.reduce((s,i)=>s+Number(i.grossCents||0),0);
-  const turnoverReceiptsMonth = receiptsThisMonth.reduce((s,r)=>s+Number(r.grossCents||0),0);
-  const turnoverMonth = turnoverInvoicesMonth + turnoverReceiptsMonth;
+  const invSum = invThisMonth.reduce((s,i)=>s + Number(i.grossCents||0), 0);
+  const rcpSum = rcpThisMonth.reduce((s,r)=>s + Number(r.grossCents||0), 0);
+  const total = invSum + rcpSum;
 
   return (
-    <>
-      <div className="hero">
-        <Section>
-          <h1 className="page-title">Übersicht</h1>
-          <p className="subtle">Schlanke Kennzahlen und die neuesten Bewegungen. Erfassung erfolgt in den jeweiligen Modulen.</p>
-        </Section>
-      </div>
+    <div className="container" style={{ paddingTop: 18 }}>
+      {/* KPIs */}
+      <section className="grid-3">
+        <Card title="Kunden" value={loading ? "—" : customers.length} foot="Gesamt" />
+        <Card
+          title="Umsatz (aktueller Monat)"
+          value={loading ? "—" : currency(total, currencyCode)}
+          foot={`${currency(invSum, currencyCode)} Rechnungen · ${currency(rcpSum, currencyCode)} Belege`}
+        />
+        <Card title="Offene Rechnungen" value={loading ? "—" : invoices.filter(i => i.status === "open").length} foot="Status „offen“" />
+      </section>
 
-      <Section>
-        <div className="grid-3">
-          <StatCard title="Kunden" value={loading ? "—" : customers.length} foot={<Muted>Gesamt</Muted>} />
-          <StatCard title="Umsatz (aktueller Monat)" value={loading ? "—" : fromCents(turnoverMonth, currency)} foot={<Muted>{fromCents(turnoverInvoicesMonth, currency)} Rechnungen · {fromCents(turnoverReceiptsMonth, currency)} Belege</Muted>} />
-          <StatCard title="Offene Rechnungen" value={loading ? "—" : invoices.filter(i => i.status === "open").length} foot={<Muted>Status „offen“</Muted>} />
-        </div>
-      </Section>
-
-      <Section>
-        <div className="grid-2">
-          <Panel title="Zuletzt erstellte Rechnungen">
-            <Table head={["Nr.", "Kunde", "Datum", "Brutto"]} hideOnSmall={[2]}>
-              {(loading ? [] : invoices).slice(0, 10).map(r => (
-                <tr key={r.id}>
-                  <td className="ellipsis">{r.invoiceNo}</td>
-                  <td className="ellipsis">{r.customerName}</td>
-                  <td className="hide-sm">{new Date(r.issueDate).toLocaleDateString()}</td>
-                  <td>{fromCents(r.grossCents, r.currency)}</td>
+      {/* Listen */}
+      <section className="grid-2" style={{ marginTop: 16 }}>
+        <Panel title="Zuletzt erstellte Rechnungen">
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Nr.</th>
+                  <th>Kunde</th>
+                  <th className="hide-sm">Datum</th>
+                  <th>Brutto</th>
                 </tr>
-              ))}
-              {!loading && invoices.length === 0 && (
-                <tr><td colSpan={4}><Muted>Keine Rechnungen vorhanden.</Muted></td></tr>
-              )}
-            </Table>
-          </Panel>
+              </thead>
+              <tbody>
+                {(loading ? [] : invoices).slice(0, 10).map(r => (
+                  <tr key={r.id}>
+                    <td className="ellipsis">{r.invoiceNo}</td>
+                    <td className="ellipsis">{r.customerName}</td>
+                    <td className="hide-sm">{new Date(r.issueDate).toLocaleDateString()}</td>
+                    <td>{currency(r.grossCents, r.currency || currencyCode)}</td>
+                  </tr>
+                ))}
+                {!loading && invoices.length === 0 && (
+                  <tr><td colSpan={4} style={{ color:"#666" }}>Keine Rechnungen vorhanden.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
 
-          <Panel title="Zuletzt erfasste Belege">
-            <Table head={["Nr.", "Datum", "Betrag"]} hideOnSmall={[1]}>
-              {(loading ? [] : receipts).slice(0, 10).map(r => (
-                <tr key={r.id}>
-                  <td className="ellipsis">{r.receiptNo}</td>
-                  <td className="hide-sm">{new Date(r.date).toLocaleDateString()}</td>
-                  <td>{fromCents(r.grossCents, r.currency)}</td>
+        <Panel title="Zuletzt erfasste Belege">
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Nr.</th>
+                  <th className="hide-sm">Datum</th>
+                  <th>Betrag</th>
                 </tr>
-              ))}
-              {!loading && receipts.length === 0 && (
-                <tr><td colSpan={3}><Muted>Keine Belege vorhanden.</Muted></td></tr>
-              )}
-            </Table>
-          </Panel>
-        </div>
-      </Section>
-    </>
+              </thead>
+              <tbody>
+                {(loading ? [] : receipts).slice(0, 10).map(r => (
+                  <tr key={r.id}>
+                    <td className="ellipsis">{r.receiptNo}</td>
+                    <td className="hide-sm">{new Date(r.date).toLocaleDateString()}</td>
+                    <td>{currency(r.grossCents, r.currency || currencyCode)}</td>
+                  </tr>
+                ))}
+                {!loading && receipts.length === 0 && (
+                  <tr><td colSpan={3} style={{ color:"#666" }}>Keine Belege vorhanden.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+/* kleine lokale UI-Helfer */
+function Card({ title, value, foot }) {
+  return (
+    <div className="surface" style={{ padding: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#6b7280", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 28, fontWeight: 900, color: "var(--color-primary)" }}>{value}</div>
+      {foot && <div style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>{foot}</div>}
+    </div>
+  );
+}
+function Panel({ title, children }) {
+  return (
+    <div className="surface" style={{ padding: 14 }}>
+      <div style={{ fontWeight: 800, margin: "2px 2px 12px" }}>{title}</div>
+      {children}
+    </div>
   );
 }
