@@ -118,44 +118,75 @@ export default function ReceiptsPage() {
       </div>
 
       <div style={{ ...card, marginTop:12 }}>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{whiteSpace:"nowrap"}}>Nr.</th>
-                <th className="hide-sm" style={{whiteSpace:"nowrap"}}>Datum</th>
-                <th style={{whiteSpace:"nowrap"}}>Betrag</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => {
-                const d = r.date ? new Date(r.date) : null;
-                return (
-                  <>
-                    <tr key={r.id} className="row-clickable" style={{ cursor:"pointer" }} onClick={()=>toggleExpand(r.id)}>
-                      <td className="ellipsis">{r.receiptNo}</td>
-                      <td className="hide-sm">{d ? d.toLocaleDateString() : "—"}</td>
-                      <td>{currency(r.grossCents ?? r.totalCents, r.currency || currencyCode)}</td>
-                    </tr>
-                    {expandedId === r.id && (
-                      <tr key={r.id + "-details"}>
-                        <td colSpan={3} style={{ background:"#fafafa", padding:12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
-                          <ReceiptDetails row={r} currencyCode={r.currency || currencyCode} />
-                          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
-                            <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-              {rows.length===0 && (
-                <tr><td colSpan={3} style={{ textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Belege vorhanden."}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <div className="table-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+           <table className="table pos-table">
+             <thead>
+               <tr>
+                 <th>Produkt</th>
+                 <th style={{ width: 96, textAlign: "left" }}>Menge</th>
+                 <th style={{ width: 140, textAlign: "left" }}>Einzelpreis</th>
+                 <th style={{ width: 140, textAlign: "left" }}>Summe</th>
+                 <th style={{ width: 110, textAlign: "right" }}>Aktion</th>
+               </tr>
+             </thead>
+             <tbody>
+               {localProducts.length === 0 && (
+                 <tr>
+                   <td colSpan={5} style={{ color: "#666", textAlign: "center" }}>
+                     Keine Produkte gefunden. Lege zuerst Produkte unter <a href="/produkte">/produkte</a> an.
+                   </td>
+                 </tr>
+               )}
+               {items.map((r) => {
+                 const qty = Number(r.quantity || 0);
+                 const upCents = toCents(r.unitPrice || 0);
+                 const line = qty * upCents;
+                 return (
+                   <tr key={r.id}>
+                     <td>
+                       <select
+                         value={r.productId}
+                         onChange={(e) => onPickProduct(r.id, e.target.value)}
+                         style={{ ...input, minWidth: 200 }}
+                       >
+                         <option value="">– auswählen –</option>
+                         {localProducts.map((p) => (
+                           <option key={p.id} value={p.id}>
+                             {p.name}
+                           </option>
+                         ))}
+                       </select>
+                     </td>
+                     <td style={{ width: 96 }}>
+                       <input
+                         value={r.quantity}
+                         onChange={(e) =>
+                           updateRow(r.id, {
+                             quantity: parseInt(e.target.value || "1", 10),
+                           })
+                         }
+                         style={input}
+                         inputMode="numeric"
+                       />
+                     </td>
+                     <td style={{ width: 140, whiteSpace: "nowrap" }}>{currency(upCents, currencyCode)}</td>
+                     <td style={{ width: 140, whiteSpace: "nowrap" }}>{currency(line, currencyCode)}</td>
+                     <td style={{ width: 110, textAlign: "right" }}>
+                       <button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>
+                         Entfernen
+                       </button>
+                     </td>
+                   </tr>
+                 );
+               })}
+             </tbody>
+           </table>
+           <div style={{ marginTop: 8 }}>
+             <button type="button" onClick={addRow} style={btnGhost}>
+               + Position
+             </button>
+           </div>
+         </div>
       </div>
 
       {showNew && (
