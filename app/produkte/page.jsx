@@ -1,304 +1,266 @@
 "use client";
+import { useEffect, useMemo, useState } from "react";
 
-import { useEffect, useState } from "react";
-
-/** Money helpers */
-function toCents(input) {
-  if (input === null || input === undefined) return 0;
-  const s = String(input).replace(/\./g, "").replace(/,/g, ".");
-  const n = Number.parseFloat(s);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100);
+// Hilfsfunktionen
+function toCents(v) {
+  if (!v) return 0;
+  const str = String(v).replace(",", ".").replace(/[^0-9.]/g, "");
+  const num = parseFloat(str);
+  return Math.round((Number.isFinite(num) ? num : 0) * 100);
 }
-function currency(cents, cur = "EUR") {
-  const n = (Number(cents || 0) / 100);
-  return new Intl.NumberFormat("de-DE", { style:"currency", currency: cur }).format(n);
+function currency(cents, code = "EUR") {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: code,
+  }).format((cents || 0) / 100);
 }
-
-/** UI */
 function Field({ label, children }) {
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#666" }}>{label}</span>
+    <label style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontSize: 13, opacity: 0.75 }}>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16 };
-const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%" };
-const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"#fff", color:"var(--color-primary)", cursor:"pointer" };
-const btnDanger = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
 
-export default function ProductsPage() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-
-  const [openNew, setOpenNew] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
-  const [editId, setEditId] = useState(null);
+// --------- Hauptseite Rechnungen ---------
+export default function InvoicesPage() {
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [currencyCode, setCurrencyCode] = useState("EUR");
+  const [showNew, setShowNew] = useState(false);
 
   async function load() {
-    setLoading(true);
-    const [res, st] = await Promise.all([
-      fetch(q ? `/api/products?q=${encodeURIComponent(q)}` : "/api/products", { cache: "no-store" }),
-      fetch("/api/settings", { cache: "no-store" }),
+    const [ij, cj, pj] = await Promise.all([
+      fetch("/api/invoices").then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/customers").then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/products").then(r => r.json()).catch(() => ({ data: [] })),
     ]);
-    const js = await res.json().catch(() => ({ data: [] }));
-    const settings = await st.json().catch(() => ({ data: { currencyDefault: "EUR" } }));
-    setCurrencyCode(settings?.data?.currencyDefault || "EUR");
-    setRows(js.data || []);
-    setLoading(false);
+
+    setInvoices(ij.data || []);
+    setCustomers(cj.data || []);
+
+    const mappedProducts = (pj?.data || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+      currency: p.currency || "EUR",
+    }));
+    setProducts(mappedProducts);
+
+    if (mappedProducts.length > 0) setCurrencyCode(mappedProducts[0].currency);
   }
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId(prev => prev === id ? null : id);
-    setEditId(null);
-  }
+  async function onCreate(form) {
+    form.preventDefault();
+    const fd = new FormData(form.target);
+    const js = Object.fromEntries(fd.entries());
+    js.items = JSON.parse(js.items || "[]");
 
-  async function removeProduct(id) {
-    if (!confirm("Diesen Eintrag wirklich löschen?")) return;
-    const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
-    const js = await res.json().catch(() => ({}));
-    if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
-    setExpandedId(null);
-    setEditId(null);
-    load();
-  }
-
-  async function saveProduct(id, values) {
-    const res = await fetch(`/api/products/${id}`, {
-      method:"PUT",
-      headers:{ "content-type":"application/json" },
-      body: JSON.stringify(values)
+    await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(js),
     });
-    const js = await res.json().catch(()=>({}));
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
-    setEditId(null);
-    load();
-  }
 
-  async function createProduct(e) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      name: fd.get("name"),
-      type: fd.get("type"),
-      categoryCode: fd.get("categoryCode") || null,
-      unitPriceCents: toCents(fd.get("unitPrice") || 0),
-      travelRateCents: fd.get("travelRate") ? toCents(fd.get("travelRate")) : null,
-      currency: currencyCode,
-    };
-    if (!payload.name?.trim()) return alert("Name ist erforderlich.");
-    const res = await fetch("/api/products", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
-    const js = await res.json().catch(()=>({}));
-    if (!js?.ok) return alert(js?.error || "Erstellen fehlgeschlagen.");
-    setOpenNew(false);
-    load();
+    setShowNew(false);
+    await load();
   }
 
   return (
-    <main>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-        <h1 style={{ margin:0 }}>Produkte & Dienstleistungen</h1>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/Kategorie)…" style={input} />
-          <button onClick={load} style={btnGhost}>Suchen</button>
-          <button onClick={()=>setOpenNew(true)} style={btnPrimary}>+ Neuer Eintrag</button>
-        </div>
+    <div className="page">
+      <h1>Rechnungen</h1>
+      <button style={btnPrimary} onClick={() => setShowNew(true)}>+ Neue Rechnung</button>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Nr.</th>
+              <th>Datum</th>
+              <th>Kunde</th>
+              <th>Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map(r => (
+              <tr key={r.id}>
+                <td>{r.invoiceNo}</td>
+                <td>{r.date}</td>
+                <td>{r.customer?.name || "–"}</td>
+                <td>{currency(r.totalCents, r.currency || "EUR")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div style={{ ...card, marginTop: 12 }}>
+      {showNew && (
+        <NewInvoiceSheet
+          currencyCode={currencyCode}
+          products={products}
+          customers={customers}
+          onClose={() => setShowNew(false)}
+          onSubmit={onCreate}
+        />
+      )}
+    </div>
+  );
+}
+
+// --------- Modal für neue Rechnung ---------
+function NewInvoiceSheet({ currencyCode, products, customers, onClose, onSubmit }) {
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [customerId, setCustomerId] = useState("");
+  const [discount, setDiscount] = useState("");
+
+  const [localProducts, setLocalProducts] = useState(Array.isArray(products) ? products : []);
+  useEffect(() => {
+    let ignore = false;
+    async function ensureProducts() {
+      if (Array.isArray(products) && products.length > 0) {
+        setLocalProducts(products);
+        return;
+      }
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const js = await res.json().catch(() => ({ data: [] }));
+      const mapped = (js.data || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+        currency: p.currency || "EUR",
+      }));
+      if (!ignore) setLocalProducts(mapped);
+    }
+    ensureProducts();
+    return () => { ignore = true; };
+  }, [products]);
+
+  const [items, setItems] = useState([
+    { id: crypto.randomUUID(), productId: "", name: "", quantity: 1, unitPrice: "" },
+  ]);
+
+  const itemsTotal = useMemo(
+    () => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity || 0), 0),
+    [items]
+  );
+  const discountCents = toCents(discount || 0);
+  const gross = Math.max(0, itemsTotal - discountCents);
+
+  function addRow() {
+    setItems(prev => [...prev, { id: crypto.randomUUID(), productId: "", name: "", quantity: 1, unitPrice: "" }]);
+  }
+  function updateRow(id, patch) {
+    setItems(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+  }
+  function removeRow(id) { setItems(prev => prev.filter(r => r.id !== id)); }
+  function onPickProduct(rowId, productId) {
+    const p = localProducts.find(x => x.id === productId);
+    if (!p) return updateRow(rowId, { productId: "", name: "", unitPrice: "" });
+    updateRow(rowId, {
+      productId,
+      name: p.name,
+      unitPrice: (p.priceCents / 100).toString().replace(".", ","),
+    });
+  }
+
+  return (
+    <div className="surface" style={modalWrap}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+        <b>Neue Rechnung erfassen</b>
+        <button onClick={onClose} className="btn-ghost">×</button>
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          const hidden = document.querySelector("#new-invoice-items");
+          hidden.value = JSON.stringify(items.map(({ id, ...rest }) => rest));
+          onSubmit(e);
+        }}
+        style={{ display: "grid", gap: 12 }}
+      >
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <Field label="Nr.">
+            <input style={input} name="invoiceNo" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} />
+          </Field>
+          <Field label="Datum">
+            <input type="date" style={input} name="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Kunde">
+            <select style={input} name="customerId" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+              <option value="">– bitte wählen –</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        </div>
+
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th className="hide-sm">Typ</th>
-                <th>Kategorie</th>
-                <th className="hide-sm">Fahrt €/km</th>
-                <th>Preis</th>
+                <th>Produkt</th>
+                <th>Menge</th>
+                <th>Einzelpreis</th>
+                <th>Summe</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <>
-                  <tr
-                    key={r.id}
-                    className="row-clickable"
-                    onClick={() => toggleExpand(r.id)}
-                    style={{ cursor:"pointer" }}
-                  >
-                    <td className="ellipsis">{r.name}</td>
-                    <td className="hide-sm">{r.type === "service" ? "Dienstleistung" : "Produkt"}</td>
-                    <td className="ellipsis">{r.categoryCode || "—"}</td>
-                    <td className="hide-sm">{r.travelRateCents ? currency(r.travelRateCents, r.currency || currencyCode) : "—"}</td>
-                    <td>{currency(r.unitPriceCents, r.currency || currencyCode)}</td>
+              {items.map(r => {
+                const qty = Number(r.quantity || 0);
+                const upCents = toCents(r.unitPrice || 0);
+                const line = qty * upCents;
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={input}>
+                        <option value="">– auswählen –</option>
+                        {localProducts.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        value={r.quantity}
+                        onChange={(e) => updateRow(r.id, { quantity: parseInt(e.target.value || "1", 10) })}
+                        style={input}
+                        inputMode="numeric"
+                      />
+                    </td>
+                    <td>{currency(upCents, currencyCode)}</td>
+                    <td>{currency(line, currencyCode)}</td>
+                    <td><button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>X</button></td>
                   </tr>
-
-                  {expandedId === r.id && (
-                    <tr key={r.id + "-details"}>
-                      <td colSpan={5} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
-                        {editId === r.id ? (
-                          <ProductEditForm
-                            initial={r}
-                            currencyCode={r.currency || currencyCode}
-                            onCancel={() => setEditId(null)}
-                            onSave={(values) => saveProduct(r.id, values)}
-                          />
-                        ) : (
-                          <ProductDetails
-                            row={r}
-                            currencyCode={r.currency || currencyCode}
-                            onEdit={() => setEditId(r.id)}
-                            onDelete={() => removeProduct(r.id)}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-              {rows.length===0 && (
-                <tr><td colSpan={5} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
-              )}
+                );
+              })}
             </tbody>
           </table>
+          <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
         </div>
-      </div>
 
-      {/* Mini-Modal: Neu */}
-      {openNew && (
-        <div className="surface" style={modalWrap}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 12 }}>
-            <div style={{ fontWeight: 800 }}>Neuen Eintrag anlegen</div>
-            <button onClick={()=>setOpenNew(false)} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
-          </div>
-          <form onSubmit={createProduct} style={{ display:"grid", gap:12 }}>
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
-              <Field label="Name *"><input style={input} name="name" required /></Field>
-              <Field label="Typ">
-                <select style={input} name="type" defaultValue="service">
-                  <option value="service">Dienstleistung</option>
-                  <option value="product">Produkt</option>
-                </select>
-              </Field>
-              <Field label="Kategorie-Code (z. B. 1.1)">
-                <input style={input} name="categoryCode" placeholder="1.1" />
-              </Field>
-            </div>
+        <Field label="Rabatt">
+          <input name="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} style={input} />
+        </Field>
 
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-              <Field label={`Preis (${currencyCode})`}>
-                <input style={input} name="unitPrice" inputMode="decimal" placeholder="z. B. 49,90" />
-              </Field>
-              <Field label={`Fahrtkosten €/km (${currencyCode})`}>
-                <input style={input} name="travelRate" inputMode="decimal" placeholder="optional, z. B. 0,35" />
-              </Field>
-              <Field label="Währung">
-                <input style={input} value={currencyCode} disabled />
-              </Field>
-            </div>
+        <div style={{ fontWeight: 700, textAlign: "right" }}>Gesamt: {currency(gross, currencyCode)}</div>
 
-            <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-              <button type="button" onClick={()=>setOpenNew(false)} style={btnGhost}>Abbrechen</button>
-              <button type="submit" style={btnPrimary}>Speichern</button>
-            </div>
-          </form>
+        <input type="hidden" id="new-invoice-items" name="items" />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
+          <button type="submit" style={btnPrimary}>Speichern</button>
         </div>
-      )}
-    </main>
-  );
-}
-
-/** Details – read-only */
-function ProductDetails({ row, currencyCode, onEdit, onDelete }) {
-  return (
-    <div style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
-        <Field label="Kategorie-Code"><div>{row.categoryCode || "—"}</div></Field>
-        <Field label="Name"><div>{row.name}</div></Field>
-        <Field label="Typ"><div>{row.type === "service" ? "Dienstleistung" : "Produkt"}</div></Field>
-      </div>
-
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-        <Field label={`Preis (${currencyCode})`}><div>{currency(row.unitPriceCents, currencyCode)}</div></Field>
-        <Field label={`Fahrt €/km (${currencyCode})`}><div>{row.travelRateCents ? currency(row.travelRateCents, currencyCode) : "—"}</div></Field>
-        <Field label="Währung"><div>{currencyCode}</div></Field>
-      </div>
-
-      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
-        <button className="btn-ghost" onClick={onEdit}>⚙️ Bearbeiten</button>
-        <button className="btn-ghost" onClick={onDelete} style={{ borderColor:"#c00", color:"#c00" }}>❌ Löschen</button>
-      </div>
+      </form>
     </div>
   );
 }
 
-/** Inline-Edit */
-function ProductEditForm({ initial, currencyCode, onCancel, onSave }) {
-  const [name, setName] = useState(initial?.name || "");
-  const [type, setType] = useState(initial?.type || "service");
-  const [categoryCode, setCategoryCode] = useState(initial?.categoryCode || "");
-  const [unitPrice, setUnitPrice] = useState(
-    initial ? (initial.unitPriceCents/100).toString().replace(".", ",") : ""
-  );
-  const [travelRate, setTravelRate] = useState(
-    initial?.travelRateCents ? (initial.travelRateCents/100).toString().replace(".", ",") : ""
-  );
-
-  function submit(e){
-    e.preventDefault();
-    if (!name.trim()) return alert("Name ist erforderlich.");
-    onSave({
-      name,
-      type,
-      categoryCode: categoryCode || null,
-      unitPriceCents: toCents(unitPrice || 0),
-      travelRateCents: travelRate ? toCents(travelRate) : null,
-      currency: currencyCode,
-    });
-  }
-
-  return (
-    <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"2fr 1fr 1fr" }}>
-        <Field label="Name *"><input style={input} value={name} onChange={e=>setName(e.target.value)} required /></Field>
-        <Field label="Typ">
-          <select style={input} value={type} onChange={e=>setType(e.target.value)}>
-            <option value="service">Dienstleistung</option>
-            <option value="product">Produkt</option>
-          </select>
-        </Field>
-        <Field label="Kategorie-Code (z. B. 1.1)">
-          <input style={input} value={categoryCode} onChange={e=>setCategoryCode(e.target.value)} placeholder="1.1" />
-        </Field>
-      </div>
-
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
-        <Field label={`Preis (${currencyCode})`}>
-          <input style={input} value={unitPrice} onChange={e=>setUnitPrice(e.target.value)} inputMode="decimal" placeholder="z. B. 49,90" />
-        </Field>
-        <Field label={`Fahrtkosten €/km (${currencyCode})`}>
-          <input style={input} value={travelRate} onChange={e=>setTravelRate(e.target.value)} inputMode="decimal" placeholder="optional, z. B. 0,35" />
-        </Field>
-        <Field label="Währung">
-          <input style={input} value={currencyCode} disabled />
-        </Field>
-      </div>
-
-      <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-        <button type="button" onClick={onCancel} style={btnGhost}>Abbrechen</button>
-        <button type="submit" style={btnPrimary}>Speichern</button>
-      </div>
-    </form>
-  );
-}
-
-const modalWrap = {
-  position:"fixed", left:"50%", top:"10%", transform:"translateX(-50%)",
-  width:"min(760px, 92vw)", maxHeight:"80vh", overflow:"auto", padding:16, zIndex:1000
-};
+// --------- Styles ---------
+const input = { padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4 };
+const btnPrimary = { background: "#0aa", color: "#fff", padding: "6px 12px", borderRadius: 4 };
+const btnGhost = { background: "#eee", padding: "6px 12px", borderRadius: 4 };
+const btnDanger = { background: "#c33", color: "#fff", padding: "4px 8px", borderRadius: 4 };
+const modalWrap = { position: "fixed", top: "10%", left: "50%", transform: "translateX(-50%)", background: "#fff", padding: 20, borderRadius: 8, zIndex: 1000, width: "90%", maxWidth: 800 };
