@@ -12,7 +12,7 @@ export default function HeaderTop() {
       <div className="container" style={{ paddingTop: 14, paddingBottom: 10 }}>
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 14, alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Image src="/logo.p g" alt="BuZiness Logo" width={42} height={42} priority style={{ borderRadius: 10 }} />
+            <Image src="/logo.png" alt="BuZiness Logo" width={42} height={42} priority style={{ borderRadius: 10 }} />
           </div>
 
           <div style={{ minWidth: 0 }}>
