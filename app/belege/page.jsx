@@ -1,326 +1,122 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 
-/** =========================
- *  Konstante für die Listen-API
- *  ========================= */
-const LIST_API = "/api/receipts";
-
-/** =========================
- *  Kleine Utilities & Styles
- *  ========================= */
-function toCents(input) {
-  if (input === null || input === undefined) return 0;
-  const s = String(input).replace(/\./g, "").replace(/,/g, ".");
-  const n = Number.parseFloat(s);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100);
+// Hilfsfunktionen
+function toCents(v) {
+  if (!v) return 0;
+  const str = String(v).replace(",", ".").replace(/[^0-9.]/g, "");
+  const num = parseFloat(str);
+  return Math.round((Number.isFinite(num) ? num : 0) * 100);
 }
-function currency(cents, cur = "EUR") {
-  const n = Number(cents || 0) / 100;
-  return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(n);
+function currency(cents, code = "EUR") {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: code,
+  }).format((cents || 0) / 100);
 }
 function Field({ label, children }) {
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap" }}>{label}</span>
+    <label style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontSize: 13, opacity: 0.75 }}>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: "var(--radius)", padding: 16 };
-const input = { padding: "10px 12px", borderRadius: "var(--radius)", border: "1px solid #ddd", background: "#fff", outline: "none", width: "100%" };
-const btnPrimary = { padding: "10px 12px", borderRadius: "var(--radius)", border: "1px solid var(--color-primary)", background: "var(--color-primary)", color: "#fff", cursor: "pointer" };
-const btnGhost = { padding: "10px 12px", borderRadius: "var(--radius)", border: "1px solid var(--color-primary)", background: "#fff", color: "var(--color-primary)", cursor: "pointer" };
-const btnDanger = { padding: "10px 12px", borderRadius: "var(--radius)", border: "1px solid #c00", background: "#fff", color: "#c00", cursor: "pointer" };
-const modalWrap = {
-  position: "fixed", left: "50%", top: "8%", transform: "translateX(-50%)",
-  width: "min(860px, 94vw)", maxHeight: "84vh", overflow: "auto", padding: 16, zIndex: 1000
-};
 
-/** =========================
- *  Seite: Belege
- *  ========================= */
+// --------- Hauptseite Belege ---------
 export default function ReceiptsPage() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-  const [openNew, setOpenNew] = useState(false);
-
-  const [expandedId, setExpandedId] = useState(null);
-  const [editId, setEditId] = useState(null);
-
-  const [currencyCode, setCurrencyCode] = useState("EUR");
+  const [receipts, setReceipts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [settings, setSettings] = useState({ kleinunternehmer: true, defaultVat: 19 });
+  const [currencyCode, setCurrencyCode] = useState("EUR");
+  const [showNew, setShowNew] = useState(false);
 
   async function load() {
-    setLoading(true);
-
-    const listUrl = q ? `${LIST_API}?q=${encodeURIComponent(q)}` : LIST_API;
-
-    const [listRes, stRes, prRes, csRes] = await Promise.all([
-      fetch(listUrl, { cache: "no-store" }),
-      fetch("/api/settings", { cache: "no-store" }),
-      fetch("/api/products", { cache: "no-store" }),
-      fetch("/api/customers", { cache: "no-store" }),
+    const [rj, cj, pj] = await Promise.all([
+      fetch("/api/receipts").then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/customers").then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/products").then(r => r.json()).catch(() => ({ data: [] })),
     ]);
 
-    const [listJs, stJs, prJs, csJs] = await Promise.all([
-      listRes.json().catch(() => ({ ok: false, data: [] })),
-      stRes.json().catch(() => ({ ok: false, data: {} })),
-      prRes.json().catch(() => ({ ok: false, data: [] })),
-      csRes.json().catch(() => ({ ok: false, data: [] })),
-    ]);
+    setReceipts(rj.data || []);
+    setCustomers(cj.data || []);
 
-    setRows(listJs?.data || []);
+    const mappedProducts = (pj?.data || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+      currency: p.currency || "EUR",
+    }));
+    setProducts(mappedProducts);
 
-    const st = stJs?.data || {};
-    setCurrencyCode(st.currencyDefault || "EUR");
-    setSettings({
-      kleinunternehmer: !!st.kleinunternehmer,
-      defaultVat: Number.isFinite(st.defaultVat) ? st.defaultVat : 19,
-    });
-
-    // Produkte exakt nach deiner API mappen: priceCents
-const mappedProducts = (prJs?.data || []).map(p => ({
-  id: p.id,
-  name: p.name,
-  priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
-  currency: p.currency || "EUR",
-}));
-setProducts(mappedProducts);
-    
-    setCustomers(csJs?.data || []);
-    setLoading(false);
+    if (mappedProducts.length > 0) setCurrencyCode(mappedProducts[0].currency);
   }
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId((prev) => (prev === id ? null : id));
-    setEditId(null);
-  }
+  async function onCreate(form) {
+    form.preventDefault();
+    const fd = new FormData(form.target);
+    const js = Object.fromEntries(fd.entries());
+    js.items = JSON.parse(js.items || "[]");
 
-  async function removeReceipt(id) {
-    if (!confirm("Diesen Beleg wirklich löschen?")) return;
-    const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
-    const js = await res.json().catch(() => ({}));
-    if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
-    setExpandedId(null);
-    setEditId(null);
-    load();
-  }
-
-  async function saveReceipt(id, values) {
-    const res = await fetch(`/api/receipts/${id}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const js = await res.json().catch(() => ({}));
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
-    setEditId(null);
-    load();
-  }
-
-  async function createReceipt(e) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const itemsRaw = JSON.parse(fd.get("items") || "[]");
-    if (!itemsRaw.length) return alert("Bitte mindestens eine Position hinzufügen.");
-
-    const payload = {
-      receiptNo: fd.get("receiptNo") || null,
-      date: fd.get("date"),
-      customerId: fd.get("customerId") || null, // optional
-      currency: currencyCode,
-      vatExempt: settings.kleinunternehmer === true,
-      discountCents: toCents(fd.get("discount") || 0),
-      items: itemsRaw.map((it) => ({
-        productId: it.productId || null,
-        name: it.name,
-        quantity: Number(it.quantity || 0),
-        unitPriceCents: toCents(it.unitPrice || 0),
-      })),
-    };
-
-    const res = await fetch("/api/receipts", {
+    await fetch("/api/receipts", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(js),
     });
-    const js = await res.json().catch(() => ({}));
-    if (!js?.ok) return alert(js?.error || "Erstellen fehlgeschlagen.");
-    setOpenNew(false);
-    load();
+
+    setShowNew(false);
+    await load();
   }
 
   return (
-    <main>
-      {/* Kopf */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>Belege</h1>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") load(); }}
-            placeholder="Suchen (Nr./Notiz)…"
-            style={input}
-          />
-          <button onClick={load} style={btnGhost}>Suchen</button>
-          <button onClick={() => setOpenNew(true)} style={btnPrimary}>+ Neuer Beleg</button>
-        </div>
-      </div>
-
-      {/* Tabelle */}
-      <div style={{ ...card, marginTop: 12 }}>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ whiteSpace: "nowrap" }}>Nr.</th>
-                <th className="hide-sm" style={{ whiteSpace: "nowrap" }}>Datum</th>
-                <th style={{ whiteSpace: "nowrap" }}>Betrag</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const date = r.date ? new Date(r.date) : null;
-                return (
-                  <>
-                    <tr
-                      key={r.id}
-                      className="row-clickable"
-                      onClick={() => toggleExpand(r.id)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <td className="ellipsis">{r.receiptNo}</td>
-                      <td className="hide-sm">{date ? date.toLocaleDateString() : "—"}</td>
-                      <td>{currency(r.grossCents, currencyCode)}</td>
-                    </tr>
-
-                    {expandedId === r.id && (
-                      <tr key={r.id + "-details"}>
-                        <td colSpan={3} style={{ background: "#fafafa", padding: 12, borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-                          {editId === r.id ? (
-                            <div style={{ color: "#6b7280" }}>
-                              Inline-Bearbeitung kann ich dir bei Bedarf analog zum Neu-Dialog nachziehen.
-                              <div style={{ marginTop: 8 }}>
-                                <button className="btn-ghost" onClick={() => setEditId(null)}>Schließen</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <ReceiptDetails
-                              row={r}
-                              currencyCode={currencyCode}
-                              onEdit={() => setEditId(r.id)}
-                              onDelete={() => removeReceipt(r.id)}
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={3} style={{ color: "#999", textAlign: "center" }}>
-                    {loading ? "Lade…" : "Keine Belege vorhanden."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Neu-Erfassen */}
-      {openNew && (
-        <NewReceiptSheet
-          currencyCode={currencyCode}
-          products={products}
-          customers={customers}
-          kleinunternehmer={settings.kleinunternehmer}
-          onClose={() => setOpenNew(false)}
-          onSubmit={createReceipt}
-        />
-      )}
-    </main>
-  );
-}
-
-/** =========================
- *  Details (Read-Only)
- *  ========================= */
-function ReceiptDetails({ row, currencyCode, onEdit, onDelete }) {
-  const items = row.items || [];
-  const discount = Number(row.discountCents || 0);
-  const itemsTotal = items.reduce((s, it) => s + Number(it.unitPriceCents || 0) * Number(it.quantity || 0), 0);
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
-        <Field label="Beleg-Nr."><div>{row.receiptNo}</div></Field>
-        <Field label="Datum"><div>{row.date ? new Date(row.date).toLocaleDateString() : "—"}</div></Field>
-        <Field label="Kunde"><div>{row.customerName || "—"}</div></Field>
-      </div>
+    <div className="page">
+      <h1>Belege</h1>
+      <button style={btnPrimary} onClick={() => setShowNew(true)}>+ Neuer Beleg</button>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th style={{ whiteSpace: "nowrap" }}>Bezeichnung</th>
-              <th style={{ width: 110, whiteSpace: "nowrap" }}>Menge</th>
-              <th style={{ width: 160, whiteSpace: "nowrap" }}>Einzelpreis</th>
-              <th style={{ width: 160, whiteSpace: "nowrap" }}>Summe</th>
+              <th>Nr.</th>
+              <th>Datum</th>
+              <th>Kunde</th>
+              <th>Betrag</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((it, idx) => {
-              const line = Number(it.quantity || 0) * Number(it.unitPriceCents || 0);
-              return (
-                <tr key={idx}>
-                  <td className="ellipsis">{it.name}</td>
-                  <td>{it.quantity}</td>
-                  <td>{currency(it.unitPriceCents, currencyCode)}</td>
-                  <td>{currency(line, currencyCode)}</td>
-                </tr>
-              );
-            })}
-            {items.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "#999" }}>Keine Positionen.</td></tr>}
+            {receipts.map(r => (
+              <tr key={r.id}>
+                <td>{r.receiptNo}</td>
+                <td>{r.date}</td>
+                <td>{r.customer?.name || "–"}</td>
+                <td>{currency(r.totalCents, r.currency || "EUR")}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr auto", alignItems: "center" }}>
-        <div style={{ color: "#6b7280" }}>
-          Netto: {currency(itemsTotal, currencyCode)}
-          {discount > 0 && <> · Rabatt: {currency(discount, currencyCode)}</>}
-        </div>
-        <div style={{ fontWeight: 800 }}>Gesamt: {currency(row.grossCents, currencyCode)}</div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-        <button className="btn-ghost" onClick={onEdit}>⚙️ Bearbeiten</button>
-        <button className="btn-ghost" onClick={onDelete} style={{ borderColor: "#c00", color: "#c00" }}>❌ Löschen</button>
-      </div>
+      {showNew && (
+        <NewReceiptSheet
+          currencyCode={currencyCode}
+          products={products}
+          customers={customers}
+          onClose={() => setShowNew(false)}
+          onSubmit={onCreate}
+        />
+      )}
     </div>
   );
 }
 
-/** =========================
- *  Neu-Modal (Produkt + Menge)
- *  ========================= */
-function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, onClose, onSubmit }) {
+// --------- Modal für neuen Beleg ---------
+function NewReceiptSheet({ currencyCode, products, customers, onClose, onSubmit }) {
   const [receiptNo, setReceiptNo] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState("");
 
-  // Lokale, robuste Produktliste (fällt zurück auf Fetch, falls products leer ist)
   const [localProducts, setLocalProducts] = useState(Array.isArray(products) ? products : []);
   useEffect(() => {
     let ignore = false;
@@ -334,7 +130,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
       const mapped = (js.data || []).map(p => ({
         id: p.id,
         name: p.name,
-        priceCents: Number.isFinite(p.unitPriceCents) ? p.unitPriceCents : 0,
+        priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
         currency: p.currency || "EUR",
       }));
       if (!ignore) setLocalProducts(mapped);
@@ -344,7 +140,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
   }, [products]);
 
   const [items, setItems] = useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId: "", name: "", quantity: 1, unitPrice: "" },
+    { id: crypto.randomUUID(), productId: "", name: "", quantity: 1, unitPrice: "" },
   ]);
 
   const itemsTotal = useMemo(
@@ -355,7 +151,7 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
   const gross = Math.max(0, itemsTotal - discountCents);
 
   function addRow() {
-    setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId: "", name: "", quantity: 1, unitPrice: "" }]);
+    setItems(prev => [...prev, { id: crypto.randomUUID(), productId: "", name: "", quantity: 1, unitPrice: "" }]);
   }
   function updateRow(id, patch) {
     setItems(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
@@ -373,9 +169,9 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
 
   return (
     <div className="surface" style={modalWrap}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontWeight: 800 }}>Neuen Beleg erfassen</div>
-        <button onClick={onClose} className="btn-ghost" style={{ padding: "6px 10px" }}>×</button>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+        <b>Neuen Beleg erfassen</b>
+        <button onClick={onClose} className="btn-ghost">×</button>
       </div>
 
       <form
@@ -386,10 +182,9 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
         }}
         style={{ display: "grid", gap: 12 }}
       >
-        {/* Kopf: Nr., Datum, Kunde (optional) */}
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="Nr.">
-            <input style={input} name="receiptNo" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} placeholder="automatisch oder manuell" />
+            <input style={input} name="receiptNo" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} />
           </Field>
           <Field label="Datum">
             <input type="date" style={input} name="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -402,26 +197,18 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
           </Field>
         </div>
 
-        {/* Positionen */}
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th style={{ whiteSpace: "nowrap" }}>Produkt</th>
-                <th style={{ width: 120, whiteSpace: "nowrap" }}>Menge</th>
-                <th style={{ width: 160, whiteSpace: "nowrap" }}>Einzelpreis</th>
-                <th style={{ width: 160, whiteSpace: "nowrap" }}>Summe</th>
-                <th style={{ width: 110, textAlign: "right", whiteSpace: "nowrap" }}>Aktion</th>
+                <th>Produkt</th>
+                <th>Menge</th>
+                <th>Einzelpreis</th>
+                <th>Summe</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {localProducts.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ color: "#666", textAlign: "center" }}>
-                    Keine Produkte gefunden. Lege zuerst Produkte unter <a href="/produkte">/produkte</a> an.
-                  </td>
-                </tr>
-              )}
               {items.map(r => {
                 const qty = Number(r.quantity || 0);
                 const upCents = toCents(r.unitPrice || 0);
@@ -446,32 +233,23 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
                     </td>
                     <td>{currency(upCents, currencyCode)}</td>
                     <td>{currency(line, currencyCode)}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>Entfernen</button>
-                    </td>
+                    <td><button type="button" onClick={() => removeRow(r.id)} style={btnDanger}>X</button></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <div style={{ marginTop: 8 }}>
-            <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
-          </div>
+          <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
         </div>
 
-        {/* Rabatt & Summe */}
-        <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
-          <Field label="Rabatt gesamt">
-            <input name="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} style={input} inputMode="decimal" placeholder="z. B. 10,00" />
-          </Field>
-          <div style={{ fontWeight: 700, minWidth: 220, textAlign: "right" }}>
-            Gesamt: {currency(gross, currencyCode)}
-          </div>
-        </div>
+        <Field label="Rabatt">
+          <input name="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} style={input} />
+        </Field>
+
+        <div style={{ fontWeight: 700, textAlign: "right" }}>Gesamt: {currency(gross, currencyCode)}</div>
 
         <input type="hidden" id="new-receipt-items" name="items" />
-
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
           <button type="submit" style={btnPrimary}>Speichern</button>
         </div>
@@ -479,3 +257,10 @@ function NewReceiptSheet({ currencyCode, products, customers, kleinunternehmer, 
     </div>
   );
 }
+
+// --------- Styles ---------
+const input = { padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4 };
+const btnPrimary = { background: "#0aa", color: "#fff", padding: "6px 12px", borderRadius: 4 };
+const btnGhost = { background: "#eee", padding: "6px 12px", borderRadius: 4 };
+const btnDanger = { background: "#c33", color: "#fff", padding: "4px 8px", borderRadius: 4 };
+const modalWrap = { position: "fixed", top: "10%", left: "50%", transform: "translateX(-50%)", background: "#fff", padding: 20, borderRadius: 8, zIndex: 1000, width: "90%", maxWidth: 800 };
