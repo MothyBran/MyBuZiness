@@ -1,16 +1,23 @@
 "use client";
 
-export default function HomeTest() {
-  return (
-    <div className="container" style={{ paddingTop: 18 }}>
-      <h2 style={{ marginTop: 0 }}>Startseite</h2>
-      <p style={{ color: "#666" }}>
-        Wenn du oben den cyanfarbenen „LAYOUT: app/layout.jsx aktiv“-Balken siehst, läuft das Root-Layout korrekt.  
-        Darunter sollte der Header mit Logo, Claim, Anmelden, Registrieren und Modul-Button zu sehen sein.
-      </p>
-      <div className="surface" style={{ padding: 14, marginTop: 12 }}>
-        Inhalt deiner Startseite kommt hier hin.
-      </div>
-    </div>
-  );
+import { useEffect, useMemo, useState } from "react";
+
+function currency(cents, cur = "EUR") {
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format((cents || 0) / 100);
 }
+
+export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [customers, setCustomers] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [receipts, setReceipts] = useState([]);
+  const [currencyCode, setCurrencyCode] = useState("EUR");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cs, iv, rc, st] = await Promise.all([
+          fetch("/api/customers", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/invoices",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/receipts",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
+          fetch("/api/settings",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data:
