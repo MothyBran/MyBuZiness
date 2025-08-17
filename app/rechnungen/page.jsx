@@ -280,21 +280,34 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("");
 
-  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]);
+  const [items, setItems] = useState([
+    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }
+  ]);
 
-  const itemsTotal = useMemo(() => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0), [items]);
+  const itemsTotal = useMemo(
+    () => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0),
+    [items]
+  );
   const vatRate = (settings?.kleinunternehmer === true) ? 0 : (Number.isFinite(settings?.defaultVat) ? settings.defaultVat : 19);
   const tax = Math.round(itemsTotal * (vatRate / 100));
   const discountCents = toCents(discount || 0);
   const gross = Math.max(0, itemsTotal + tax - discountCents);
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]); }
-  function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
-  function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+  function addRow(){
+    setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]);
+  }
+  function updateRow(id, patch){
+    setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
+  }
+  function removeRow(id){ setItems(prev => prev.filter(r => r.id !== id)); }
   function onPickProduct(rowId, productId) {
     const p = products.find(x => x.id === productId);
     if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
-    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+    updateRow(rowId, {
+      productId,
+      name: p.name,
+      unitPrice: (p.priceCents/100).toString().replace(".", ",")
+    });
   }
 
   return (
@@ -303,11 +316,15 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
         <div style={{ fontWeight: 800 }}>Neue Rechnung erstellen</div>
         <button onClick={onClose} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
       </div>
-      <form onSubmit={(e)=>{ 
-        const hidden = document.querySelector("#new-invoice-items");
-        hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
-        onSubmit(e);
-      }} style={{ display:"grid", gap:12 }}>
+
+      <form
+        onSubmit={(e)=>{ 
+          const hidden = document.querySelector("#new-invoice-items");
+          hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
+          onSubmit(e);
+        }}
+        style={{ display:"grid", gap:12 }}
+      >
         {/* Kopf: Nr., Datum, Kunde */}
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
           <Field label="Nr.">
@@ -324,7 +341,7 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
           </Field>
         </div>
 
-        {/* Positionen: Produkt, Menge */}
+        {/* Positionen: nur Produkt + Menge; Preis & Summe read-only */}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -339,10 +356,11 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
             <tbody>
               {items.map(r => {
                 const qty = Number(r.quantity||0);
-                const up = toCents(r.unitPrice || 0);
-                const line = qty*up;
+                const upCents = toCents(r.unitPrice || 0);
+                const line = qty * upCents;
                 return (
                   <tr key={r.id}>
+                    {/* Produkt */}
                     <td>
                       <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
                         <option value="">– auswählen –</option>
@@ -351,10 +369,27 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
                         ))}
                       </select>
                     </td>
-                    <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
-                    <td><input value={r.unitPrice} disabled style={input} /></td>
+
+                    {/* Menge */}
+                    <td>
+                      <input
+                        value={r.quantity}
+                        onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})}
+                        style={input}
+                        inputMode="numeric"
+                      />
+                    </td>
+
+                    {/* Einzelpreis (nur Anzeige) */}
+                    <td>{currency(upCents, currencyCode)}</td>
+
+                    {/* Summe (nur Anzeige) */}
                     <td>{currency(line, currencyCode)}</td>
-                    <td style={{ textAlign:"right" }}><button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button></td>
+
+                    {/* Entfernen */}
+                    <td style={{ textAlign:"right" }}>
+                      <button type="button" onClick={()=>removeRow(r.id)} style={btnDanger}>Entfernen</button>
+                    </td>
                   </tr>
                 );
               })}
@@ -363,14 +398,14 @@ function NewInvoiceSheet({ onClose, onSubmit, customers, products, currencyCode,
           </table>
         </div>
 
-        {/* Rabatt & Summen (Steuer automatisch je nach §19/DefaultVAT) */}
+        {/* Rabatt & Summen inkl. Steuer je nach §19 */}
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr", alignItems:"center" }}>
           <Field label="Rabatt gesamt">
             <input name="discount" value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" placeholder="z. B. 10,00" />
           </Field>
           <div style={{ textAlign:"right" }}>
             <div>Zwischensumme: <b>{currency(itemsTotal, currencyCode)}</b></div>
-            {vatRate>0 && <div>Steuer ({vatRate}%): <b>{currency(tax, currencyCode)}</b></div>}
+            {vatRate>0 && <div>Steuer ({vatRate}%): <b>{currency(Math.round(itemsTotal*(vatRate/100)), currencyCode)}</b></div>}
             <div style={{ marginTop:6, fontWeight:700 }}>Brutto: {currency(gross, currencyCode)}</div>
           </div>
         </div>
