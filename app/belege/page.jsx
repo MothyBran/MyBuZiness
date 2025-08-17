@@ -259,10 +259,15 @@ function NewReceiptSheet({ currencyCode, products, customers, onClose, onSubmit 
   function updateRow(id, patch){ setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(prev => prev.filter(r => r.id !== id)); }
   function onPickProduct(rowId, productId) {
-    const p = localProducts.find(x => x.id === productId);
-    if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
-    updateRow(rowId, { productId, name: p.name, unitPrice: String((p.priceCents/100).toFixed(2)).replace(".", ",") });
-  }
+  const p = localProducts.find(x => x.id === productId);
+  if (!p) return updateRow(rowId, { productId: "", name: "", unitPrice: "" });
+  // Preis robust mit Punkt setzen -> toCents() versteht das sicher
+  updateRow(rowId, {
+    productId,
+    name: p.name,
+    unitPrice: (p.priceCents / 100).toFixed(2), // "20.00"
+  });
+}
 
   return (
     <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
