@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
+const LIST_API = "/api/receipts";
 /* ===== Helpers ===== */
 function toCents(input) {
   if (input === null || input === undefined) return 0;
