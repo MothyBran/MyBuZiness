@@ -17,7 +17,7 @@ function currency(cents, cur = "EUR") {
 function Field({ label, children }) {
   return (
     <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#666" }}>{label}</span>
+      <span style={{ fontSize: 12, color: "#666", whiteSpace:"nowrap" }}>{label}</span>
       {children}
     </div>
   );
@@ -39,16 +39,23 @@ export default function ReceiptsPage() {
   const [editId, setEditId] = useState(null);
   const [currencyCode, setCurrencyCode] = useState("EUR");
 
+  const [products, setProducts] = useState([]);
+
   async function load() {
     setLoading(true);
-    const [listRes, stRes] = await Promise.all([
+    const [listRes, stRes, prRes] = await Promise.all([
       fetch(q ? `/api/receipts?q=${encodeURIComponent(q)}` : "/api/receipts", { cache: "no-store" }),
       fetch("/api/settings", { cache: "no-store" }),
+      fetch("/api/products", { cache: "no-store" }),
     ]);
     const js = await listRes.json().catch(() => ({ data: [] }));
     const st = await stRes.json().catch(() => ({ data: { currencyDefault: "EUR" } }));
+    const pr = await prRes.json().catch(() => ({ data: [] }));
     setRows(js.data || []);
     setCurrencyCode(st?.data?.currencyDefault || "EUR");
+    setProducts((pr.data || []).map(p => ({
+      id: p.id, name: p.name, priceCents: p.unitPriceCents, currency: p.currency
+    })));
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -84,7 +91,7 @@ export default function ReceiptsPage() {
       vatExempt: true,
       discountCents: toCents(discount || 0),
       items: itemsRaw.map(it => ({
-        productId: null,
+        productId: it.productId || null,
         name: it.name,
         quantity: Number(it.quantity || 0),
         unitPriceCents: toCents(it.unitPrice || 0)
@@ -114,9 +121,9 @@ export default function ReceiptsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th className="hide-sm">Datum</th>
-                <th>Betrag</th>
+                <th style="white-space:nowrap">Nr.</th>
+                <th className="hide-sm" style={{whiteSpace:"nowrap"}}>Datum</th>
+                <th style={{whiteSpace:"nowrap"}}>Betrag</th>
               </tr>
             </thead>
             <tbody>
@@ -142,6 +149,7 @@ export default function ReceiptsPage() {
                             <ReceiptEditForm
                               initial={r}
                               currencyCode={r.currency || currencyCode}
+                              products={products}
                               onCancel={() => setEditId(null)}
                               onSave={(values) => saveReceipt(r.id, values)}
                             />
@@ -168,7 +176,7 @@ export default function ReceiptsPage() {
       </div>
 
       {/* Mini-Modal Neu */}
-      {openNew && <NewReceiptSheet currencyCode={currencyCode} onClose={()=>setOpenNew(false)} onSubmit={createReceipt} />}
+      {openNew && <NewReceiptSheet currencyCode={currencyCode} products={products} onClose={()=>setOpenNew(false)} onSubmit={createReceipt} />}
     </main>
   );
 }
@@ -180,20 +188,19 @@ function ReceiptDetails({ row, currencyCode, onEdit, onDelete }) {
   const itemsTotal = items.reduce((s, it) => s + Number(it.unitPriceCents||0)*Number(it.quantity||0), 0);
   return (
     <div style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
         <Field label="Beleg-Nr."><div>{row.receiptNo}</div></Field>
         <Field label="Datum"><div>{row.date ? new Date(row.date).toLocaleDateString() : "—"}</div></Field>
-        <Field label="Währung"><div>{row.currency || currencyCode}</div></Field>
       </div>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th>Bezeichnung</th>
-              <th style={{ width:110 }}>Menge</th>
-              <th style={{ width:160 }}>Einzelpreis</th>
-              <th style={{ width:160 }}>Summe</th>
+              <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+              <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
             </tr>
           </thead>
           <tbody>
@@ -229,11 +236,12 @@ function ReceiptDetails({ row, currencyCode, onEdit, onDelete }) {
   );
 }
 
-function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
+function ReceiptEditForm({ initial, currencyCode, products, onCancel, onSave }) {
   const [date, setDate] = useState(initial?.date ? String(initial.date).slice(0,10) : new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState(initial?.discountCents ? (initial.discountCents/100).toString().replace(".",",") : "");
   const [items, setItems] = useState(() => (initial?.items || []).map(x => ({
     id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
+    productId: null, // wenn aus Dropdown gewählt
     name: x.name || "",
     quantity: Number(x.quantity||0),
     unitPrice: x.unitPriceCents ? (x.unitPriceCents/100).toString().replace(".",",") : "",
@@ -243,9 +251,15 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
   const discountCents = toCents(discount || 0);
   const gross = Math.max(0, itemsTotal - discountCents);
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]); }
+  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
   function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+
+  function onPickProduct(rowId, productId) {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+  }
 
   function submit(e){
     e.preventDefault();
@@ -257,7 +271,7 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
       vatExempt: true,
       discountCents,
       items: items.map(it => ({
-        productId: null,
+        productId: it.productId || null,
         name: it.name,
         quantity: Number(it.quantity||0),
         unitPriceCents: toCents(it.unitPrice || 0)
@@ -267,20 +281,20 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
 
   return (
     <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
-      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr" }}>
         <Field label="Datum"><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={input}/></Field>
-        <Field label="Währung"><input value={currencyCode} disabled style={input}/></Field>
       </div>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th>Bezeichnung</th>
-              <th style={{ width:110 }}>Menge</th>
-              <th style={{ width:160 }}>Einzelpreis</th>
-              <th style={{ width:160 }}>Summe</th>
-              <th style={{ width:110, textAlign:"right" }}>Aktion</th>
+              <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
+              <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+              <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+              <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
+              <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
             </tr>
           </thead>
           <tbody>
@@ -290,7 +304,15 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
               const line = qty*up;
               return (
                 <tr key={r.id}>
-                  <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                  <td>
+                    <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
+                      <option value="">– auswählen –</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
                   <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
                   <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
                   <td>{currency(line, currencyCode)}</td>
@@ -298,7 +320,7 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
                 </tr>
               );
             })}
-            {items.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+            {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -306,7 +328,9 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
       <div style={{ display:"flex", gap:8, justifyContent:"space-between", alignItems:"center", flexWrap:"wrap" }}>
         <button type="button" onClick={addRow} style={btnGhost}>+ Position</button>
         <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-          <Field label="Rabatt gesamt"><input value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" /></Field>
+          <Field label="Rabatt gesamt">
+            <input value={discount} onChange={e=>setDiscount(e.target.value)} style={input} inputMode="decimal" />
+          </Field>
           <div style={{ fontWeight:700, minWidth:220, textAlign:"right" }}>Gesamt: {currency(gross, currencyCode)}</div>
         </div>
       </div>
@@ -320,18 +344,23 @@ function ReceiptEditForm({ initial, currencyCode, onCancel, onSave }) {
 }
 
 /* ===== Mini Sheet for New ===== */
-function NewReceiptSheet({ currencyCode, onClose, onSubmit }) {
+function NewReceiptSheet({ currencyCode, products, onClose, onSubmit }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("");
-  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]);
+  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]);
 
   const itemsTotal = useMemo(() => items.reduce((s, it) => s + toCents(it.unitPrice || 0) * Number(it.quantity||0), 0), [items]);
   const discountCents = toCents(discount || 0);
   const gross = Math.max(0, itemsTotal - discountCents);
 
-  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), name:"", quantity:1, unitPrice:"" }]); }
+  function addRow(){ setItems([...items, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:null, name:"", quantity:1, unitPrice:"" }]); }
   function updateRow(id, patch){ setItems(items.map(r => r.id===id ? { ...r, ...patch } : r)); }
   function removeRow(id){ setItems(items.filter(r => r.id !== id)); }
+  function onPickProduct(rowId, productId) {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents/100).toString().replace(".", ",") });
+  }
 
   return (
     <div className="surface" style={modalWrap}>
@@ -344,20 +373,20 @@ function NewReceiptSheet({ currencyCode, onClose, onSubmit }) {
         hidden.value = JSON.stringify(items.map(({id, ...rest})=>rest));
         onSubmit(e);
       }} style={{ display:"grid", gap:12 }}>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr" }}>
           <Field label="Datum"><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={input} name="date" /></Field>
-          <Field label="Währung"><input value={currencyCode} disabled style={input}/></Field>
         </div>
 
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>Bezeichnung</th>
-                <th style={{ width:110 }}>Menge</th>
-                <th style={{ width:160 }}>Einzelpreis</th>
-                <th style={{ width:160 }}>Summe</th>
-                <th style={{ width:110, textAlign:"right" }}>Aktion</th>
+                <th style={{whiteSpace:"nowrap"}}>Produkt wählen</th>
+                <th style={{whiteSpace:"nowrap"}}>Bezeichnung</th>
+                <th style={{ width:110, whiteSpace:"nowrap" }}>Menge</th>
+                <th style={{ width:160, whiteSpace:"nowrap" }}>Einzelpreis</th>
+                <th style={{ width:160, whiteSpace:"nowrap" }}>Summe</th>
+                <th style={{ width:110, textAlign:"right", whiteSpace:"nowrap" }}>Aktion</th>
               </tr>
             </thead>
             <tbody>
@@ -367,7 +396,15 @@ function NewReceiptSheet({ currencyCode, onClose, onSubmit }) {
                 const line = qty*up;
                 return (
                   <tr key={r.id}>
-                    <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Position"/></td>
+                    <td>
+                      <select value={r.productId || ""} onChange={e=>onPickProduct(r.id, e.target.value)} style={input}>
+                        <option value="">– auswählen –</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td><input value={r.name} onChange={e=>updateRow(r.id,{name:e.target.value})} style={input} placeholder="Bezeichnung"/></td>
                     <td><input value={r.quantity} onChange={e=>updateRow(r.id,{quantity:parseInt(e.target.value||"1",10)})} style={input} inputMode="numeric"/></td>
                     <td><input value={r.unitPrice} onChange={e=>updateRow(r.id,{unitPrice:e.target.value})} style={input} inputMode="decimal"/></td>
                     <td>{currency(line, currencyCode)}</td>
@@ -375,7 +412,7 @@ function NewReceiptSheet({ currencyCode, onClose, onSubmit }) {
                   </tr>
                 );
               })}
-              {items.length===0 && <tr><td colSpan={5} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
+              {items.length===0 && <tr><td colSpan={6} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
             </tbody>
           </table>
         </div>
