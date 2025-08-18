@@ -23,15 +23,16 @@ export default function ReceiptsPage() {
   const [currency, setCurrency] = useState("EUR");
   const [vatExemptDefault, setVatExemptDefault] = useState(true);
 
-  // Modal
+  // Modal (Neu/Bearbeiten)
   const [isOpen, setIsOpen] = useState(false);
+  const [editId, setEditId] = useState(null); // null = neu, sonst ID
   const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [vatExempt, setVatExempt] = useState(true);
   const [discount, setDiscount] = useState("0");
   const [items, setItems] = useState([makeEmptyItem()]);
 
-  // Debug
-  const [debug, setDebug] = useState({ receiptsRaw: null, receiptsOk: null, diagRaw: null, productsRaw: null });
+  // Debug (optional)
+  const [debug, setDebug] = useState({ receiptsOk: null, receiptsRaw: null, diagRaw: null });
 
   async function load() {
     setLoading(true);
@@ -46,7 +47,7 @@ export default function ReceiptsPage() {
       const pr = await prodRes.json().catch(() => ({}));
       const st = await setRes.json().catch(() => ({}));
 
-      // Produkte defensiv normalisieren
+      // Produkte normalisieren
       setProducts(
         Array.isArray(pr?.data)
           ? pr.data.map((p) => ({
@@ -65,38 +66,33 @@ export default function ReceiptsPage() {
       const kU = typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true;
       setCurrency(cur);
       setVatExemptDefault(kU);
-      setVatExempt(kU);
 
-      // Primäre Quelle: /api/receipts
+      // Primärquelle
       let useRows = Array.isArray(list?.data) ? list.data : [];
       const okPrimary = !!(list && list.ok === true);
 
-      // Fallback: /api/_diag, wenn leer oder API nicht ok
+      // Fallback /api/_diag, wenn leer/nicht ok
       if ((!okPrimary || useRows.length === 0)) {
         const diagRes = await fetch("/api/_diag", { cache: "no-store" }).catch(() => null);
         const diag = diagRes ? await diagRes.json().catch(() => ({})) : {};
         const diagList = Array.isArray(diag?.latest?.receipts) ? diag.latest.receipts : [];
-        // diag.latest.receipts hat weniger Felder – mappen auf erwartete Struktur
         useRows = diagList.map((r) => ({
           id: r.id,
           receiptNo: r.receiptNo || "-",
           date: r.date || null,
           grossCents: Number(r.grossCents || 0),
           currency: r.currency || cur || "EUR",
-          items: [], // _diag liefert keine Items → leer, aber Tabelle lädt
+          items: [],
         }));
-
-        setDebug({ receiptsRaw: list, receiptsOk: okPrimary, diagRaw: diag, productsRaw: pr });
+        setDebug({ receiptsOk: okPrimary, receiptsRaw: list, diagRaw: diag });
       } else {
-        setDebug({ receiptsRaw: list, receiptsOk: okPrimary, diagRaw: null, productsRaw: pr });
+        setDebug({ receiptsOk: okPrimary, receiptsRaw: list, diagRaw: null });
       }
 
       setRows(useRows);
     } catch (e) {
       console.error("Receipts load error:", e);
       setRows([]);
-      setProducts([]);
-      setDebug((d) => ({ ...d, error: String(e) }));
     } finally {
       setLoading(false);
     }
@@ -104,16 +100,42 @@ export default function ReceiptsPage() {
 
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
+  function toggleExpand(id) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
 
-  /** Modal-Logik */
-  function openModal() {
+  /** Modal öffnen (Neu) */
+  function openNew() {
+    setEditId(null);
     setFormDate(new Date().toISOString().slice(0, 10));
     setVatExempt(vatExemptDefault);
     setDiscount("0");
     setItems([makeEmptyItem()]);
     setIsOpen(true);
   }
+
+  /** Modal öffnen (Bearbeiten) */
+  function openEdit(row) {
+    setEditId(row.id);
+    setFormDate(row.date ? String(row.date).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    // vatExempt / discount sind nicht im GET dabei; wenn du sie in Receipt speicherst, hier setzen
+    setVatExempt(vatExemptDefault);
+    setDiscount("0");
+    const its = Array.isArray(row.items) ? row.items : [];
+    setItems(
+      its.length
+        ? its.map((it) => ({
+            productId: it.productId || "",
+            name: it.name || "",
+            quantity: toInt(it.quantity || 1),
+            unitPriceCents: toInt(it.unitPriceCents || 0),
+            lineTotalCents: toInt(it.lineTotalCents || 0),
+          }))
+        : [makeEmptyItem()]
+    );
+    setIsOpen(true);
+  }
+
   function closeModal() { setIsOpen(false); }
 
   function updateItem(idx, patch) {
@@ -126,10 +148,7 @@ export default function ReceiptsPage() {
 
   function onProductSelect(idx, productId) {
     const p = products.find((x) => x.id === productId);
-    if (!p) {
-      updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
-      return;
-    }
+    if (!p) { updateItem(idx, { productId: "", name: "", unitPriceCents: 0 }); return; }
     let unit = p.priceCents;
     if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
     if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
@@ -139,7 +158,7 @@ export default function ReceiptsPage() {
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /** Summen */
+  /** Summen für Modal */
   const calc = useMemo(() => {
     const netCents = items.reduce((sum, it) => sum + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
     const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
@@ -149,7 +168,7 @@ export default function ReceiptsPage() {
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
   }, [items, discount, vatExempt]);
 
-  /** Speichern */
+  /** Speichern (Neu/Update) */
   async function saveReceipt() {
     try {
       const cleanItems = items
@@ -174,17 +193,32 @@ export default function ReceiptsPage() {
         items: cleanItems,
       };
 
-      const res = await fetch("/api/receipts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const js = await res.json().catch(() => ({}));
-
-      if (!res.ok || !js?.ok) {
-        console.error("POST /api/receipts failed:", js?.error || res.statusText);
-        alert("Speichern fehlgeschlagen. Details in der Konsole.");
-        return;
+      if (editId) {
+        // UPDATE (sofern API vorhanden)
+        const res = await fetch(`/api/receipts/${editId}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          alert("Bearbeiten fehlgeschlagen (PUT fehlt evtl. im Backend).");
+          console.warn("PUT /api/receipts/[id] response:", res.status, txt);
+          return;
+        }
+      } else {
+        // CREATE
+        const res = await fetch("/api/receipts", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const js = await res.json().catch(() => ({}));
+        if (!res.ok || !js?.ok) {
+          console.error("POST /api/receipts failed:", js?.error || res.statusText);
+          alert("Speichern fehlgeschlagen. Details in der Konsole.");
+          return;
+        }
       }
 
       setIsOpen(false);
@@ -195,17 +229,36 @@ export default function ReceiptsPage() {
     }
   }
 
+  /** Löschen */
+  async function deleteReceipt(id) {
+    if (!confirm("Beleg wirklich löschen?")) return;
+    try {
+      const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        alert("Löschen fehlgeschlagen (DELETE fehlt evtl. im Backend).");
+        console.warn("DELETE /api/receipts/[id] response:", res.status, txt);
+        return;
+      }
+      if (expandedId === id) setExpandedId(null);
+      await load();
+    } catch (e) {
+      console.error("deleteReceipt error:", e);
+      alert("Löschen fehlgeschlagen (Technischer Fehler).");
+    }
+  }
+
   return (
     <main className="grid-gap-16">
       {/* Kopf */}
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h1 className="page-title" style={{ margin: 0 }}>Belege</h1>
-          <button className="btn" onClick={openModal}>+ Neuer Beleg</button>
+          <button className="btn" onClick={openNew}>+ Neuer Beleg</button>
         </div>
       </div>
 
-      {/* Debug – nur anzeigen, wenn keine Daten da sind */}
+      {/* Debug – falls leer */}
       {!loading && rows.length === 0 && (
         <div className="card" style={{ background: "#fffbe6", borderColor: "#fde68a" }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Debug-Hinweis</div>
@@ -223,32 +276,85 @@ export default function ReceiptsPage() {
           <table className="table table-fixed">
             <thead>
               <tr>
-                <th style={{ width: "18%" }}>Nr.</th>
-                <th style={{ width: "28%" }}>Datum</th>
-                <th style={{ width: "28%" }}>Betrag</th>
-                <th style={{ width: "26%" }}></th>
+                <th style={{ width: "34%" }}>Nr.</th>
+                <th style={{ width: "33%" }}>Datum</th>
+                <th style={{ width: "33%" }}>Betrag</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={4} style={{ color: "#6b7280" }}>Lade…</td></tr>
+                <tr><td colSpan={3} style={{ color: "#6b7280" }}>Lade…</td></tr>
               )}
 
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
+                <tr><td colSpan={3} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
               )}
 
               {!loading && rows.map((r) => {
                 const d = r.date ? new Date(r.date) : null;
+                const dateStr = d ? d.toLocaleDateString() : "—";
+                const isOpen = expandedId === r.id;
                 return (
-                  <RowWithDetails
-                    key={r.id}
-                    row={r}
-                    expanded={expandedId === r.id}
-                    onToggle={() => setExpandedId((prev) => (prev === r.id ? null : r.id))}
-                    dateStr={d ? d.toLocaleDateString() : "—"}
-                    currency={r.currency || currency}
-                  />
+                  <>
+                    <tr
+                      key={r.id}
+                      className="row-clickable"
+                      onClick={() => toggleExpand(r.id)}
+                    >
+                      <td className="ellipsis">#{r.receiptNo || "-"}</td>
+                      <td>{dateStr}</td>
+                      <td>{money(r.grossCents, r.currency || currency)}</td>
+                    </tr>
+
+                    {isOpen && (
+                      <tr key={r.id + "-details"}>
+                        <td colSpan={3} style={{ background: "#fafafa" }}>
+                          {/* Aktionszeile */}
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "8px" }}>
+                            <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>⚙️ Bearbeiten</button>
+                            <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); deleteReceipt(r.id); }}>❌ Löschen</button>
+                          </div>
+
+                          {/* Positionsliste */}
+                          <div className="table-wrap" style={{ padding: "0 8px 2px" }}>
+                            <table className="table table-fixed" style={{ minWidth: 720 }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ width: "50%" }}>Bezeichnung</th>
+                                  <th style={{ width: "10%" }}>Menge</th>
+                                  <th style={{ width: "20%" }}>Einzelpreis</th>
+                                  <th style={{ width: "20%" }}>Summe</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(!r.items || r.items.length === 0) && (
+                                  <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
+                                )}
+                                {Array.isArray(r.items) && r.items.map((it, idx) => {
+                                  const qty = toInt(it.quantity || 0);
+                                  const unit = toInt(it.unitPriceCents || 0);
+                                  const line = toInt(it.lineTotalCents || qty * unit);
+                                  return (
+                                    <tr key={idx}>
+                                      <td className="ellipsis">{it.name || "—"}</td>
+                                      <td>{qty}</td>
+                                      <td>{money(unit, r.currency || currency)}</td>
+                                      <td>{money(line, r.currency || currency)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Gesamtsumme */}
+                          <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
+                            Gesamt: {money(r.grossCents, r.currency || currency)}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
             </tbody>
@@ -256,7 +362,7 @@ export default function ReceiptsPage() {
         </div>
       </div>
 
-      {/* Modal Neuer Beleg */}
+      {/* Modal (Neu/Bearbeiten) */}
       {isOpen && (
         <div
           role="dialog" aria-modal="true"
@@ -265,7 +371,7 @@ export default function ReceiptsPage() {
         >
           <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <h2 style={{ margin: 0 }}>Neuer Beleg</h2>
+              <h2 style={{ margin: 0 }}>{editId ? `Beleg #${editId.slice(0, 6)} bearbeiten` : "Neuer Beleg"}</h2>
               <button className="btn-ghost" onClick={() => setIsOpen(false)}>✕ Schließen</button>
             </div>
 
@@ -286,10 +392,7 @@ export default function ReceiptsPage() {
                   </div>
                   <div>
                     <label style={lbl}>Rabatt (gesamt, €)</label>
-                    <input
-                      type="text" inputMode="decimal" placeholder="0,00"
-                      value={discount} onChange={(e) => setDiscount(e.target.value)} style={inp}
-                    />
+                    <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inp} />
                   </div>
                 </div>
               </div>
@@ -365,71 +468,14 @@ export default function ReceiptsPage() {
 
               {/* Aktionen */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn-ghost" onClick={() => setIsOpen(false)}>Abbrechen</button>
-                <button className="btn" onClick={saveReceipt}>Speichern</button>
+                <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
+                <button className="btn" onClick={saveReceipt}>{editId ? "Aktualisieren" : "Speichern"}</button>
               </div>
             </div>
           </div>
         </div>
       )}
     </main>
-  );
-}
-
-/** Tabellenzeile + Details */
-function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
-  const items = Array.isArray(row.items) ? row.items : [];
-  return (
-    <>
-      <tr className="row-clickable" onClick={onToggle}>
-        <td className="ellipsis">#{row.receiptNo || "-"}</td>
-        <td>{dateStr}</td>
-        <td>{money(row.grossCents, currency)}</td>
-        <td style={{ textAlign: "right", color: "var(--muted)" }}>
-          {expanded ? "▲ Details" : "▼ Details"}
-        </td>
-      </tr>
-
-      {expanded && (
-        <tr>
-          <td colSpan={4} style={{ background: "#fafafa" }}>
-            <div className="table-wrap" style={{ padding: "8px 8px 2px" }}>
-              <table className="table table-fixed" style={{ minWidth: 720 }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: "50%" }}>Bezeichnung</th>
-                    <th style={{ width: "10%" }}>Menge</th>
-                    <th style={{ width: "20%" }}>Einzelpreis</th>
-                    <th style={{ width: "20%" }}>Summe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 && (
-                    <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
-                  )}
-                  {items.map((it, idx) => {
-                    const qty = toInt(it.quantity || 0);
-                    const unit = toInt(it.unitPriceCents || 0);
-                    const line = toInt(it.lineTotalCents || qty * unit);
-                    return (
-                      <tr key={idx}>
-                        <td className="ellipsis">{it.name || "—"}</td>
-                        <td>{qty}</td>
-                        <td>{money(unit, currency)}</td>
-                        <td>{money(line, currency)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
-              Gesamt: {money(row.grossCents, currency)}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
   );
 }
 
