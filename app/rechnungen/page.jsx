@@ -89,9 +89,7 @@ export default function InvoicesPage(){
         .table-fixed{table-layout:fixed}
         .row-clickable{cursor:pointer}
         .ellipsis{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-        @media (max-width: 760px){
-          .hide-sm{display:none}
-        }
+        @media (max-width: 760px){ .hide-sm{display:none} }
       `}</style>
     </main>
   );
@@ -216,6 +214,7 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
 
         <PositionsTable
           items={items}
+          products={products}
           onPickProduct={onPickProduct}
           onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
           onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
@@ -249,7 +248,7 @@ function CustomerPicker({ value, onChange }){
   );
 }
 
-function PositionsTable({ items, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
+function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
   return (
     <div className="table-wrap">
       <table className="table table-fixed" style={{ minWidth: 760 }}>
@@ -271,6 +270,11 @@ function PositionsTable({ items, onPickProduct, onQty, onChangeUnit, onRemove, o
                   <div style={{display:"grid",gap:6}}>
                     <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input, width:"100%"}}>
                       <option value="">– auswählen –</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.kind==="travel" ? "(Fahrtkosten)" : p.kind==="service" ? "(Dienstleistung)" : ""}
+                        </option>
+                      ))}
                     </select>
                     {Number(r.extraBaseCents||0) > 0 && (
                       <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
