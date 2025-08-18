@@ -1,39 +1,37 @@
 // app/api/_diag/route.js
-import { prisma } from "@/lib/prisma";
+import { initDb, q } from "@/lib/db";
 
 export async function GET() {
   try {
-    // 1) Verbindung testen
-    await prisma.$queryRaw`SELECT 1`;
+    await initDb();
 
-    // 2) Tabellenvorhandensein abfragen
-    const rows = await prisma.$queryRaw`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema='public'
-        AND table_name IN ('Customer','Product')
-    `;
+    const invCount = (await q(`SELECT COUNT(*)::int AS n FROM "Invoice"`)).rows[0]?.n ?? 0;
+    const recCount = (await q(`SELECT COUNT(*)::int AS n FROM "Receipt"`)).rows[0]?.n ?? 0;
 
-    // 3) Zähler versuchen (liefert -1, wenn Tabelle fehlt)
-    const [customerCount, productCount] = await Promise.all([
-      prisma.customer?.count().catch(() => -1),
-      prisma.product?.count().catch(() => -1),
-    ]);
+    const invoices = (await q(
+      `SELECT i."id", i."invoiceNo", i."issueDate", i."grossCents",
+              i."createdAt", i."updatedAt", c."name" AS "customerName"
+       FROM "Invoice" i
+       LEFT JOIN "Customer" c ON c."id" = i."customerId"
+       ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST
+       LIMIT 5`
+    )).rows;
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        db: "reachable",
-        tablesPresent: rows.map(r => r.table_name),
-        counts: { customerCount, productCount },
-        hint: "Wenn Tabellen fehlen oder Count -1 ist, hat db push/migrate nicht gegriffen."
-      }),
-      { headers: { "content-type": "application/json" } }
-    );
+    const receipts = (await q(
+      `SELECT "id", "receiptNo", "date", "grossCents", "createdAt", "updatedAt"
+       FROM "Receipt"
+       ORDER BY "createdAt" DESC NULLS LAST, "date" DESC NULLS LAST
+       LIMIT 5`
+    )).rows;
+
+    return new Response(JSON.stringify({
+      ok: true,
+      counts: { invoices: invCount, receipts: recCount },
+      latest: { invoices, receipts },
+    }), { status: 200, headers: { "content-type": "application/json" } });
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: String(e) }),
-      { status: 500, headers: { "content-type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+      status: 500, headers: { "content-type": "application/json" }
+    });
   }
 }
