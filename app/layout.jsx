@@ -1,21 +1,18 @@
-// app/layout.jsx
+// app/layout.jsx (Ausschnitt)
 import "./globals.css";
-import HeaderTop from "@/components/HeaderTop";
+import TopBar from "@/components/TopBar";
 import InfoStripe from "@/components/InfoStripe";
-
-export const metadata = {
-  title: "BuZiness",
-  description: "Schnell erfassen, sicher verwalten.",
-};
+// ggf. dein Footer importieren
+import Footer from "@/components/Footer";
 
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
       <body>
-        {/* Dein Header (unverändert) */}
-        <HeaderTop />
+        {/* Header oben */}
+        <TopBar />
 
-        {/* NEU: Streifen direkt unter dem Header mit Text */}
+        {/* NEU: Info-Streifen direkt unter TopBar mit Text */}
         <InfoStripe position="top" showText={true} />
 
         {/* Hauptinhalt */}
@@ -23,10 +20,10 @@ export default function RootLayout({ children }) {
           {children}
         </div>
 
-        {/* NEU: Streifen über der Fußzeile ohne Text */}
+        {/* NEU: Farb-Streifen über der Fußzeile, ohne Text */}
         <InfoStripe position="bottom" showText={false} />
 
-        {/* Footer */}
+        {/* Footer unten */}
         <Footer />
       </body>
     </html>
