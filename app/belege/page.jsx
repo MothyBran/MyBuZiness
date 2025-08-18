@@ -2,186 +2,302 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* Utils */
-function toCents(input){ if(input==null) return 0; if(typeof input==="number") return Math.round(input*100); let s=String(input).trim(); if(/^\d+$/.test(s)) return parseInt(s,10)*100; s=s.replace(/[^\d.,]/g,""); if(s.includes(",")&&s.includes(".")){const lc=s.lastIndexOf(","), ld=s.lastIndexOf("."); const dec=lc>ld?",":"."; const thou=dec===","?".":","; s=s.replace(new RegExp("\\"+thou,"g"),""); s=s.replace(dec,".");} else if(s.includes(",")&&!s.includes(".")){ s=s.replace(",","."); } const n=Number.parseFloat(s); return Number.isFinite(n)?Math.round(n*100):0; }
-function fmt(c, code="EUR"){ return new Intl.NumberFormat("de-DE",{style:"currency",currency:code}).format((Number(c||0)/100)); }
-function Field({ label, children }){ return <label style={{display:"grid",gap:4}}><span style={{fontSize:12,color:"#6b7280"}}>{label}</span>{children}</label>; }
-const input={ padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
-const btnPrimary={ padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
-const btnGhost={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
-const card={ background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const modalWrap={ position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
+/* =========================
+   Utils & kleine UI-Helfer
+   ========================= */
+function toCents(input) {
+  if (input === null || input === undefined) return 0;
+  if (typeof input === "number") return Math.round(input * 100);
 
-export default function ReceiptsPage(){
-  const [rows,setRows]=useState([]); const [loading,setLoading]=useState(true);
-  const [products,setProducts]=useState([]); const [currencyCode,setCurrencyCode]=useState("EUR");
-  const [expandedId,setExpandedId]=useState(null); const [showNew,setShowNew]=useState(false); const [editRow,setEditRow]=useState(null);
+  let s = String(input).trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
 
-  async function load(){
+  s = s.replace(/[^\d.,]/g, "");
+  if (s.includes(",") && s.includes(".")) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    const decSep = lastComma > lastDot ? "," : ".";
+    const thouSep = decSep === "," ? "." : ",";
+    s = s.replace(new RegExp("\\" + thouSep, "g"), "");
+    s = s.replace(decSep, ".");
+  } else if (s.includes(",") && !s.includes(".")) {
+    s = s.replace(",", ".");
+  }
+
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+function fmt(cents, code = "EUR") {
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: code }).format((Number(cents || 0) / 100));
+}
+function Field({ label, children }) {
+  return (
+    <label style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 8, width: "100%" };
+const btnPrimary = { padding: "10px 12px", borderRadius: 8, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" };
+const btnGhost = { padding: "10px 12px", borderRadius: 8, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" };
+const btnDanger = { padding: "10px 12px", borderRadius: 8, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" };
+const card = { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 16 };
+const modalWrap = { position: "fixed", left: "50%", top: "8%", transform: "translateX(-50%)", width: "min(900px,94vw)", maxHeight: "84vh", overflow: "auto", background: "#fff", borderRadius: 14, padding: 16, zIndex: 1000, boxShadow: "0 10px 40px rgba(0,0,0,.15)" };
+
+/* =========================
+   Seite: Belege
+   ========================= */
+export default function ReceiptsPage() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currencyCode, setCurrencyCode] = useState("EUR");
+  const [products, setProducts] = useState([]);
+
+  const [expandedId, setExpandedId] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+
+  async function load() {
     setLoading(true);
     const [listRes, prodRes] = await Promise.all([
-      fetch("/api/receipts",{cache:"no-store"}),
-      fetch("/api/products",{cache:"no-store"})
+      fetch("/api/receipts", { cache: "no-store" }),
+      fetch("/api/products", { cache: "no-store" }),
     ]);
-    const list=await listRes.json().catch(()=>({data:[]}));
-    const pr=await prodRes.json().catch(()=>({data:[]}));
-    setRows(list.data||[]);
-    const mapped=(pr.data||[]).map(p=>({ id:p.id, name:p.name, kind:p.kind, priceCents:p.priceCents||0, hourlyRateCents:p.hourlyRateCents||0, travelBaseCents:p.travelBaseCents||0, travelPerKmCents:p.travelPerKmCents||0 }));
-    setProducts(mapped);
+    const list = await listRes.json().catch(() => ({ data: [] }));
+    const pr = await prodRes.json().catch(() => ({ data: [] }));
+
+    setRows(list.data || []);
+    const mappedProducts = (pr.data || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      priceCents: Number.isFinite(p.priceCents) ? p.priceCents : 0,
+      currency: p.currency || "EUR",
+    }));
+    setProducts(mappedProducts);
+    if (mappedProducts.length) setCurrencyCode(mappedProducts[0].currency);
     setLoading(false);
   }
-  useEffect(()=>{ load(); },[]);
-  function toggleExpand(id){ setExpandedId(prev=>prev===id?null:id); }
-  async function removeRow(id){ if(!confirm("Diesen Beleg wirklich löschen?")) return; const res=await fetch(`/api/receipts/${id}`,{method:"DELETE"}); const js=await res.json().catch(()=>({})); if(!js?.ok) return alert(js?.error||"Löschen fehlgeschlagen."); if(expandedId===id) setExpandedId(null); load(); }
+  useEffect(() => { load(); }, []);
+
+  function toggleExpand(id) { setExpandedId(prev => prev === id ? null : id); }
+
+  async function removeRow(id) {
+    if (!confirm("Diesen Beleg wirklich löschen?")) return;
+    const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
+    const js = await res.json().catch(()=>({}));
+    if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
+    if (expandedId === id) setExpandedId(null);
+    load();
+  }
 
   return (
     <main>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <h1 style={{margin:0}}>Belege</h1>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+        <h1 style={{ margin:0 }}>Belege</h1>
         <button style={btnPrimary} onClick={()=>setShowNew(true)}>+ Neuer Beleg</button>
       </div>
 
-      <div style={{...card,marginTop:12}}>
+      <div style={{ ...card, marginTop:12 }}>
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Nr.</th><th className="hide-sm">Datum</th><th>Betrag</th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{whiteSpace:"nowrap"}}>Nr.</th>
+                <th className="hide-sm" style={{whiteSpace:"nowrap"}}>Datum</th>
+                <th style={{whiteSpace:"nowrap"}}>Betrag</th>
+              </tr>
+            </thead>
             <tbody>
-              {rows.map(r=>{
-                const d=r.date? new Date(r.date):null;
+              {rows.map(r => {
+                const d = r.date ? new Date(r.date) : null;
                 return (
                   <>
-                    <tr key={r.id} className="row-clickable" style={{cursor:"pointer"}} onClick={()=>toggleExpand(r.id)}>
-                      <td>{r.receiptNo}</td>
-                      <td className="hide-sm">{d? d.toLocaleDateString():"—"}</td>
-                      <td>{fmt(r.grossCents)}</td>
+                    <tr key={r.id} className="row-clickable" style={{ cursor:"pointer" }} onClick={()=>toggleExpand(r.id)}>
+                      <td className="ellipsis">{r.receiptNo}</td>
+                      <td className="hide-sm">{d ? d.toLocaleDateString() : "—"}</td>
+                      <td>{fmt(r.grossCents ?? r.totalCents, r.currency || currencyCode)}</td>
                     </tr>
-                    {expandedId===r.id && (
-                      <tr key={r.id+"-d"}><td colSpan={3} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-                        <ReceiptDetails row={r} />
-                        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                          <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>⚙️ Bearbeiten</button>
-                          <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
-                        </div>
-                      </td></tr>
+                    {expandedId === r.id && (
+                      <tr key={r.id + "-details"}>
+                        <td colSpan={3} style={{ background:"#fafafa", padding:12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                          <ReceiptDetails row={r} currencyCode={r.currency || currencyCode} />
+                          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
+                            <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>⚙️ Bearbeiten</button>
+                            <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
+                          </div>
+                        </td>
+                      </tr>
                     )}
                   </>
                 );
               })}
-              {rows.length===0 && <tr><td colSpan={3} style={{textAlign:"center",color:"#999"}}>{loading?"Lade…":"Keine Belege vorhanden."}</td></tr>}
+              {rows.length===0 && (
+                <tr><td colSpan={3} style={{ textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Belege vorhanden."}</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {showNew && <NewReceiptSheet products={products} onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
-      {editRow && <EditReceiptSheet row={editRow} products={products} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); load(); }} />}
+      {showNew && (
+        <NewReceiptSheet
+          currencyCode={currencyCode}
+          products={products}
+          onClose={()=>setShowNew(false)}
+          onSaved={()=>{ setShowNew(false); load(); }}
+        />
+      )}
+      {editRow && (
+        <EditReceiptSheet
+          row={editRow}
+          products={products}
+          onClose={()=>setEditRow(null)}
+          onSaved={()=>{ setEditRow(null); load(); }}
+        />
+      )}
     </main>
   );
 }
 
-function ReceiptDetails({ row }){
-  const items=row.items||[];
+/* ========= Details (aufklappbar) ========= */
+function ReceiptDetails({ row, currencyCode }) {
+  const items = row.items || [];
+  const discount = Number(row.discountCents || 0);
+  const itemsTotal = items.reduce((s, it) => s + Number(it.unitPriceCents||0) * Number(it.quantity||0), 0);
   return (
-    <div style={{display:"grid",gap:12}}>
+    <div style={{ display:"grid", gap:12 }}>
+      <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+        <Field label="Beleg-Nr."><div>{row.receiptNo}</div></Field>
+        <Field label="Datum"><div>{row.date ? new Date(row.date).toLocaleDateString() : "—"}</div></Field>
+        <Field label="Kunde"><div>{row.customerName || row.customer?.name || "—"}</div></Field>
+      </div>
+
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Bezeichnung</th><th style={{width:110}}>Menge</th><th style={{width:160}}>Einzelpreis</th><th style={{width:160}}>Summe</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Bezeichnung</th>
+              <th style={{ width:110 }}>Menge</th>
+              <th style={{ width:160 }}>Einzelpreis</th>
+              <th style={{ width:160 }}>Summe</th>
+            </tr>
+          </thead>
           <tbody>
-            {items.map((it,idx)=>{
-              const sum = Number(it.quantity||0)*Number(it.unitPriceCents||0) + Number(it.extraBaseCents||0);
+            {items.map((it, idx) => {
+              const sum = Number(it.quantity||0) * Number(it.unitPriceCents||0);
               return (
                 <tr key={idx}>
                   <td className="ellipsis">{it.name}</td>
                   <td>{it.quantity}</td>
-                  <td>{fmt(it.unitPriceCents)}</td>
-                  <td>{fmt(sum)}</td>
+                  <td>{fmt(it.unitPriceCents, currencyCode)}</td>
+                  <td>{fmt(sum, currencyCode)}</td>
                 </tr>
               );
             })}
-            {items.length===0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#999"}}>Keine Positionen.</td></tr>}
+            {items.length===0 && <tr><td colSpan={4} style={{ textAlign:"center", color:"#999" }}>Keine Positionen.</td></tr>}
           </tbody>
         </table>
       </div>
-      <div style={{textAlign:"right",fontWeight:800}}>Gesamt: {fmt(row.grossCents)}</div>
+
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", color:"#6b7280" }}>
+        <div>Netto: {fmt(itemsTotal, currencyCode)} {discount>0 && <> · Rabatt: {fmt(discount, currencyCode)}</>}</div>
+        <div style={{ fontWeight:800 }}>Gesamt: {fmt(row.grossCents ?? row.totalCents, currencyCode)}</div>
+      </div>
     </div>
   );
 }
 
-/* Modal Neu/Bearbeiten (gleiche Logik) */
-function NewReceiptSheet({ products, onClose, onSaved }) {
+/* ========= Modal: Neuer Beleg ========= */
+function NewReceiptSheet({ currencyCode, products, onClose, onSaved }) {
+  const [receiptNo, setReceiptNo] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0,10));
+  const [customerId, setCustomerId] = useState("");
   const [discount, setDiscount] = useState("");
-  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]);
 
-  const itemsTotal = useMemo(()=> items.reduce((s,it)=> s + (toCents(it.unitPrice||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0), [items]);
-  function addRow(){ setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]); }
-  function updateRow(id, patch){ setItems(prev=>prev.map(r=>r.id===id? {...r,...patch}:r)); }
-  function removeRowLocal(id){ setItems(prev=>prev.filter(r=>r.id!==id)); }
-
-  function onPickProduct(rowId, productId){
-    const p = products.find(x=>x.id===productId);
-    if(!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"", extraBaseCents:0 });
-    // Setze per Art
-    if (p.kind === "product") {
-      updateRow(rowId, { productId, name:p.name, unitPrice:(p.priceCents/100).toFixed(2), extraBaseCents:0 });
-    } else if (p.kind === "service") {
-      const perUnit = p.hourlyRateCents || p.priceCents; // wenn Stundensatz gesetzt, Menge=Stunden
-      updateRow(rowId, { productId, name:p.name, unitPrice:(perUnit/100).toFixed(2), extraBaseCents:p.priceCents||0 });
-    } else if (p.kind === "travel") {
-      updateRow(rowId, { productId, name:p.name, unitPrice:(p.travelPerKmCents/100).toFixed(2), extraBaseCents:p.travelBaseCents||0 });
+  const [localProducts, setLocalProducts] = useState(Array.isArray(products)? products : []);
+  useEffect(() => {
+    let ignore = false;
+    async function ensureProducts() {
+      if (Array.isArray(products) && products.length > 0) { setLocalProducts(products); return; }
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const js = await res.json().catch(()=>({ data: [] }));
+      const mapped = (js.data||[]).map(p => ({ id:p.id, name:p.name, priceCents:Number.isFinite(p.priceCents)?p.priceCents:0, currency:p.currency||"EUR" }));
+      if (!ignore) setLocalProducts(mapped);
     }
+    ensureProducts();
+    return ()=>{ ignore = true; };
+  }, [products]);
+
+  const [items, setItems] = useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]);
+
+  const itemsTotal = useMemo(()=> items.reduce((s,it)=> s + toCents(it.unitPrice||0)*Number(it.quantity||0), 0), [items]);
+  const gross = Math.max(0, itemsTotal - toCents(discount||0));
+
+  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"" }]); }
+  function updateRow(id, patch){ setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r)); }
+  function removeRowLocal(id){ setItems(prev => prev.filter(r => r.id !== id)); }
+  function onPickProduct(rowId, productId) {
+    const p = localProducts.find(x => x.id === productId);
+    if (!p) return updateRow(rowId, { productId: "", name: "", unitPrice: "" });
+    updateRow(rowId, { productId, name: p.name, unitPrice: (p.priceCents / 100).toFixed(2) });
   }
 
   async function save(e){
     e.preventDefault();
     const payload = {
+      receiptNo: receiptNo || null,
       date,
+      customerId: customerId || null,
+      currency: currencyCode,
       discountCents: toCents(discount||0),
-      items: items.map(it=>({
+      items: items.map(it => ({
         productId: it.productId || null,
         name: it.name,
         quantity: Number(it.quantity||0),
         unitPriceCents: toCents(it.unitPrice||0),
-        extraBaseCents: Number(it.extraBaseCents||0),
       })),
     };
-    const res = await fetch("/api/receipts",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    const res = await fetch("/api/receipts", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
     const js = await res.json().catch(()=>({}));
-    if(!js?.ok) return alert(js?.error||"Speichern fehlgeschlagen.");
+    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
     onSaved?.();
   }
 
-  const gross = Math.max(0, itemsTotal - toCents(discount||0));
-
   return (
     <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
         <b>Neuen Beleg erfassen</b>
-        <button onClick={onClose} className="btn-ghost" style={{padding:"6px 10px"}}>×</button>
+        <button onClick={onClose} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
       </div>
 
-      <form onSubmit={save} style={{display:"grid",gap:12}}>
-        <div style={{display:"grid",gap:12,gridTemplateColumns:"1fr 1fr"}}>
+      <form onSubmit={save} style={{ display:"grid", gap:12 }}>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" }}>
+          <Field label="Nr."><input style={input} value={receiptNo} onChange={e=>setReceiptNo(e.target.value)} /></Field>
           <Field label="Datum"><input type="date" style={input} value={date} onChange={e=>setDate(e.target.value)} /></Field>
-          <Field label="Rabatt gesamt"><input style={input} value={discount} onChange={e=>setDiscount(e.target.value)} inputMode="decimal" placeholder="z. B. 10,00" /></Field>
+          <Field label="Kunde (optional)">
+            <CustomerPicker value={customerId} onChange={setCustomerId} />
+          </Field>
         </div>
 
         <PositionsTable
           items={items}
-          products={products}
+          products={localProducts}
+          currencyCode={currencyCode}
           onPickProduct={onPickProduct}
-          onQty={(id,v)=>updateRow(id,{ quantity: parseInt(v||"1",10) })}
+          onQty={(id, v)=>updateRow(id,{ quantity: parseInt(v||"1",10) })}
           onRemove={removeRowLocal}
           onAdd={addRow}
         />
 
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div />
-          <div style={{fontWeight:800}}>Gesamt: {fmt(gross)}</div>
+        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+          <Field label="Rabatt gesamt">
+            <input style={input} value={discount} onChange={e=>setDiscount(e.target.value)} inputMode="decimal" placeholder="z. B. 10,00" />
+          </Field>
+          <div style={{ fontWeight:800 }}>Gesamt: {fmt(gross, currencyCode)}</div>
         </div>
 
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
           <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
           <button type="submit" style={btnPrimary}>Speichern</button>
         </div>
@@ -190,45 +306,157 @@ function NewReceiptSheet({ products, onClose, onSaved }) {
   );
 }
 
-function EditReceiptSheet(props){
-  // Für Kürze gleich wie NewReceiptSheet, gleiche Logik, nur PUT auf /api/receipts/[id]
-  // Wenn du die Bearbeiten-Ansicht aktiv nutzt, sag kurz Bescheid – ich liefere die komplette Edit-Version nach.
-  return null;
+/* ========= Modal: Beleg bearbeiten ========= */
+function EditReceiptSheet({ row, products, onClose, onSaved }) {
+  const currencyCode = row.currency || "EUR";
+  const [receiptNo, setReceiptNo] = useState(row.receiptNo || "");
+  const [date, setDate] = useState(row.date?.slice(0,10) || new Date().toISOString().slice(0,10));
+  const [discount, setDiscount] = useState(((row.discountCents||0)/100).toFixed(2));
+
+  const [localProducts, setLocalProducts] = useState(Array.isArray(products)? products : []);
+  useEffect(()=>{ (async ()=>{
+    if (localProducts.length) return;
+    const res = await fetch("/api/products", { cache:"no-store" });
+    const js = await res.json().catch(()=>({data:[]}));
+    setLocalProducts((js.data||[]).map(p=>({ id:p.id, name:p.name, priceCents:p.priceCents||0, currency:p.currency||"EUR" })));
+  })(); },[]);
+
+  const [items, setItems] = useState(
+    (row.items||[]).map(it => ({
+      id: it.id,
+      productId: it.productId || "",
+      name: it.name || "",
+      quantity: Number(it.quantity || 1),
+      unitPrice: (Number(it.unitPriceCents||0)/100).toFixed(2),
+    }))
+  );
+
+  const itemsTotal = useMemo(()=> items.reduce((s,it)=> s + toCents(it.unitPrice||0)*Number(it.quantity||0), 0), [items]);
+  const gross = Math.max(0, itemsTotal - toCents(discount||0));
+
+  function addRow(){ setItems(prev=>[...prev, { id: crypto.randomUUID(), productId:"", name:"", quantity:1, unitPrice:"" }]); }
+  function updateRow(id, patch){ setItems(prev=>prev.map(r => r.id===id? {...r, ...patch} : r)); }
+  function removeRowLocal(id){ setItems(prev => prev.filter(r => r.id !== id)); }
+  function onPickProduct(rowId, productId) {
+    const p = localProducts.find(x=>x.id===productId);
+    if (!p) return updateRow(rowId, { productId:"", name:"", unitPrice:"" });
+    updateRow(rowId, { productId, name:p.name, unitPrice:(p.priceCents/100).toFixed(2) });
+  }
+
+  async function save(e){
+    e.preventDefault();
+    const payload = {
+      receiptNo: receiptNo || null,
+      date,
+      currency: currencyCode,
+      discountCents: toCents(discount||0),
+      items: items.map(it=>({
+        productId: it.productId || null,
+        name: it.name,
+        quantity: Number(it.quantity||0),
+        unitPriceCents: toCents(it.unitPrice||0),
+      })),
+    };
+    const res = await fetch(`/api/receipts/${row.id}`, { method:"PUT", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    const js = await res.json().catch(()=>({}));
+    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    onSaved?.();
+  }
+
+  return (
+    <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <b>Beleg bearbeiten</b>
+        <button onClick={onClose} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
+      </div>
+
+      <form onSubmit={save} style={{ display:"grid", gap:12 }}>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+          <Field label="Nr."><input style={input} value={receiptNo} onChange={e=>setReceiptNo(e.target.value)} /></Field>
+          <Field label="Datum"><input type="date" style={input} value={date} onChange={e=>setDate(e.target.value)} /></Field>
+        </div>
+
+        <PositionsTable
+          items={items}
+          products={localProducts}
+          currencyCode={currencyCode}
+          onPickProduct={onPickProduct}
+          onQty={(id, v)=>updateRow(id,{ quantity: parseInt(v||"1",10) })}
+          onRemove={removeRowLocal}
+          onAdd={addRow}
+        />
+
+        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+          <Field label="Rabatt gesamt">
+            <input style={input} value={discount} onChange={e=>setDiscount(e.target.value)} inputMode="decimal" placeholder="z. B. 10,00" />
+          </Field>
+          <div style={{ fontWeight:800 }}>Gesamt: {fmt(gross, currencyCode)}</div>
+        </div>
+
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
+          <button type="submit" style={btnPrimary}>Speichern</button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
-/* Positionstabelle mit extraBaseCents-Anzeige */
-function PositionsTable({ items, products, onPickProduct, onQty, onRemove, onAdd }){
+/* ========= Wiederverwendbare Komponente: Positionstabelle ========= */
+function PositionsTable({ items, products, currencyCode, onPickProduct, onQty, onRemove, onAdd }) {
   return (
-    <div className="table-wrap" style={{ overflowX:"auto" }}>
-      <table className="table pos-table" style={{ minWidth: 720 }}>
-        <thead><tr><th>Produkt</th><th style={{width:96}}>Menge</th><th style={{width:160}}>Einzelpreis</th><th style={{width:160}}>Summe</th><th style={{width:120,textAlign:"right"}}>Aktion</th></tr></thead>
+    <div className="table-wrap" style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+      <table className="table pos-table" style={{ minWidth: 640 }}>
+        <thead>
+          <tr>
+            <th>Produkt</th>
+            <th style={{ width:96 }}>Menge</th>
+            <th style={{ width:160 }}>Einzelpreis</th>
+            <th style={{ width:160 }}>Summe</th>
+            <th style={{ width:120, textAlign:"right" }}>Aktion</th>
+          </tr>
+        </thead>
         <tbody>
-          {products.length===0 && <tr><td colSpan={5} style={{textAlign:"center",color:"#777"}}>Keine Produkte. Lege zuerst unter <a href="/produkte">/produkte</a> an.</td></tr>}
+          {products.length===0 && (
+            <tr><td colSpan={5} style={{ textAlign:"center", color:"#777" }}>Keine Produkte vorhanden. Lege zuerst Produkte unter <a href="/produkte">/produkte</a> an.</td></tr>
+          )}
           {items.map(r=>{
-            const qty=Number(r.quantity||0);
-            const upCents=toCents(r.unitPrice||0);
-            const sum=qty*upCents + Number(r.extraBaseCents||0);
+            const qty = Number(r.quantity||0);
+            const upCents = toCents(r.unitPrice || 0);
+            const line = qty * upCents;
             return (
               <tr key={r.id}>
                 <td>
-                  <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input,minWidth:220}}>
+                  <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{ ...input, minWidth: 200 }}>
                     <option value="">– auswählen –</option>
                     {products.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  {Number(r.extraBaseCents||0) > 0 && (
-                    <div style={{ fontSize:12, color:"#6b7280", marginTop:6 }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
-                  )}
                 </td>
                 <td><input value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} inputMode="numeric" /></td>
-                <td>{fmt(upCents)}</td>
-                <td>{fmt(sum)}</td>
-                <td style={{textAlign:"right"}}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
+                <td>{fmt(upCents, currencyCode)}</td>
+                <td>{fmt(line, currencyCode)}</td>
+                <td style={{ textAlign:"right" }}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div style={{marginTop:8}}><button type="button" onClick={onAdd} style={btnGhost}>+ Position</button></div>
+      <div style={{ marginTop:8 }}><button type="button" onClick={onAdd} style={btnGhost}>+ Position</button></div>
     </div>
+  );
+}
+
+/* ========= Kunden-Picker (leichtgewichtig) ========= */
+function CustomerPicker({ value, onChange }) {
+  const [opts, setOpts] = useState([]);
+  useEffect(()=>{ (async()=>{
+    const js = await fetch("/api/customers", { cache:"no-store" }).then(r=>r.json()).catch(()=>({data:[]}));
+    setOpts(js.data || []);
+  })(); },[]);
+  return (
+    <select style={input} value={value} onChange={e=>onChange(e.target.value)}>
+      <option value="">– kein Kunde –</option>
+      {opts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
   );
 }
