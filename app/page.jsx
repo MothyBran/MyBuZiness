@@ -24,6 +24,16 @@ export default function DashboardPage() {
         setRecentInvoices(js.data.recentInvoices || []);
         setCurrency(js.data.settings?.currencyDefault || "EUR");
         setSettings(js.data.settings || null);
+
+        // Design-Variablen aus Settings setzen
+        if (js.data.settings) {
+          const s = js.data.settings;
+          const root = document.documentElement;
+          if (s.primaryColor)   root.style.setProperty("--color-primary", s.primaryColor);
+          if (s.secondaryColor) root.style.setProperty("--color-secondary", s.secondaryColor);
+          if (s.fontFamily)     root.style.setProperty("--font-family", s.fontFamily);
+          if (s.fontColor)      root.style.setProperty("--color-text", s.fontColor);
+        }
       } catch (e) {
         console.error("Dashboard error:", e);
       } finally {
@@ -33,62 +43,37 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-4">⏳ Lade Dashboard…</div>;
+    return <div>⏳ Lade Dashboard…</div>;
   }
 
   return (
-    <div className="p-4 space-y-6">
-      {/* CSS Variablen global setzen */}
-      {settings && (
-        <style>{`
-          :root {
-            --color-primary: ${settings.primaryColor || "#0aa"};
-            --color-secondary: ${settings.secondaryColor || "#0f766e"};
-            --font-family: ${settings.fontFamily || "Inter, sans-serif"};
-            --font-color: ${settings.fontColor || "#111111"};
-          }
-          body {
-            font-family: var(--font-family);
-            color: var(--font-color);
-          }
-        `}</style>
-      )}
-
+    <div className="grid-gap-16">
       {/* Umsatz-Karten */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardTitle>Heute</CardTitle>
-          <CardValue>{formatMoney(totals.today, currency)}</CardValue>
-        </Card>
-        <Card>
-          <CardTitle>Letzte 7 Tage</CardTitle>
-          <CardValue>{formatMoney(totals.last7, currency)}</CardValue>
-        </Card>
-        <Card>
-          <CardTitle>Letzte 30 Tage</CardTitle>
-          <CardValue>{formatMoney(totals.last30, currency)}</CardValue>
-        </Card>
+      <section className="grid-gap-16 grid-1-3">
+        <Card><div className="card-title">Heute</div><div className="card-value">{money(totals.today, currency)}</div></Card>
+        <Card><div className="card-title">Letzte 7 Tage</div><div className="card-value">{money(totals.last7, currency)}</div></Card>
+        <Card><div className="card-title">Letzte 30 Tage</div><div className="card-value">{money(totals.last30, currency)}</div></Card>
       </section>
 
       {/* Zähler */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardTitle>Kunden</CardTitle><CardValue>{counts.customers}</CardValue></Card>
-        <Card><CardTitle>Produkte</CardTitle><CardValue>{counts.products}</CardValue></Card>
-        <Card><CardTitle>Rechnungen</CardTitle><CardValue>{counts.invoices}</CardValue></Card>
-        <Card><CardTitle>Belege</CardTitle><CardValue>{counts.receipts}</CardValue></Card>
+      <section className="grid-gap-16 grid-2-4">
+        <Card><div className="card-title">Kunden</div><div className="card-value">{counts.customers}</div></Card>
+        <Card><div className="card-title">Produkte</div><div className="card-value">{counts.products}</div></Card>
+        <Card><div className="card-title">Rechnungen</div><div className="card-value">{counts.invoices}</div></Card>
+        <Card><div className="card-title">Belege</div><div className="card-value">{counts.receipts}</div></Card>
       </section>
 
       {/* Neueste Belege */}
       <Card>
-        <CardTitle>Neueste Belege</CardTitle>
-        <div className="divide-y">
+        <div className="card-title">Neueste Belege</div>
+        <div className="list-divider">
           {recentReceipts.length === 0 && (
-            <div className="text-sm text-gray-500 py-2">Keine Belege vorhanden.</div>
+            <div className="subtle" style={{ padding: "8px 0" }}>Keine Belege vorhanden.</div>
           )}
           {recentReceipts.map(r => (
-            <div key={r.id} className="flex justify-between py-2 text-sm">
-              <span className="font-medium">#{r.receiptNo}</span>
-              <span>{formatMoney(r.grossCents, r.currency || currency)}</span>
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14 }}>
+              <span style={{ fontWeight: 600 }}>#{r.receiptNo}</span>
+              <span>{money(r.grossCents, r.currency || currency)}</span>
             </div>
           ))}
         </div>
@@ -96,17 +81,15 @@ export default function DashboardPage() {
 
       {/* Neueste Rechnungen */}
       <Card>
-        <CardTitle>Neueste Rechnungen</CardTitle>
-        <div className="divide-y">
+        <div className="card-title">Neueste Rechnungen</div>
+        <div className="list-divider">
           {recentInvoices.length === 0 && (
-            <div className="text-sm text-gray-500 py-2">Keine Rechnungen vorhanden.</div>
+            <div className="subtle" style={{ padding: "8px 0" }}>Keine Rechnungen vorhanden.</div>
           )}
           {recentInvoices.map(inv => (
-            <div key={inv.id} className="flex justify-between py-2 text-sm">
-              <span className="font-medium">
-                #{inv.invoiceNo} — {inv.customerName || "Unbekannt"}
-              </span>
-              <span>{formatMoney(inv.grossCents, inv.currency || currency)}</span>
+            <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 14 }}>
+              <span style={{ fontWeight: 600 }}>#{inv.invoiceNo} — {inv.customerName || "Unbekannt"}</span>
+              <span>{money(inv.grossCents, inv.currency || currency)}</span>
             </div>
           ))}
         </div>
@@ -115,27 +98,11 @@ export default function DashboardPage() {
   );
 }
 
-function formatMoney(cents, currency = "EUR") {
-  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency}`;
-}
-
-/* --- UI Komponenten --- */
 function Card({ children }) {
-  return (
-    <div className="bg-white shadow-md rounded-xl p-4 hover:shadow-lg transition">
-      {children}
-    </div>
-  );
+  return <div className="card">{children}</div>;
 }
 
-function CardTitle({ children }) {
-  return (
-    <div className="text-sm text-gray-500 mb-1">{children}</div>
-  );
-}
-
-function CardValue({ children }) {
-  return (
-    <div className="text-xl font-bold text-gray-900">{children}</div>
-  );
+function money(cents, curr = "EUR") {
+  const n = Number(cents || 0) / 100;
+  return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
 }
