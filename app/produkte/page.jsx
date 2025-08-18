@@ -144,9 +144,9 @@ function ProductDetails({ row }) {
   return (
     <div style={{ display:"grid", gap:12 }}>
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
-        <Field label="Nr"><div>{row.categoryCode || "—"}</div></Field>
         <Field label="Name"><div>{row.name}</div></Field>
         <Field label="Art"><div>{mapKindLabel(row.kind)}</div></Field>
+        <Field label="Kategorie"><div>{row.categoryCode || "—"}</div></Field>
         <Field label="SKU"><div>{row.sku || "—"}</div></Field>
       </div>
 
