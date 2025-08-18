@@ -26,9 +26,9 @@ export default function ReceiptsPage() {
   // Modal (Neu/Bearbeiten)
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState(null); // null = neu, sonst ID
+  const [editReceiptNo, setEditReceiptNo] = useState(null); // Anzeige im Edit-Fall
   const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [vatExempt, setVatExempt] = useState(true);
-  const [discount, setDiscount] = useState("0");
+  const [discount, setDiscount] = useState("0"); // als Euro-Text
   const [items, setItems] = useState([makeEmptyItem()]);
 
   // Debug (optional)
@@ -53,7 +53,7 @@ export default function ReceiptsPage() {
           ? pr.data.map((p) => ({
               id: p.id,
               name: p.name || "-",
-              kind: p.kind || "product",
+              kind: p.kind || "product",            // product | service | travel
               priceCents: toInt(p.priceCents || 0),
               hourlyRateCents: toInt(p.hourlyRateCents || 0),
               travelBaseCents: toInt(p.travelBaseCents || 0),
@@ -100,15 +100,13 @@ export default function ReceiptsPage() {
 
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
 
   /** Modal öffnen (Neu) */
   function openNew() {
     setEditId(null);
+    setEditReceiptNo(null);
     setFormDate(new Date().toISOString().slice(0, 10));
-    setVatExempt(vatExemptDefault);
     setDiscount("0");
     setItems([makeEmptyItem()]);
     setIsOpen(true);
@@ -117,9 +115,9 @@ export default function ReceiptsPage() {
   /** Modal öffnen (Bearbeiten) */
   function openEdit(row) {
     setEditId(row.id);
+    setEditReceiptNo(row.receiptNo || null);
     setFormDate(row.date ? String(row.date).slice(0, 10) : new Date().toISOString().slice(0, 10));
-    // vatExempt / discount sind nicht im GET dabei; wenn du sie in Receipt speicherst, hier setzen
-    setVatExempt(vatExemptDefault);
+    // Rabatt ist im GET nicht vorhanden – wenn du ihn speicherst, hier setzen. Sonst 0.
     setDiscount("0");
     const its = Array.isArray(row.items) ? row.items : [];
     setItems(
@@ -148,25 +146,34 @@ export default function ReceiptsPage() {
 
   function onProductSelect(idx, productId) {
     const p = products.find((x) => x.id === productId);
-    if (!p) { updateItem(idx, { productId: "", name: "", unitPriceCents: 0 }); return; }
+    if (!p) {
+      updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
+      return;
+    }
+    // Einzelpreis aus Produkt ableiten (nicht editierbar)
     let unit = p.priceCents;
     if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
     if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
-    updateItem(idx, { productId: p.id, name: p.name, unitPriceCents: toInt(unit) });
+
+    updateItem(idx, {
+      productId: p.id,
+      name: p.name,               // Name direkt vom Produkt, kein Freitext mehr
+      unitPriceCents: toInt(unit)
+    });
   }
 
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /** Summen für Modal */
+  /** Summen für Modal (Rabatt jetzt unter Positionen) */
   const calc = useMemo(() => {
     const netCents = items.reduce((sum, it) => sum + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
     const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
     const netAfterDiscount = Math.max(0, netCents - discountCents);
-    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19);
+    const taxCents = vatExemptDefault ? 0 : Math.round(netAfterDiscount * 0.19);
     const grossCents = netAfterDiscount + taxCents;
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
-  }, [items, discount, vatExempt]);
+  }, [items, discount, vatExemptDefault]);
 
   /** Speichern (Neu/Update) */
   async function saveReceipt() {
@@ -175,7 +182,7 @@ export default function ReceiptsPage() {
         .map((it) => ({
           productId: it.productId || null,
           name: (it.name || "").trim() || "Position",
-          quantity: clamp(it.quantity || 0, 0),
+          quantity: Math.max(0, toInt(it.quantity || 0)),
           unitPriceCents: toInt(it.unitPriceCents || 0),
         }))
         .filter((it) => it.quantity > 0 && it.unitPriceCents >= 0);
@@ -187,14 +194,14 @@ export default function ReceiptsPage() {
 
       const payload = {
         date: formDate || null,
-        vatExempt: !!vatExempt,
+        vatExempt: !!vatExemptDefault,     // aus Einstellungen
         currency,
         discountCents: calc.discountCents,
         items: cleanItems,
       };
 
       if (editId) {
-        // UPDATE (sofern API vorhanden)
+        // Optional: PUT-Endpoint, falls vorhanden
         const res = await fetch(`/api/receipts/${editId}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -207,7 +214,7 @@ export default function ReceiptsPage() {
           return;
         }
       } else {
-        // CREATE
+        // Neu
         const res = await fetch("/api/receipts", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -285,11 +292,9 @@ export default function ReceiptsPage() {
               {loading && (
                 <tr><td colSpan={3} style={{ color: "#6b7280" }}>Lade…</td></tr>
               )}
-
               {!loading && rows.length === 0 && (
                 <tr><td colSpan={3} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
               )}
-
               {!loading && rows.map((r) => {
                 const d = r.date ? new Date(r.date) : null;
                 const dateStr = d ? d.toLocaleDateString() : "—";
@@ -371,111 +376,191 @@ export default function ReceiptsPage() {
         >
           <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <h2 style={{ margin: 0 }}>{editId ? `Beleg #${editId.slice(0, 6)} bearbeiten` : "Neuer Beleg"}</h2>
+              <h2 style={{ margin: 0 }}>{editId ? `Beleg #${editReceiptNo || editId.slice(0, 6)} bearbeiten` : "Neuer Beleg"}</h2>
               <button className="btn-ghost" onClick={() => setIsOpen(false)}>✕ Schließen</button>
             </div>
 
-            {/* Stammdaten */}
-            <div className="grid-gap-16" style={{ marginTop: 12 }}>
-              <div className="surface" style={{ padding: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={lbl}>Datum</label>
-                    <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
+            {/* Kopfzeile: Datum + Beleg-Nr. (Anzeige) */}
+            <div className="surface" style={{ padding: 12, marginTop: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={lbl}>Datum</label>
+                  <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Beleg‑Nr.</label>
+                  <input
+                    type="text"
+                    value={editId ? (editReceiptNo || "") : "(automatisch)"}
+                    readOnly
+                    style={{ ...inp, background: "#f5f5f5", color: "#6b7280" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Positionen */}
+            <div className="surface" style={{ padding: 12, marginTop: 16 }}>
+              <div className="table-wrap">
+                <table className="table pos-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "50%" }}>Produkt/Dienstleistung</th>
+                      <th style={{ width: "16%" }}>Menge</th>
+                      <th style={{ width: "17%" }}>Einzelpreis</th>
+                      <th style={{ width: "17%" }}>Summe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it, idx) => {
+                      const sum = toInt(it.quantity) * toInt(it.unitPriceCents);
+                      return (
+                        <tr key={idx}>
+                          <td>
+                            <select
+                              value={it.productId}
+                              onChange={(e) => onProductSelect(idx, e.target.value)}
+                              style={{ ...inp, width: "100%" }}
+                            >
+                              <option value="">— Produkt wählen —</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              value={String(it.quantity ?? 1)}
+                              onChange={(e) => updateItem(idx, { quantity: toInt(e.target.value) })}
+                              style={{ ...inp, textAlign: "right" }}
+                            >
+                              {Array.from({ length: 20 }).map((_, i) => {
+                                const v = i + 1;
+                                return <option key={v} value={v}>{v}</option>;
+                              })}
+                            </select>
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>
+                            {/* nur Anzeige, nicht editierbar */}
+                            {money(toInt(it.unitPriceCents), currency)}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 700 }}>
+                            {money(sum, currency)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn-ghost" onClick={addRow}>+ Position</button>
+                <button className="btn-ghost" onClick={() => removeRow(items.length - 1)} disabled={items.length <= 1}>– Entfernen</button>
+              </div>
+            </div>
+
+            {/* Rabatt + Summen */}
+            <div className="surface" style={{ padding: 12, marginTop: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
+                <div>
+                  <label style={lbl}>Rabatt gesamt (€, optional)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    style={inp}
+                  />
+                  <div className="subtle" style={{ marginTop: 6 }}>
+                    Rabatt wird vor Steuer abgezogen. USt {vatExemptDefault ? "(befreit §19)" : "19%"}.
                   </div>
-                  <div>
-                    <label style={lbl}>Kleinunternehmer (§19 UStG)</label>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <input type="checkbox" checked={vatExempt} onChange={(e) => setVatExempt(e.target.checked)} />
-                      <span>Keine USt. berechnen</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label style={lbl}>Rabatt (gesamt, €)</label>
-                    <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e) => setDiscount(e.target.value)} style={inp} />
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div>Zwischensumme: <strong>{money(calc.netCents, currency)}</strong></div>
+                  <div>Rabatt: <strong>- {money(calc.discountCents, currency)}</strong></div>
+                  <div>Netto: <strong>{money(calc.netAfterDiscount, currency)}</strong></div>
+                  <div>USt {vatExemptDefault ? "(befreit §19)" : "19%"}: <strong>{money(calc.taxCents, currency)}</strong></div>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
+                    Gesamt: {money(calc.grossCents, currency)}
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Positionen */}
-              <div className="surface" style={{ padding: 12 }}>
-                <div className="table-wrap">
-                  <table className="table pos-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "44%" }}>Produkt/Dienstleistung</th>
-                        <th style={{ width: "12%" }}>Menge</th>
-                        <th style={{ width: "22%" }}>Einzelpreis</th>
-                        <th style={{ width: "22%" }}>Summe</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((it, idx) => {
-                        const sum = toInt(it.quantity) * toInt(it.unitPriceCents);
-                        return (
-                          <tr key={idx}>
-                            <td>
-                              <select value={it.productId} onChange={(e) => onProductSelect(idx, e.target.value)} style={{ ...inp, width: "100%" }}>
-                                <option value="">— Produkt wählen —</option>
-                                {products.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
-                              </select>
-                              <input type="text" placeholder="Freitext (optional)" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} style={{ ...inp, marginTop: 6 }} />
-                            </td>
-                            <td>
-                              <input type="number" min={0} step="1" value={it.quantity} onChange={(e) => updateItem(idx, { quantity: clamp(e.target.value || 0) })} style={{ ...inp, textAlign: "right" }} />
-                            </td>
-                            <td>
-                              <input
-                                type="text" inputMode="decimal"
-                                value={(toInt(it.unitPriceCents) / 100).toString().replace(".", ",")}
-                                onChange={(e) => {
-                                  const raw = (e.target.value || "0").replace(/\./g, "").replace(",", ".");
-                                  const cents = Math.round(parseFloat(raw) * 100) || 0;
-                                  updateItem(idx, { unitPriceCents: cents });
-                                }}
-                                style={{ ...inp, textAlign: "right" }}
-                              />
-                            </td>
-                            <td style={{ textAlign: "right", fontWeight: 600 }}>{money(sum, currency)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button className="btn-ghost" onClick={addRow}>+ Position</button>
-                  <button className="btn-ghost" onClick={() => removeRow(items.length - 1)} disabled={items.length <= 1}>– Entfernen</button>
-                </div>
-              </div>
-
-              {/* Summen */}
-              <div className="surface" style={{ padding: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end" }}>
-                  <div className="subtle">Rabatt wird vor Steuer abgezogen.</div>
-                  <div style={{ textAlign: "right" }}>
-                    <div>Zwischensumme: <strong>{money(calc.netCents, currency)}</strong></div>
-                    <div>Rabatt: <strong>- {money(calc.discountCents, currency)}</strong></div>
-                    <div>Netto: <strong>{money(calc.netAfterDiscount, currency)}</strong></div>
-                    <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(calc.taxCents, currency)}</strong></div>
-                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
-                      Gesamt: {money(calc.grossCents, currency)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Aktionen */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
-                <button className="btn" onClick={saveReceipt}>{editId ? "Aktualisieren" : "Speichern"}</button>
-              </div>
+            {/* Aktionen */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
+              <button className="btn" onClick={saveReceipt}>{editId ? "Aktualisieren" : "Speichern"}</button>
             </div>
           </div>
         </div>
       )}
     </main>
+  );
+}
+
+/** Tabellenzeile + Details */
+function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
+  const items = Array.isArray(row.items) ? row.items : [];
+  return (
+    <>
+      <tr className="row-clickable" onClick={onToggle}>
+        <td className="ellipsis">#{row.receiptNo || "-"}</td>
+        <td>{dateStr}</td>
+        <td>{money(row.grossCents, currency)}</td>
+      </tr>
+
+      {expanded && (
+        <tr>
+          <td colSpan={3} style={{ background: "#fafafa" }}>
+            {/* Aktionszeile */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "8px" }}>
+              <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("open-edit-receipt", { detail: { row } })); }}>⚙️ Bearbeiten</button>
+              <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("delete-receipt", { detail: { id: row.id } })); }}>❌ Löschen</button>
+            </div>
+
+            {/* Positionsliste */}
+            <div className="table-wrap" style={{ padding: "0 8px 2px" }}>
+              <table className="table table-fixed" style={{ minWidth: 720 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: "50%" }}>Bezeichnung</th>
+                    <th style={{ width: "10%" }}>Menge</th>
+                    <th style={{ width: "20%" }}>Einzelpreis</th>
+                    <th style={{ width: "20%" }}>Summe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.length === 0 && (
+                    <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
+                  )}
+                  {items.map((it, idx) => {
+                    const qty = toInt(it.quantity || 0);
+                    const unit = toInt(it.unitPriceCents || 0);
+                    const line = toInt(it.lineTotalCents || qty * unit);
+                    return (
+                      <tr key={idx}>
+                        <td className="ellipsis">{it.name || "—"}</td>
+                        <td>{qty}</td>
+                        <td>{money(unit, currency)}</td>
+                        <td>{money(line, currency)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Gesamtsumme */}
+            <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
+              Gesamt: {money(row.grossCents, currency)}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
