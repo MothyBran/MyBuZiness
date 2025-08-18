@@ -1,5 +1,7 @@
 // app/api/receipts/route.js
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { initDb, q, uuid } from "@/lib/db";
 
 /** Settings laden (Währung / Kleinunternehmer) */
