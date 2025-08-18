@@ -7,44 +7,53 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
+    // Grundliste der Belege – Sortierung tolerant gegen NULL
     const receipts = (await q(
-      `SELECT *
+      `SELECT "id","receiptNo","date","grossCents","netCents","taxCents","discountCents",
+              COALESCE("currency",'EUR') AS "currency",
+              "createdAt","updatedAt"
        FROM "Receipt"
-       ${qs ? `WHERE lower("receiptNo") LIKE $1 OR lower(COALESCE("note", '')) LIKE $1` : ""}
+       ${qs ? `WHERE lower(COALESCE("receiptNo",'')) LIKE $1 OR lower(COALESCE("note",'')) LIKE $1` : ""}
        ORDER BY "createdAt" DESC NULLS LAST, "date" DESC NULLS LAST, "id" DESC`,
       qs ? [`%${qs}%`] : []
     )).rows;
 
-    if (receipts.length) {
-      const ids = receipts.map(r => r.id);
-
-      // Items laden mit UUID-Cast
-      const items = (await q(
-        `SELECT * FROM "ReceiptItem"
-         WHERE "receiptId" = ANY($1::uuid[])
-         ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
-        [ids]
-      )).rows;
-
-      const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
-      for (const it of items) {
-        const host = byId.get(it.receiptId);
-        if (host) host.items.push(it);
-      }
-
-      return new Response(JSON.stringify({ ok: true, data: Array.from(byId.values()) }), {
+    if (receipts.length === 0) {
+      return new Response(JSON.stringify({ ok: true, data: [] }), {
         status: 200,
         headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     }
 
-    return new Response(JSON.stringify({ ok: true, data: [] }), {
+    const ids = receipts.map(r => r.id);
+
+    // Positionen anhängen – UUID-Array sauber gecastet
+    const items = (await q(
+      `SELECT "id","receiptId","productId","name",
+              COALESCE("quantity",0) AS "quantity",
+              COALESCE("unitPriceCents",0) AS "unitPriceCents",
+              COALESCE("lineTotalCents",0) AS "lineTotalCents",
+              COALESCE("createdAt", now()) AS "createdAt"
+       FROM "ReceiptItem"
+       WHERE "receiptId" = ANY($1::uuid[])
+       ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
+      [ids]
+    )).rows;
+
+    const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
+    for (const it of items) {
+      const host = byId.get(it.receiptId);
+      if (host) host.items.push(it);
+    }
+
+    return new Response(JSON.stringify({ ok: true, data: Array.from(byId.values()) }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500, headers: { "content-type": "application/json" }
+      status: 500,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
 }
