@@ -2,7 +2,6 @@
 import "./globals.css";
 import HeaderTop from "@/components/HeaderTop";
 import InfoStripe from "@/components/InfoStripe";
-import Footer from "@/components/Footer"; // falls vorhanden
 
 export const metadata = {
   title: "BuZiness",
