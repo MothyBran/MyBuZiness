@@ -15,14 +15,16 @@ async function attachItems(receipts) {
   if (!receipts.length) return receipts;
   const ids = receipts.map(r => r.id);
   const items = (await q(
-    `SELECT * FROM "ReceiptItem" WHERE "receiptId" = ANY($1::uuid[]) ORDER BY "createdAt" ASC`,
+    `SELECT * FROM "ReceiptItem"
+     WHERE "receiptId" = ANY($1::uuid[])
+     ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
     [ids]
   )).rows;
 
   const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
   for (const it of items) {
-    const r = byId.get(it.receiptId);
-    if (r) r.items.push(it);
+    const host = byId.get(it.receiptId);
+    if (host) host.items.push(it);
   }
   return Array.from(byId.values());
 }
@@ -41,35 +43,13 @@ export async function GET(request) {
       qs ? [`%${qs}%`] : []
     )).rows;
 
-    if (receipts.length) {
-      const ids = receipts.map(r => r.id);
-      const items = (await q(
-        `SELECT * FROM "ReceiptItem"
-         WHERE "receiptId" = ANY($1::uuid[])
-         ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
-        [ids]
-      )).rows;
-
-      const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
-      for (const it of items) {
-        const host = byId.get(it.receiptId);
-        if (host) host.items.push(it);
-      }
-      const withItems = Array.from(byId.values());
-      return new Response(JSON.stringify({ ok: true, data: withItems }), {
-        status: 200,
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
-      });
-    }
-
-    return new Response(JSON.stringify({ ok: true, data: [] }), {
+    const withItems = await attachItems(receipts);
+    return new Response(JSON.stringify({ ok: true, data: withItems }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500, headers: { "content-type": "application/json" }
-    });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
