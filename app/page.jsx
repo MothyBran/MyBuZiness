@@ -54,82 +54,88 @@ export default function DashboardPage() {
         `}</style>
       )}
 
-      {/* Umsätze */}
+      {/* Umsatz-Karten */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard title="Heute" value={totals.today} currency={currency} />
-        <StatCard title="Letzte 7 Tage" value={totals.last7} currency={currency} />
-        <StatCard title="Letzte 30 Tage" value={totals.last30} currency={currency} />
+        <Card>
+          <CardTitle>Heute</CardTitle>
+          <CardValue>{formatMoney(totals.today, currency)}</CardValue>
+        </Card>
+        <Card>
+          <CardTitle>Letzte 7 Tage</CardTitle>
+          <CardValue>{formatMoney(totals.last7, currency)}</CardValue>
+        </Card>
+        <Card>
+          <CardTitle>Letzte 30 Tage</CardTitle>
+          <CardValue>{formatMoney(totals.last30, currency)}</CardValue>
+        </Card>
       </section>
 
       {/* Zähler */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <CountCard title="Kunden" value={counts.customers} />
-        <CountCard title="Produkte" value={counts.products} />
-        <CountCard title="Rechnungen" value={counts.invoices} />
-        <CountCard title="Belege" value={counts.receipts} />
+        <Card><CardTitle>Kunden</CardTitle><CardValue>{counts.customers}</CardValue></Card>
+        <Card><CardTitle>Produkte</CardTitle><CardValue>{counts.products}</CardValue></Card>
+        <Card><CardTitle>Rechnungen</CardTitle><CardValue>{counts.invoices}</CardValue></Card>
+        <Card><CardTitle>Belege</CardTitle><CardValue>{counts.receipts}</CardValue></Card>
       </section>
 
       {/* Neueste Belege */}
-      <section>
-        <h2 className="font-bold text-lg mb-2">Neueste Belege</h2>
-        <div className="bg-white shadow rounded p-2">
+      <Card>
+        <CardTitle>Neueste Belege</CardTitle>
+        <div className="divide-y">
           {recentReceipts.length === 0 && (
-            <div className="text-sm text-gray-500">Keine Belege vorhanden.</div>
+            <div className="text-sm text-gray-500 py-2">Keine Belege vorhanden.</div>
           )}
           {recentReceipts.map(r => (
-            <div
-              key={r.id}
-              className="flex justify-between border-b last:border-b-0 py-1 text-sm"
-            >
-              <span>#{r.receiptNo}</span>
-              <span>
-                {(r.grossCents / 100).toFixed(2)} {r.currency || currency}
-              </span>
+            <div key={r.id} className="flex justify-between py-2 text-sm">
+              <span className="font-medium">#{r.receiptNo}</span>
+              <span>{formatMoney(r.grossCents, r.currency || currency)}</span>
             </div>
           ))}
         </div>
-      </section>
+      </Card>
 
       {/* Neueste Rechnungen */}
-      <section>
-        <h2 className="font-bold text-lg mb-2">Neueste Rechnungen</h2>
-        <div className="bg-white shadow rounded p-2">
+      <Card>
+        <CardTitle>Neueste Rechnungen</CardTitle>
+        <div className="divide-y">
           {recentInvoices.length === 0 && (
-            <div className="text-sm text-gray-500">Keine Rechnungen vorhanden.</div>
+            <div className="text-sm text-gray-500 py-2">Keine Rechnungen vorhanden.</div>
           )}
           {recentInvoices.map(inv => (
-            <div
-              key={inv.id}
-              className="flex justify-between border-b last:border-b-0 py-1 text-sm"
-            >
-              <span>#{inv.invoiceNo} — {inv.customerName || "Unbekannt"}</span>
-              <span>
-                {(inv.grossCents / 100).toFixed(2)} {inv.currency || currency}
+            <div key={inv.id} className="flex justify-between py-2 text-sm">
+              <span className="font-medium">
+                #{inv.invoiceNo} — {inv.customerName || "Unbekannt"}
               </span>
+              <span>{formatMoney(inv.grossCents, inv.currency || currency)}</span>
             </div>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   );
 }
 
-function StatCard({ title, value, currency }) {
+function formatMoney(cents, currency = "EUR") {
+  return `${(Number(cents || 0) / 100).toFixed(2)} ${currency}`;
+}
+
+/* --- UI Komponenten --- */
+function Card({ children }) {
   return (
-    <div className="bg-white shadow rounded p-4 text-center">
-      <div className="text-sm text-gray-500">{title}</div>
-      <div className="text-xl font-bold">
-        {(value / 100).toFixed(2)} {currency}
-      </div>
+    <div className="bg-white shadow-md rounded-xl p-4 hover:shadow-lg transition">
+      {children}
     </div>
   );
 }
 
-function CountCard({ title, value }) {
+function CardTitle({ children }) {
   return (
-    <div className="bg-white shadow rounded p-4 text-center">
-      <div className="text-sm text-gray-500">{title}</div>
-      <div className="text-xl font-bold">{value}</div>
-    </div>
+    <div className="text-sm text-gray-500 mb-1">{children}</div>
+  );
+}
+
+function CardValue({ children }) {
+  return (
+    <div className="text-xl font-bold text-gray-900">{children}</div>
   );
 }
