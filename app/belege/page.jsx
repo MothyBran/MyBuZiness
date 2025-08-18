@@ -10,7 +10,7 @@ function Field({ label, children }){ return <label style={{display:"grid",gap:4}
 const input={ padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
 const btnPrimary={ padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
 const btnGhost={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
+const btnDanger={ padding:"8px 10px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
 const card={ background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
 const modalWrap={ position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
 
@@ -18,7 +18,7 @@ export default function ReceiptsPage(){
   const [rows,setRows]=useState([]); const [loading,setLoading]=useState(true);
   const [products,setProducts]=useState([]);
   const [expandedId,setExpandedId]=useState(null);
-  const [showNew,setShowNew]=useState(false); const [editRow,setEditRow]=useState(null);
+  const [showNew,setShowNew]=useState(false);
 
   async function load(){
     setLoading(true);
@@ -31,8 +31,10 @@ export default function ReceiptsPage(){
     setRows(list.data||[]);
     setProducts((pr.data||[]).map(p=>({
       id:p.id, name:p.name, kind:p.kind,
-      priceCents:p.priceCents||0, hourlyRateCents:p.hourlyRateCents||0,
-      travelBaseCents:p.travelBaseCents||0, travelPerKmCents:p.travelPerKmCents||0
+      priceCents:p.priceCents||0,
+      hourlyRateCents:p.hourlyRateCents||0,
+      travelBaseCents:p.travelBaseCents||0,
+      travelPerKmCents:p.travelPerKmCents||0
     })));
     setLoading(false);
   }
@@ -66,7 +68,6 @@ export default function ReceiptsPage(){
                       <tr key={r.id+"-d"}><td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
                         <ReceiptDetails row={r} />
                         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                          {/* Bearbeiten optional */}
                           <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
                         </div>
                       </td></tr>
@@ -89,9 +90,7 @@ export default function ReceiptsPage(){
         .table-fixed{table-layout:fixed}
         .row-clickable{cursor:pointer}
         .ellipsis{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-        @media (max-width: 760px){
-          .hide-sm{display:none}
-        }
+        @media (max-width: 760px){ .hide-sm{display:none} }
       `}</style>
     </main>
   );
@@ -125,7 +124,6 @@ function ReceiptDetails({ row }){
   );
 }
 
-/* Modal Neu */
 function NewReceiptSheet({ products, onClose, onSaved }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("");
@@ -147,24 +145,23 @@ function NewReceiptSheet({ products, onClose, onSaved }) {
     if (p.kind === "product") {
       updateRow(rowId, { productId, kind:p.kind, name:p.name, unitPrice: fromCents(p.priceCents), extraBaseCents: 0 });
     } else if (p.kind === "service") {
-      // Nur wenn ein Stundensatz existiert, gibt es extraBase (Grundpreis)
       if (p.hourlyRateCents > 0) {
         updateRow(rowId, {
           productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.hourlyRateCents),   // €/Std. pro Menge
+          unitPrice: fromCents(p.hourlyRateCents),   // €/Std.
           extraBaseCents: p.priceCents || 0          // Grundpreis einmalig
         });
       } else {
         updateRow(rowId, {
           productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.priceCents),        // nur Grundpreis als Einheitspreis
+          unitPrice: fromCents(p.priceCents),        // nur Grundpreis pro Einheit
           extraBaseCents: 0
         });
       }
     } else if (p.kind === "travel") {
       updateRow(rowId, {
         productId, kind:p.kind, name:p.name,
-        unitPrice: fromCents(p.travelPerKmCents),    // €/km als editierbares Feld
+        unitPrice: fromCents(p.travelPerKmCents),    // €/km editierbar
         extraBaseCents: p.travelBaseCents || 0       // Grundpreis einmalig
       });
     }
@@ -205,6 +202,7 @@ function NewReceiptSheet({ products, onClose, onSaved }) {
 
         <PositionsTable
           items={items}
+          products={products}
           onPickProduct={onPickProduct}
           onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
           onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
@@ -226,7 +224,7 @@ function NewReceiptSheet({ products, onClose, onSaved }) {
   );
 }
 
-function PositionsTable({ items, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
+function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
   return (
     <div className="table-wrap">
       <table className="table table-fixed" style={{ minWidth: 760 }}>
@@ -248,7 +246,11 @@ function PositionsTable({ items, onPickProduct, onQty, onChangeUnit, onRemove, o
                   <div style={{display:"grid",gap:6}}>
                     <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input, width:"100%"}}>
                       <option value="">– auswählen –</option>
-                      {/* Optionen werden serverseitig geladen — hier nur Platzhalter, wenn leer */}
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.kind==="travel" ? "(Fahrtkosten)" : p.kind==="service" ? "(Dienstleistung)" : ""}
+                        </option>
+                      ))}
                     </select>
                     {Number(r.extraBaseCents||0) > 0 && (
                       <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
@@ -259,7 +261,6 @@ function PositionsTable({ items, onPickProduct, onQty, onChangeUnit, onRemove, o
                   <input type="number" min={0} step={1} value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} />
                 </td>
                 <td>
-                  {/* Für Fahrtkosten darf €/km angepasst werden, sonst nur Anzeige */}
                   {r.kind==="travel" ? (
                     <input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />
                   ) : (
