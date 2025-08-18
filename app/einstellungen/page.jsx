@@ -1,280 +1,146 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-/* ---------- UI Helfer ---------- */
-function Field({ label, children, hint }) {
-  return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
-      {children}
-      {hint && <span style={{ fontSize: 11, color: "#9ca3af" }}>{hint}</span>}
-    </label>
-  );
-}
-const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 10, width: "100%", outline: "none" };
-const btnPrimary = { padding: "12px 14px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer", fontWeight: 600 };
-const btnGhost = { padding: "12px 14px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer", fontWeight: 600 };
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 16, padding: 16, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" };
+const wrap = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
+const grid2 = { display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" };
+const grid3 = { display:"grid", gap:12, gridTemplateColumns:"1fr 1fr 1fr" };
+const label = { display:"grid", gap:6 };
+const cap = { fontSize:12, color:"#6b7280" };
+const input = { padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
+const btnPrimary = { padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
 
-const currencies = ["EUR", "CHF", "USD", "GBP"];
-const fonts = [
-  { value: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif", label: "System" },
-  { value: "Inter, system-ui, Arial, sans-serif", label: "Inter" },
-  { value: "Roboto, system-ui, Arial, sans-serif", label: "Roboto" },
-  { value: "'Open Sans', system-ui, Arial, sans-serif", label: "Open Sans" },
-  { value: "Lato, system-ui, Arial, sans-serif", label: "Lato" },
-  { value: "Poppins, system-ui, Arial, sans-serif", label: "Poppins" },
+const FONTS = [
+  "Inter, system-ui, Arial",
+  "System UI, -apple-system, Segoe UI",
+  "Roboto, Arial, Helvetica",
+  "Open Sans, Arial",
+  "Poppins, Arial, Helvetica",
+  "Nunito, Arial, Helvetica"
 ];
 
-/* ---------- Seite ---------- */
-export default function SettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+const CURRENCIES = ["EUR", "USD", "CHF", "GBP"];
 
-  // Firmendaten
-  const [companyName, setCompanyName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [address1, setAddress1] = useState("");
-  const [address2, setAddress2] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState("");
+export default function SettingsPage(){
+  const [data,setData] = useState(null);
+  const [saving,setSaving] = useState(false);
 
-  // Rechtliches/Bank
-  const [bankAccount, setBankAccount] = useState("");
-  const [vatId, setVatId] = useState("");
-  const [kleinunternehmer, setKleinunternehmer] = useState(true);
-  const [currency, setCurrency] = useState("EUR");
-
-  // Branding
-  const [logoUrl, setLogoUrl] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#06b6d4");
-  const [secondaryColor, setSecondaryColor] = useState("#0ea5e9");
-  const [fontFamily, setFontFamily] = useState(fonts[0].value);
-  const [textColor, setTextColor] = useState("#0f172a");
-
-  const samplePreview = useMemo(() => ({
-    companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-    bankAccount, vatId, kleinunternehmer, currency, logoUrl
-  }), [companyName, ownerName, address1, address2, postalCode, city, phone, email, website, bankAccount, vatId, kleinunternehmer, currency, logoUrl]);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const js = await fetch("/api/settings", { cache: "no-store" }).then(r => r.json()).catch(() => ({ ok:false }));
-      const s = js?.data || {};
-      setCompanyName(s.companyName || "");
-      setOwnerName(s.ownerName || "");
-      setAddress1(s.address1 || "");
-      setAddress2(s.address2 || "");
-      setPostalCode(s.postalCode || "");
-      setCity(s.city || "");
-      setPhone(s.phone || "");
-      setEmail(s.email || "");
-      setWebsite(s.website || "");
-      setBankAccount(s.bankAccount || "");
-      setVatId(s.vatId || "");
-      setKleinunternehmer(!!s.kleinunternehmer);
-      setCurrency(s.currency || "EUR");
-      setLogoUrl(s.logoUrl || "");
-      setPrimaryColor(s.primaryColor || "#06b6d4");
-      setSecondaryColor(s.secondaryColor || "#0ea5e9");
-      setFontFamily(s.fontFamily || fonts[0].value);
-      setTextColor(s.textColor || "#0f172a");
-      setLoading(false);
-
-      // Live anwenden
-      applyTheme({
-        primaryColor: s.primaryColor || "#06b6d4",
-        secondaryColor: s.secondaryColor || "#0ea5e9",
-        textColor: s.textColor || "#0f172a",
-        fontFamily: s.fontFamily || fonts[0].value
-      });
-    })();
-  }, []);
-
-  function applyTheme({ primaryColor, secondaryColor, textColor, fontFamily }) {
-    const root = document.documentElement;
-    if (primaryColor) root.style.setProperty("--color-primary", primaryColor);
-    if (secondaryColor) root.style.setProperty("--color-secondary", secondaryColor);
-    if (textColor) root.style.setProperty("--color-text", textColor);
-    if (fontFamily) document.body.style.fontFamily = fontFamily;
+  async function load(){
+    const res = await fetch("/api/settings", { cache:"no-store" });
+    const js = await res.json().catch(()=>({}));
+    setData(js?.data || {});
   }
+  useEffect(()=>{ load(); },[]);
 
-  async function onUploadLogo(file) {
-    if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/uploads", { method: "POST", body: fd });
-    const js = await res.json().catch(()=>({ ok:false }));
-    if (!js?.ok || !js?.url) return alert(js?.error || "Upload fehlgeschlagen.");
-    setLogoUrl(js.url);
-  }
+  function upd(p){ setData(prev => ({ ...prev, ...p })); }
 
-  async function save(e) {
-    e?.preventDefault?.();
+  async function save(){
     setSaving(true);
-    const payload = {
-      companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-      bankAccount, vatId, kleinunternehmer, currency,
-      logoUrl, primaryColor, secondaryColor, fontFamily, textColor
-    };
     const res = await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
+      method:"PUT",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify(data)
     });
-    const js = await res.json().catch(()=>({ ok:false }));
+    const js = await res.json().catch(()=>({}));
     setSaving(false);
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
-
-    // Anwendung sofort aktualisieren
-    applyTheme({ primaryColor, secondaryColor, textColor, fontFamily });
+    if(!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    setData(js.data);
     alert("Einstellungen gespeichert.");
   }
 
+  if(!data) return <main><div style={wrap}>Lade…</div></main>;
+
   return (
     <main>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-        <h1 style={{ margin:0 }}>Einstellungen</h1>
-        <button onClick={save} disabled={saving} style={btnPrimary}>
-          {saving ? "Speichern…" : "Speichern"}
-        </button>
+      <h1>Einstellungen</h1>
+
+      {/* Preview-Streifen oben */}
+      <div style={{height:8, borderRadius:8, background:`linear-gradient(90deg, ${data.primaryColor||"#0aa"} 0%, ${data.secondaryColor||"#0e7490"} 100%)`, margin:"8px 0 16px"}} />
+
+      <div style={{...wrap, display:"grid", gap:16}}>
+        <section style={{display:"grid", gap:12}}>
+          <h3 style={{margin:"4px 0"}}>Firmendaten</h3>
+          <div style={grid2}>
+            <Field label="Firmenname"><input style={input} value={data.companyName||""} onChange={e=>upd({companyName:e.target.value})} /></Field>
+            <Field label="Inhaber"><input style={input} value={data.proprietor||""} onChange={e=>upd({proprietor:e.target.value})} /></Field>
+          </div>
+          <div style={grid2}>
+            <Field label="Adresszeile 1"><input style={input} value={data.address1||""} onChange={e=>upd({address1:e.target.value})} /></Field>
+            <Field label="Adresszeile 2 (optional)"><input style={input} value={data.address2||""} onChange={e=>upd({address2:e.target.value})} /></Field>
+          </div>
+          <div style={grid3}>
+            <Field label="PLZ"><input style={input} value={data.postalCode||""} onChange={e=>upd({postalCode:e.target.value})} /></Field>
+            <Field label="Ort"><input style={input} value={data.city||""} onChange={e=>upd({city:e.target.value})} /></Field>
+            <Field label="Telefon"><input style={input} value={data.phone||""} onChange={e=>upd({phone:e.target.value})} /></Field>
+          </div>
+          <div style={grid3}>
+            <Field label="E-Mail"><input style={input} value={data.email||""} onChange={e=>upd({email:e.target.value})} /></Field>
+            <Field label="Webseite (optional)"><input style={input} value={data.website||""} onChange={e=>upd({website:e.target.value})} /></Field>
+            <Field label="USt-ID"><input style={input} value={data.vatId||""} onChange={e=>upd({vatId:e.target.value})} /></Field>
+          </div>
+          <Field label="Bankverbindung"><input style={input} value={data.bank||""} onChange={e=>upd({bank:e.target.value})} /></Field>
+        </section>
+
+        <section style={{display:"grid", gap:12}}>
+          <h3 style={{margin:"4px 0"}}>Steuer & Währung</h3>
+          <div style={grid2}>
+            <Field label="Kleinunternehmer-Regelung § 19 UStG">
+              <label style={{display:"flex", alignItems:"center", gap:10}}>
+                <input type="checkbox" checked={!!data.kleinunternehmer} onChange={e=>upd({kleinunternehmer:e.target.checked})} />
+                <span style={{fontSize:13, color:"#374151"}}>Wenn aktiv, werden Rechnungen/Belege ohne USt. erstellt.</span>
+              </label>
+            </Field>
+            <Field label="Währung">
+              <select style={input} value={data.currency||"EUR"} onChange={e=>upd({currency:e.target.value})}>
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        <section style={{display:"grid", gap:12}}>
+          <h3 style={{margin:"4px 0"}}>Branding & Design</h3>
+          <div style={grid3}>
+            <Field label="Primärfarbe">
+              <input type="color" style={{...input, padding:0, height:44}} value={data.primaryColor||"#0aa"} onChange={e=>upd({primaryColor:e.target.value})} />
+            </Field>
+            <Field label="Sekundärfarbe">
+              <input type="color" style={{...input, padding:0, height:44}} value={data.secondaryColor||"#0e7490"} onChange={e=>upd({secondaryColor:e.target.value})} />
+            </Field>
+            <Field label="Schriftfarbe">
+              <input type="color" style={{...input, padding:0, height:44}} value={data.fontColor||"#111827"} onChange={e=>upd({fontColor:e.target.value})} />
+            </Field>
+          </div>
+          <div style={grid2}>
+            <Field label="Schriftart">
+              <select style={input} value={data.fontFamily||FONTS[0]} onChange={e=>upd({fontFamily:e.target.value})}>
+                {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </Field>
+            <Field label="Logo-URL">
+              <input style={input} value={data.logoUrl||""} onChange={e=>upd({logoUrl:e.target.value})} placeholder="https://…" />
+            </Field>
+          </div>
+        </section>
+
+        <div style={{display:"flex", justifyContent:"flex-end"}}>
+          <button disabled={saving} onClick={save} style={btnPrimary}>{saving ? "Speichern…" : "Speichern"}</button>
+        </div>
       </div>
 
-      {/* Firmendaten */}
-      <section style={{ ...card, marginTop:12 }}>
-        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Firmendaten</h2>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <Field label="Firmenname"><input style={input} value={companyName} onChange={e=>setCompanyName(e.target.value)} /></Field>
-          <Field label="Inhaber"><input style={input} value={ownerName} onChange={e=>setOwnerName(e.target.value)} /></Field>
-          <Field label="Adresszeile 1"><input style={input} value={address1} onChange={e=>setAddress1(e.target.value)} /></Field>
-          <Field label="Adresszeile 2 (optional)"><input style={input} value={address2} onChange={e=>setAddress2(e.target.value)} /></Field>
-          <Field label="PLZ"><input style={input} value={postalCode} onChange={e=>setPostalCode(e.target.value)} /></Field>
-          <Field label="Ort"><input style={input} value={city} onChange={e=>setCity(e.target.value)} /></Field>
-          <Field label="Telefon"><input style={input} value={phone} onChange={e=>setPhone(e.target.value)} /></Field>
-          <Field label="E-Mail"><input style={input} type="email" value={email} onChange={e=>setEmail(e.target.value)} /></Field>
-          <Field label="Webseite (optional)"><input style={input} type="url" value={website} onChange={e=>setWebsite(e.target.value)} placeholder="https://…" /></Field>
-          <Field label="Bankverbindung"><textarea style={{ ...input, minHeight: 80 }} value={bankAccount} onChange={e=>setBankAccount(e.target.value)} placeholder="IBAN / BIC / Bankname" /></Field>
-          <Field label="USt-ID"><input style={input} value={vatId} onChange={e=>setVatId(e.target.value)} /></Field>
-          <Field label="Währung">
-            <select style={input} value={currency} onChange={e=>setCurrency(e.target.value)}>
-              {currencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Kleinunternehmer-Regelung § 19 UStG">
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <input id="ku" type="checkbox" checked={kleinunternehmer} onChange={e=>setKleinunternehmer(e.target.checked)} />
-              <label htmlFor="ku" style={{ userSelect:"none" }}>Aktiv</label>
-            </div>
-          </Field>
-        </div>
-      </section>
-
-      {/* Branding */}
-      <section style={{ ...card, marginTop:12 }}>
-        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Branding & Design</h2>
-        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-          <Field label="Logo">
-            <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-              {logoUrl ? <img src={logoUrl} alt="Logo" style={{ width:72, height:72, objectFit:"contain", border:"1px solid #eee", borderRadius:10, background:"#fff" }} /> : <div style={{ width:72, height:72, border:"1px dashed #ddd", borderRadius:10, display:"grid", placeItems:"center", color:"#9ca3af" }}>kein Logo</div>}
-              <input type="file" accept="image/*" onChange={e=>onUploadLogo(e.target.files?.[0])} />
-              <input style={{ ...input, flex:"1 1 280px" }} value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="Logo-URL (optional, falls kein Upload)" />
-            </div>
-          </Field>
-
-          <Field label="Schriftart">
-            <select style={input} value={fontFamily} onChange={e=>setFontFamily(e.target.value)}>
-              {fonts.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-          </Field>
-
-          <Field label="Primärfarbe">
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <input type="color" value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)} />
-              <input style={input} value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)} />
-            </div>
-          </Field>
-          <Field label="Sekundärfarbe">
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <input type="color" value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)} />
-              <input style={input} value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)} />
-            </div>
-          </Field>
-          <Field label="Schriftfarbe">
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)} />
-              <input style={input} value={textColor} onChange={e=>setTextColor(e.target.value)} />
-            </div>
-          </Field>
-        </div>
-
-        {/* Live-Vorschau */}
-        <div style={{ marginTop:16 }}>
-          <h3 style={{ margin:"0 0 8px 0", fontSize:16, color:"#6b7280" }}>Vorschau</h3>
-          <BrandPreview settings={{ ...samplePreview, primaryColor, secondaryColor, fontFamily, textColor }} />
-        </div>
-
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:16 }}>
-          <button onClick={save} disabled={saving} style={btnPrimary}>{saving ? "Speichern…" : "Speichern"}</button>
-          <button onClick={()=>applyTheme({ primaryColor, secondaryColor, textColor, fontFamily })} style={btnGhost}>Live anwenden</button>
-        </div>
-      </section>
+      {/* Preview-Streifen unten (ohne Text) */}
+      <div style={{height:8, borderRadius:8, background:`linear-gradient(90deg, ${data.primaryColor||"#0aa"} 0%, ${data.secondaryColor||"#0e7490"} 100%)`, margin:"16px 0 8px"}} />
 
       <style jsx global>{`
-        @media (max-width: 820px){
-          section > div {
-            grid-template-columns: 1fr !important;
-          }
+        :root {
+          --color-primary: ${data.primaryColor || "#0aa"};
         }
+        body { color: ${data.fontColor || "#111827"}; font-family: ${data.fontFamily || "Inter, system-ui, Arial"}; }
       `}</style>
     </main>
   );
 }
 
-/* ---------- Vorschau-Komponente ---------- */
-function BrandPreview({ settings }) {
-  const {
-    companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-    kleinunternehmer, currency, logoUrl, primaryColor, secondaryColor, fontFamily, textColor
-  } = settings;
-
-  return (
-    <div style={{
-      border: "1px solid #e5e7eb",
-      borderRadius: 16,
-      overflow: "hidden",
-      boxShadow: "0 8px 30px rgba(0,0,0,.05)"
-    }}>
-      <div style={{
-        padding: 14,
-        background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
-        color: "#fff",
-        display: "flex",
-        alignItems:"center",
-        gap: 12
-      }}>
-        {logoUrl ? <img src={logoUrl} style={{ width:40, height:40, objectFit:"contain", filter:"drop-shadow(0 2px 4px rgba(0,0,0,.2))" }} alt="Logo" /> : null}
-        <div style={{ fontWeight: 800, letterSpacing: .2 }}>{companyName || "Firmenname"}</div>
-      </div>
-      <div style={{ padding: 14, fontFamily, color: textColor }}>
-        <div style={{ display:"grid", gap:4 }}>
-          <div><b>Inhaber:</b> {ownerName || "—"}</div>
-          <div><b>Adresse:</b> {address1 || "—"} {address2 ? `, ${address2}` : ""}</div>
-          <div><b>PLZ/Ort:</b> {(postalCode || "—") + " " + (city || "")}</div>
-          <div><b>Telefon:</b> {phone || "—"} · <b>E-Mail:</b> {email || "—"}</div>
-          {website ? <div><b>Web:</b> {website}</div> : null}
-          <div><b>Währung:</b> {currency}</div>
-          {kleinunternehmer && (
-            <div style={{ fontSize:12, opacity:.8, marginTop:8 }}>
-              Hinweis gem. § 19 UStG (Kleinunternehmerregelung): Es wird keine Umsatzsteuer ausgewiesen.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function Field({ label, children }){
+  return <label style={label}><span style={cap}>{label}</span>{children}</label>;
 }
