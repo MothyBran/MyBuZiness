@@ -1,137 +1,123 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
-function currency(cents, cur = "EUR") {
-  return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format((cents || 0) / 100);
-}
+import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
+  const [totals, setTotals] = useState({ today: 0, last7: 0, last30: 0 });
+  const [counts, setCounts] = useState({ customers: 0, products: 0, invoices: 0, receipts: 0 });
+  const [recentReceipts, setRecentReceipts] = useState([]);
+  const [recentInvoices, setRecentInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [customers, setCustomers] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [receipts, setReceipts] = useState([]);
-  const [currencyCode, setCurrencyCode] = useState("EUR");
+
+  // Currency kommt aus Settings in /api/dashboard
+  const [currency, setCurrency] = useState("EUR");
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/dashboard", { cache: "no-store" });
         const js = await res.json();
-        if (!js.ok) throw new Error(js.error || "Dashboard-Fehler");
-  
-        // Aus den gelieferten Daten setzen:
-        setTotals(js.data.totals);
-        setCounts(js.data.counts);
+        if (!js.ok) throw new Error(js.error || "Fehler beim Laden");
+
+        setTotals(js.data.totals || {});
+        setCounts(js.data.counts || {});
         setRecentReceipts(js.data.recentReceipts || []);
         setRecentInvoices(js.data.recentInvoices || []);
+
+        // falls Settings im Backend ergänzt wurden
+        if (js.data.settings?.currencyDefault) {
+          setCurrency(js.data.settings.currencyDefault);
+        }
       } catch (e) {
-        console.error("Dashboard load error", e);
+        console.error("Dashboard error:", e);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-
-  const ym = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-  const nowYM = ym(new Date());
-
-  const invThisMonth = useMemo(() => invoices.filter(i => ym(new Date(i.issueDate)) === nowYM), [invoices]);
-  const rcpThisMonth = useMemo(() => receipts.filter(r => ym(new Date(r.date)) === nowYM), [receipts]);
-
-  const invSum = invThisMonth.reduce((s,i)=>s + Number(i.grossCents||0), 0);
-  const rcpSum = rcpThisMonth.reduce((s,r)=>s + Number(r.grossCents||0), 0);
-  const total = invSum + rcpSum;
+  if (loading) {
+    return <div className="p-4">⏳ Lade Dashboard…</div>;
+  }
 
   return (
-    <div className="container" style={{ paddingTop: 18 }}>
-      {/* KPIs */}
-      <section className="grid-3">
-        <Card title="Kunden" value={loading ? "—" : customers.length} foot="Gesamt" />
-        <Card
-          title="Umsatz (aktueller Monat)"
-          value={loading ? "—" : currency(total, currencyCode)}
-          foot={`${currency(invSum, currencyCode)} Rechnungen · ${currency(rcpSum, currencyCode)} Belege`}
-        />
-        <Card title="Offene Rechnungen" value={loading ? "—" : invoices.filter(i => i.status === "open").length} foot="Status „offen“" />
+    <div className="p-4 space-y-6">
+      {/* Umsätze */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard title="Heute" value={totals.today} currency={currency} />
+        <StatCard title="Letzte 7 Tage" value={totals.last7} currency={currency} />
+        <StatCard title="Letzte 30 Tage" value={totals.last30} currency={currency} />
       </section>
 
-      {/* Listen */}
-      <section className="grid-2" style={{ marginTop: 16 }}>
-        <Panel title="Zuletzt erstellte Rechnungen">
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nr.</th>
-                  <th>Kunde</th>
-                  <th className="hide-sm">Datum</th>
-                  <th>Brutto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(loading ? [] : invoices).slice(0, 10).map(r => (
-                  <tr key={r.id}>
-                    <td className="ellipsis">{r.invoiceNo}</td>
-                    <td className="ellipsis">{r.customerName}</td>
-                    <td className="hide-sm">{new Date(r.issueDate).toLocaleDateString()}</td>
-                    <td>{currency(r.grossCents, r.currency || currencyCode)}</td>
-                  </tr>
-                ))}
-                {!loading && invoices.length === 0 && (
-                  <tr><td colSpan={4} style={{ color:"#666" }}>Keine Rechnungen vorhanden.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
+      {/* Zähler */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <CountCard title="Kunden" value={counts.customers} />
+        <CountCard title="Produkte" value={counts.products} />
+        <CountCard title="Rechnungen" value={counts.invoices} />
+        <CountCard title="Belege" value={counts.receipts} />
+      </section>
 
-        <Panel title="Zuletzt erfasste Belege">
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nr.</th>
-                  <th className="hide-sm">Datum</th>
-                  <th>Betrag</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(loading ? [] : receipts).slice(0, 10).map(r => (
-                  <tr key={r.id}>
-                    <td className="ellipsis">{r.receiptNo}</td>
-                    <td className="hide-sm">{new Date(r.date).toLocaleDateString()}</td>
-                    <td>{currency(r.grossCents, r.currency || currencyCode)}</td>
-                  </tr>
-                ))}
-                {!loading && receipts.length === 0 && (
-                  <tr><td colSpan={3} style={{ color:"#666" }}>Keine Belege vorhanden.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
+      {/* Neueste Belege */}
+      <section>
+        <h2 className="font-bold text-lg mb-2">Neueste Belege</h2>
+        <div className="bg-white shadow rounded p-2">
+          {recentReceipts.length === 0 && (
+            <div className="text-sm text-gray-500">Keine Belege vorhanden.</div>
+          )}
+          {recentReceipts.map(r => (
+            <div
+              key={r.id}
+              className="flex justify-between border-b last:border-b-0 py-1 text-sm"
+            >
+              <span>#{r.receiptNo}</span>
+              <span>
+                {(r.grossCents / 100).toFixed(2)} {r.currency || currency}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Neueste Rechnungen */}
+      <section>
+        <h2 className="font-bold text-lg mb-2">Neueste Rechnungen</h2>
+        <div className="bg-white shadow rounded p-2">
+          {recentInvoices.length === 0 && (
+            <div className="text-sm text-gray-500">Keine Rechnungen vorhanden.</div>
+          )}
+          {recentInvoices.map(inv => (
+            <div
+              key={inv.id}
+              className="flex justify-between border-b last:border-b-0 py-1 text-sm"
+            >
+              <span>#{inv.invoiceNo} — {inv.customerName || "Unbekannt"}</span>
+              <span>
+                {(inv.grossCents / 100).toFixed(2)} {inv.currency || currency}
+              </span>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
 }
 
-/* kleine lokale UI-Helfer */
-function Card({ title, value, foot }) {
+function StatCard({ title, value, currency }) {
   return (
-    <div className="surface" style={{ padding: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#6b7280", marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: "var(--color-primary)" }}>{value}</div>
-      {foot && <div style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>{foot}</div>}
+    <div className="bg-white shadow rounded p-4 text-center">
+      <div className="text-sm text-gray-500">{title}</div>
+      <div className="text-xl font-bold">
+        {(value / 100).toFixed(2)} {currency}
+      </div>
     </div>
   );
 }
-function Panel({ title, children }) {
+
+function CountCard({ title, value }) {
   return (
-    <div className="surface" style={{ padding: 14 }}>
-      <div style={{ fontWeight: 800, margin: "2px 2px 12px" }}>{title}</div>
-      {children}
+    <div className="bg-white shadow rounded p-4 text-center">
+      <div className="text-sm text-gray-500">{title}</div>
+      <div className="text-xl font-bold">{value}</div>
     </div>
   );
 }
