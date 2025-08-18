@@ -1,4 +1,5 @@
 // app/api/invoices/route.js
+export const dynamic = "force-dynamic";
 import { initDb, q, uuid } from "@/lib/db";
 
 /** Settings laden (Währung / Kleinunternehmer) */
