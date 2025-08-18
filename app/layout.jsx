@@ -1,6 +1,6 @@
 // app/layout.jsx (Ausschnitt)
 import "./globals.css";
-import TopBar from "@/components/TopBar";
+import TopBar from "@/components/HeaderTop";
 import InfoStripe from "@/components/InfoStripe";
 // ggf. dein Footer importieren
 import Footer from "@/components/Footer";
