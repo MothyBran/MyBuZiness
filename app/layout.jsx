@@ -16,12 +16,20 @@ export default function RootLayout({ children }) {
   return (
     <html lang="de">
       <body style={{ overflowX: "hidden", width: "100%", maxWidth: "100%" }}>
+        {/* Obere Kopfzeile bleibt unverändert */}
         <HeaderTop />
+        {/* Farbstreifen darunter (Text ein/aus je nach Position) */}
         <InfoStripe position="top" showText={true} />
-        <main style={{ flex: 1, width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+
+        {/* Seiten-Container */}
+        <main className="container" style={{ width: "100%", maxWidth: "100%" }}>
           {children}
         </main>
+
+        {/* Unterer Farbstreifen ohne Text */}
         <InfoStripe position="bottom" showText={false} />
+
+        {/* Footer */}
         <footer
           className="container"
           style={{ paddingTop: 30, paddingBottom: 30, color: "var(--muted)", fontSize: 13 }}
