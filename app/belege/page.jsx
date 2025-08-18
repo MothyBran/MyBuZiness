@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* ---------- Utils ---------- */
+/* ============== Utils ============== */
 function toCents(input){
   if(input==null) return 0;
   if(typeof input==="number") return Math.round(input*100);
@@ -25,9 +25,9 @@ function fromCents(c){
   return n.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function fmt(c, code="EUR"){
-  return new Intl.NumberFormat("de-DE",{style:"currency",currency:code})
-    .format((Number(c||0)/100));
+  return new Intl.NumberFormat("de-DE",{style:"currency",currency:code}).format((Number(c||0)/100));
 }
+
 function Field({ label, children }){
   return <label style={{display:"grid",gap:6}}>
     <span style={{fontSize:12,color:"#6b7280"}}>{label}</span>
@@ -35,33 +35,34 @@ function Field({ label, children }){
   </label>;
 }
 
-/* ---------- Styles ---------- */
+/* ============== Styles ============== */
 const input      = { padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
-const btnPrimary = { padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
-const btnGhost   = { padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger  = { padding:"8px 10px",  borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
+const btn       = (bg="#fff", fg="#0aa", b=fg)=>({ padding:"10px 12px", borderRadius:8, background:bg, color:fg, border:`1px solid ${b}`, cursor:"pointer" });
+const btnPrimary = btn("var(--color-primary,#0aa)","#fff","transparent");
+const btnGhost   = btn("#fff","var(--color-primary,#0aa)","var(--color-primary,#0aa)");
+const btnDanger  = btn("#fff","#c00","#c00");
 const card       = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const modalWrap  = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
+const sheet      = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(980px,96vw)", maxHeight:"86vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
 
 export default function ReceiptsPage(){
-  const [rows,setRows]=useState([]); 
+  const [rows,setRows]=useState([]);
   const [loading,setLoading]=useState(true);
   const [products,setProducts]=useState([]);
   const [settings,setSettings]=useState({ currency:"EUR", kleinunternehmer:false });
   const [expandedId,setExpandedId]=useState(null);
   const [showNew,setShowNew]=useState(false);
+  const [editRow,setEditRow]=useState(null);
 
   async function load(){
     setLoading(true);
-    const [listRes, prodRes, settingsRes] = await Promise.all([
+    const [listRes, prodRes, setRes] = await Promise.all([
       fetch("/api/receipts",{cache:"no-store"}),
       fetch("/api/products",{cache:"no-store"}),
-      fetch("/api/settings",{cache:"no-store"})
+      fetch("/api/settings",{cache:"no-store"}),
     ]);
-    const list=await listRes.json().catch(()=>({data:[]}));
-    const pr=await prodRes.json().catch(()=>({data:[]}));
-    const s=await settingsRes.json().catch(()=>({data:{}}));
-
+    const list = await listRes.json().catch(()=>({data:[]}));
+    const pr   = await prodRes.json().catch(()=>({data:[]}));
+    const st   = await setRes.json().catch(()=>({data:{}}));
     setRows(list.data||[]);
     setProducts((pr.data||[]).map(p=>({
       id:p.id, name:p.name, kind:p.kind,
@@ -70,7 +71,7 @@ export default function ReceiptsPage(){
       travelBaseCents:p.travelBaseCents||0,
       travelPerKmCents:p.travelPerKmCents||0
     })));
-    setSettings({ currency: s?.data?.currency || "EUR", kleinunternehmer: !!s?.data?.kleinunternehmer });
+    setSettings({ currency: st?.data?.currency || "EUR", kleinunternehmer: !!st?.data?.kleinunternehmer });
     setLoading(false);
   }
   useEffect(()=>{ load(); },[]);
@@ -98,15 +99,15 @@ export default function ReceiptsPage(){
           <table className="table table-fixed">
             <thead>
               <tr>
-                <th style={{width:"20%"}}>Nr.</th>
+                <th style={{width:"25%"}}>Nr.</th>
                 <th className="hide-sm" style={{width:"25%"}}>Datum</th>
                 <th style={{width:"25%"}}>Betrag</th>
-                <th style={{width:"30%"}}></th>
+                <th style={{width:"25%"}}></th>
               </tr>
             </thead>
             <tbody>
               {rows.map(r=>{
-                const d=r.date? new Date(r.date):null;
+                const d = r.date ? new Date(r.date) : null;
                 return (
                   <>
                     <tr key={r.id} className="row-clickable" onClick={()=>toggleExpand(r.id)}>
@@ -116,11 +117,12 @@ export default function ReceiptsPage(){
                       <td></td>
                     </tr>
                     {expandedId===r.id && (
-                      <tr key={r.id+"-d"}>
+                      <tr key={r.id+"-details"}>
                         <td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
                           <ReceiptDetails row={r} currency={settings.currency} />
                           <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                            <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
+                            <button style={btnGhost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>⚙️ Bearbeiten</button>
+                            <button style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
                           </div>
                         </td>
                       </tr>
@@ -128,19 +130,34 @@ export default function ReceiptsPage(){
                   </>
                 );
               })}
-              {rows.length===0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#999"}}>{loading?"Lade…":"Keine Belege vorhanden."}</td></tr>}
+              {rows.length===0 && (
+                <tr><td colSpan={4} style={{textAlign:"center",color:"#999"}}>{loading?"Lade…":"Keine Belege vorhanden."}</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       {showNew && (
-        <NewReceiptSheet
+        <ReceiptEditor
+          title="Neuen Beleg erfassen"
           products={products}
           currency={settings.currency}
           kleinunternehmer={settings.kleinunternehmer}
+          initial={null}
           onClose={()=>setShowNew(false)}
           onSaved={()=>{ setShowNew(false); load(); }}
+        />
+      )}
+      {!!editRow && (
+        <ReceiptEditor
+          title={`Beleg ${editRow.receiptNo} bearbeiten`}
+          products={products}
+          currency={settings.currency}
+          kleinunternehmer={settings.kleinunternehmer}
+          initial={editRow}
+          onClose={()=>setEditRow(null)}
+          onSaved={()=>{ setEditRow(null); load(); }}
         />
       )}
 
@@ -166,8 +183,8 @@ function ReceiptDetails({ row, currency }){
           <thead>
             <tr>
               <th style={{width:"45%"}}>Bezeichnung</th>
-              <th style={{width:100}}>Menge</th>
-              <th style={{width:160}}>Einzelpreis</th>
+              <th style={{width:110}}>Menge</th>
+              <th style={{width:170}}>Einzelpreis</th>
               <th style={{width:160}}>Summe</th>
             </tr>
           </thead>
@@ -192,55 +209,52 @@ function ReceiptDetails({ row, currency }){
   );
 }
 
-/* ---------- Modal: Neuer Beleg ---------- */
-function NewReceiptSheet({ products, currency, kleinunternehmer, onClose, onSaved }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0,10));
-  const [discount, setDiscount] = useState("");
-  const [items, setItems] = useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }
-  ]);
+/* ===== Editor (Neu/Bearbeiten) ===== */
+function ReceiptEditor({ title, products, currency, kleinunternehmer, initial, onClose, onSaved }){
+  const isEdit = !!initial;
+  const [date,setDate]=useState( initial?.date ? new Date(initial.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10) );
+  const [discount,setDiscount]=useState( initial ? fromCents(initial.discountCents||0) : "" );
+  const [items,setItems]=useState(
+    initial
+      ? (initial.items||[]).map(it=>({
+          id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
+          productId: it.productId || "",
+          name: it.name || "",
+          kind: "", // für Anzeige nicht zwingend
+          quantity: Number(it.quantity||0),
+          unitPrice: fromCents(it.unitPriceCents||0),
+          extraBaseCents: Number(it.extraBaseCents||0)
+        }))
+      : [{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", kind:"", quantity:1, unitPrice:"", extraBaseCents:0 }]
+  );
 
   const itemsTotal = useMemo(()=> items.reduce((s,it)=> s + (toCents(it.unitPrice||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0), [items]);
   const gross = Math.max(0, itemsTotal - toCents(discount||0));
 
-  function addRow(){
-    setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]);
-  }
-  function updateRow(id, patch){ setItems(prev=>prev.map(r=>r.id===id? {...r,...patch}:r)); }
-  function removeRowLocal(id){ setItems(prev=>prev.filter(r=>r.id!==id)); }
+  function addRow(){ setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", kind:"", quantity:1, unitPrice:"", extraBaseCents:0 }]); }
+  function updRow(id,patch){ setItems(prev=>prev.map(r=>r.id===id? {...r,...patch}:r)); }
+  function delRow(id){ setItems(prev=>prev.filter(r=>r.id!==id)); }
 
   function onPickProduct(rowId, productId){
-    const p = products.find(x=>x.id===productId);
-    if(!p) return updateRow(rowId, { productId:"", kind:"", name:"", unitPrice:"", extraBaseCents:0 });
-
-    if (p.kind === "product") {
-      updateRow(rowId, { productId, kind:p.kind, name:p.name, unitPrice: fromCents(p.priceCents), extraBaseCents: 0 });
-    } else if (p.kind === "service") {
-      if (p.hourlyRateCents > 0) {
-        updateRow(rowId, {
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.hourlyRateCents),   // €/Std. pro Menge
-          extraBaseCents: p.priceCents || 0          // Grundpreis einmalig
-        });
+    const p=products.find(x=>x.id===productId);
+    if(!p) return updRow(rowId,{ productId:"", name:"", kind:"", unitPrice:"", extraBaseCents:0 });
+    if(p.kind==="product"){
+      updRow(rowId,{ productId, name:p.name, kind:p.kind, unitPrice:fromCents(p.priceCents), extraBaseCents:0 });
+    } else if(p.kind==="service"){
+      if(p.hourlyRateCents>0){
+        updRow(rowId,{ productId, name:p.name, kind:p.kind, unitPrice:fromCents(p.hourlyRateCents), extraBaseCents:p.priceCents||0 });
       } else {
-        updateRow(rowId, {
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.priceCents),        // nur Grundpreis pro Einheit
-          extraBaseCents: 0
-        });
+        updRow(rowId,{ productId, name:p.name, kind:p.kind, unitPrice:fromCents(p.priceCents), extraBaseCents:0 });
       }
-    } else if (p.kind === "travel") {
-      updateRow(rowId, {
-        productId, kind:p.kind, name:p.name,
-        unitPrice: fromCents(p.travelPerKmCents),    // €/km als editierbares Feld
-        extraBaseCents: p.travelBaseCents || 0       // Grundpreis einmalig
-      });
+    } else if(p.kind==="travel"){
+      updRow(rowId,{ productId, name:p.name, kind:p.kind, unitPrice:fromCents(p.travelPerKmCents), extraBaseCents:p.travelBaseCents||0 });
     }
   }
 
   async function save(e){
     e.preventDefault();
     if(items.length===0) return alert("Mindestens eine Position ist erforderlich.");
+
     const payload = {
       date,
       discountCents: toCents(discount||0),
@@ -252,19 +266,25 @@ function NewReceiptSheet({ products, currency, kleinunternehmer, onClose, onSave
         extraBaseCents: Number(it.extraBaseCents||0),
       })),
     };
-    const res = await fetch("/api/receipts",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+
+    let url="/api/receipts", method="POST";
+    if(isEdit){
+      url = `/api/receipts/${initial.id}`;
+      method = "PUT";
+    }
+
+    const res = await fetch(url,{ method, headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
     const js = await res.json().catch(()=>({}));
     if(!js?.ok) return alert(js?.error||"Speichern fehlgeschlagen.");
     onSaved?.();
   }
 
   return (
-    <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
+    <div className="surface" style={sheet} onClick={e=>e.stopPropagation()}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <b>Neuen Beleg erfassen</b>
-        <button onClick={onClose} className="btn-ghost" style={{padding:"6px 10px"}}>×</button>
+        <b>{title}</b>
+        <button onClick={onClose} style={btnGhost}>×</button>
       </div>
-
       <form onSubmit={save} style={{display:"grid",gap:12}}>
         <div style={{display:"grid",gap:12,gridTemplateColumns:"1fr 1fr"}}>
           <Field label="Datum">
@@ -280,9 +300,9 @@ function NewReceiptSheet({ products, currency, kleinunternehmer, onClose, onSave
           products={products}
           currency={currency}
           onPickProduct={onPickProduct}
-          onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
-          onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
-          onRemove={removeRowLocal}
+          onQty={(id,v)=>updRow(id,{ quantity: Math.max(0, Number(v)) })}
+          onChangeUnit={(id,v)=>updRow(id,{ unitPrice: v })}
+          onRemove={delRow}
           onAdd={addRow}
         />
 
@@ -345,11 +365,10 @@ function PositionsTable({ items, products, currency, onPickProduct, onQty, onCha
                   <input type="number" min={0} step={1} value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} />
                 </td>
                 <td>
-                  {r.kind==="travel" ? (
-                    <input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />
-                  ) : (
-                    <div style={{padding:"10px 0"}}>{fmt(upCents, currency)}</div>
-                  )}
+                  {r.kind==="travel"
+                    ? (<input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />)
+                    : (<div style={{padding:"10px 0"}}>{fmt(upCents, currency)}</div>)
+                  }
                 </td>
                 <td>{fmt(sum, currency)}</td>
                 <td style={{textAlign:"right"}}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
