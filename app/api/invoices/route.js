@@ -1,26 +1,29 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
+// app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
-/** Items serverseitig an Kopfzeilen hängen */
-async function attachInvoiceItems(rows) {
-  if (!rows?.length) return rows;
-  const ids = rows.map(r => r.id);
+/** Settings laden (Währung / Kleinunternehmer) */
+async function loadSettings() {
+  const row = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0];
+  return {
+    currency: row?.currency || "EUR",
+    kleinunternehmer: !!row?.kleinunternehmer,
+  };
+}
+
+/** Items an Liste von Rechnungen anhängen */
+async function attachItems(invoices) {
+  if (!invoices.length) return invoices;
+  const ids = invoices.map(r => r.id);
   const items = (await q(
-    `SELECT * FROM "InvoiceItem"
-     WHERE "invoiceId" = ANY($1::uuid[])
-     ORDER BY "id" ASC`,
+    `SELECT * FROM "InvoiceItem" WHERE "invoiceId" = ANY($1::uuid[]) ORDER BY "createdAt" ASC`,
     [ids]
   )).rows;
-
-  const by = new Map(rows.map(r => [r.id, { ...r, items: [] }]));
+  const byId = new Map(invoices.map(r => [r.id, { ...r, items: [] }]));
   for (const it of items) {
-    const host = by.get(it.invoiceId);
-    if (host) host.items.push(it);
+    const r = byId.get(it.invoiceId);
+    if (r) r.items.push(it);
   }
-  return Array.from(by.values());
+  return Array.from(byId.values());
 }
 
 export async function GET(request) {
@@ -29,31 +32,26 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
-    const heads = (await q(
+    const rows = (await q(
       `SELECT i.*, c."name" AS "customerName"
        FROM "Invoice" i
-       LEFT JOIN "Customer" c ON c."id" = i."customerId"
-       ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(COALESCE(c."name", '')) LIKE $1` : ""}
-       ORDER BY i."issueDate" DESC NULLS LAST, i."id" DESC`,
+       JOIN "Customer" c ON c."id" = i."customerId"
+       ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(c."name") LIKE $1` : ""}
+       ORDER BY i."issueDate" DESC, i."createdAt" DESC`,
       qs ? [`%${qs}%`] : []
     )).rows;
 
-    const withItems = await attachInvoiceItems(heads);
-
-    return new Response(JSON.stringify({ ok: true, data: withItems }), {
-      status: 200,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
+    const withItems = await attachItems(rows);
+    return Response.json({ ok: true, data: withItems });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
 export async function POST(request) {
   try {
     await initDb();
-
-    const body = await request.json().catch(()=>({}));
+    const body = await request.json().catch(() => ({}));
     const { customerId, issueDate, dueDate } = body;
     let taxRate = Number(body.taxRate ?? 19);
     const items = Array.isArray(body.items) ? body.items : [];
@@ -61,47 +59,70 @@ export async function POST(request) {
     if (!customerId) return new Response(JSON.stringify({ ok:false, error:"customerId fehlt." }), { status:400 });
     if (items.length === 0) return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
 
-    // Settings (Währung + §19)
-    const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC NULLS LAST LIMIT 1`)).rows[0] || {};
-    if (settings.kleinunternehmer) taxRate = 0;
-    const currency = settings.currency || "EUR";
+    const settings = await loadSettings();
+    const currency = settings.currency;
 
-    const id = uuid();
+    // §19 UStG: Steuer 0%
+    if (settings.kleinunternehmer) taxRate = 0;
+
+    // Rechnungsnummer
     const seq = (await q(`SELECT nextval('\"InvoiceNumberSeq\"') AS n`)).rows[0].n;
+    const id = uuid();
     const invoiceNo = String(seq);
 
-    // Summen berechnen
+    // Zeilensummen
     let netCents = 0;
-    const normItems = items.map(it => {
-      const qty   = Number(it.quantity || 0);
-      const unit  = Number(it.unitPriceCents || 0);
+    const normalized = items.map(it => {
+      const qty = Number(it.quantity || 0);
+      const unit = Number(it.unitPriceCents || 0);
       const extra = Number(it.extraBaseCents || 0);
-      const line  = qty * unit + extra;
-      netCents += line;
-      return { qty, unit, extra, line, name: String(it.name||"").trim(), productId: it.productId || null, description: it.description || null };
+      const lineTotalCents = qty * unit + extra;
+      netCents += lineTotalCents;
+      return {
+        id: uuid(),
+        invoiceId: id,
+        productId: it.productId || null,
+        name: String(it.name || "").trim(),
+        description: it.description || null,
+        quantity: qty,
+        unitPriceCents: unit,
+        extraBaseCents: extra,
+        lineTotalCents,
+      };
     });
 
-    const taxCents = Math.round(netCents * (Number(taxRate || 0)/100));
+    const taxCents = Math.round(netCents * (Number(taxRate) / 100));
     const grossCents = netCents + taxCents;
 
-    // Kopf speichern
     await q(
-      `INSERT INTO "Invoice" ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate")
-       VALUES ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10)`,
-      [id, invoiceNo, customerId, issueDate || null, dueDate || null, currency, netCents, taxCents, grossCents, Number(taxRate||0)]
+      `INSERT INTO "Invoice" (
+        "id","invoiceNo","customerId","issueDate","dueDate",
+        "currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt"
+      ) VALUES (
+        $1,$2,$3,COALESCE($4, CURRENT_DATE),$5,
+        $6,$7,$8,$9,$10, now(), now()
+      )`,
+      [id, invoiceNo, customerId, issueDate || null, dueDate || null, currency, netCents, taxCents, grossCents, Number(taxRate || 0)]
     );
 
-    // Items speichern
-    for (const it of normItems) {
+    for (const it of normalized) {
       await q(
-        `INSERT INTO "InvoiceItem" ("id","invoiceId","productId","name","description","quantity","unitPriceCents","extraBaseCents","lineTotalCents")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [uuid(), id, it.productId, it.name, it.description, it.qty, it.unit, it.extra, it.line]
+        `INSERT INTO "InvoiceItem" (
+          "id","invoiceId","productId","name","description",
+          "quantity","unitPriceCents","extraBaseCents","lineTotalCents","createdAt","updatedAt"
+        ) VALUES (
+          $1,$2,$3,$4,$5,
+          $6,$7,$8,$9, now(), now()
+        )`,
+        [
+          it.id, it.invoiceId, it.productId, it.name, it.description,
+          it.quantity, it.unitPriceCents, it.extraBaseCents, it.lineTotalCents
+        ]
       );
     }
 
-    return new Response(JSON.stringify({ ok:true, data:{ id, invoiceNo } }), { status: 201 });
+    return Response.json({ ok: true, data: { id, invoiceNo } }, { status: 201 });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
