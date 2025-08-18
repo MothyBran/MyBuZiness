@@ -27,54 +27,44 @@ async function attachItems(invoices) {
 }
 
 export async function GET(request) {
-  try {
-    await initDb();
-    const { searchParams } = new URL(request.url);
-    const qs = (searchParams.get("q") || "").trim().toLowerCase();
+  await initDb();
+  const { searchParams } = new URL(request.url);
+  const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
-    // LEFT JOIN, damit Rechnungen auch erscheinen, wenn der Kunde fehlt/gelöscht wurde.
-    // Klare Sortierung mit createdAt (falls vorhanden) + Fallback auf issueDate.
-    const rows = (await q(
-      `SELECT i.*, c."name" AS "customerName"
-       FROM "Invoice" i
-       LEFT JOIN "Customer" c ON c."id" = i."customerId"
-       ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(COALESCE(c."name", '')) LIKE $1` : ""}
-       ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC
-       ${qs ? "" : ""}`,
-      qs ? [`%${qs}%`] : []
+  const rows = (await q(
+    `SELECT i.*, c."name" AS "customerName"
+     FROM "Invoice" i
+     LEFT JOIN "Customer" c ON c."id" = i."customerId"
+     ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(COALESCE(c."name", '')) LIKE $1` : ""}
+     ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC`,
+    qs ? [`%${qs}%`] : []
+  )).rows;
+
+  // Items andocken …
+  if (rows.length) {
+    const ids = rows.map(r => r.id);
+    const items = (await q(
+      `SELECT * FROM "InvoiceItem"
+       WHERE "invoiceId" = ANY($1::uuid[])
+       ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
+      [ids]
     )).rows;
 
-    // Items andocken (wie gehabt)
-    if (rows.length) {
-      const ids = rows.map(r => r.id);
-      const items = (await q(
-        `SELECT * FROM "InvoiceItem"
-         WHERE "invoiceId" = ANY($1::uuid[])
-         ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
-        [ids]
-      )).rows;
-      const byId = new Map(rows.map(r => [r.id, { ...r, items: [] }]));
-      for (const it of items) {
-        const host = byId.get(it.invoiceId);
-        if (host) host.items.push(it);
-      }
-      const withItems = Array.from(byId.values());
-
-      return new Response(JSON.stringify({ ok: true, data: withItems }), {
-        status: 200,
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
-      });
+    const byId = new Map(rows.map(r => [r.id, { ...r, items: [] }]));
+    for (const it of items) {
+      const host = byId.get(it.invoiceId);
+      if (host) host.items.push(it);
     }
-
-    return new Response(JSON.stringify({ ok: true, data: [] }), {
+    return new Response(JSON.stringify({ ok: true, data: Array.from(byId.values()) }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
-  } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500, headers: { "content-type": "application/json" }
-    });
   }
+
+  return new Response(JSON.stringify({ ok: true, data: [] }), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 }
 
 export async function POST(request) {
