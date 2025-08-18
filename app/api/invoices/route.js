@@ -15,56 +15,42 @@ async function attachItems(invoices) {
   if (!invoices.length) return invoices;
   const ids = invoices.map(r => r.id);
   const items = (await q(
-    `SELECT * FROM "InvoiceItem" WHERE "invoiceId" = ANY($1::uuid[]) ORDER BY "createdAt" ASC`,
+    `SELECT * FROM "InvoiceItem"
+     WHERE "invoiceId" = ANY($1::uuid[])
+     ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
     [ids]
   )).rows;
   const byId = new Map(invoices.map(r => [r.id, { ...r, items: [] }]));
   for (const it of items) {
-    const r = byId.get(it.invoiceId);
-    if (r) r.items.push(it);
+    const host = byId.get(it.invoiceId);
+    if (host) host.items.push(it);
   }
   return Array.from(byId.values());
 }
 
 export async function GET(request) {
-  await initDb();
-  const { searchParams } = new URL(request.url);
-  const qs = (searchParams.get("q") || "").trim().toLowerCase();
+  try {
+    await initDb();
+    const { searchParams } = new URL(request.url);
+    const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
-  const rows = (await q(
-    `SELECT i.*, c."name" AS "customerName"
-     FROM "Invoice" i
-     LEFT JOIN "Customer" c ON c."id" = i."customerId"
-     ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(COALESCE(c."name", '')) LIKE $1` : ""}
-     ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC`,
-    qs ? [`%${qs}%`] : []
-  )).rows;
-
-  // Items andocken …
-  if (rows.length) {
-    const ids = rows.map(r => r.id);
-    const items = (await q(
-      `SELECT * FROM "InvoiceItem"
-       WHERE "invoiceId" = ANY($1::uuid[])
-       ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
-      [ids]
+    const rows = (await q(
+      `SELECT i.*, c."name" AS "customerName"
+       FROM "Invoice" i
+       LEFT JOIN "Customer" c ON c."id" = i."customerId"
+       ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(COALESCE(c."name", '')) LIKE $1` : ""}
+       ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC`,
+      qs ? [`%${qs}%`] : []
     )).rows;
 
-    const byId = new Map(rows.map(r => [r.id, { ...r, items: [] }]));
-    for (const it of items) {
-      const host = byId.get(it.invoiceId);
-      if (host) host.items.push(it);
-    }
-    return new Response(JSON.stringify({ ok: true, data: Array.from(byId.values()) }), {
+    const withItems = await attachItems(rows);
+    return new Response(JSON.stringify({ ok: true, data: withItems }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
-
-  return new Response(JSON.stringify({ ok: true, data: [] }), {
-    status: 200,
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
-  });
 }
 
 export async function POST(request) {
@@ -75,8 +61,12 @@ export async function POST(request) {
     let taxRate = Number(body.taxRate ?? 19);
     const items = Array.isArray(body.items) ? body.items : [];
 
-    if (!customerId) return new Response(JSON.stringify({ ok:false, error:"customerId fehlt." }), { status:400 });
-    if (items.length === 0) return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
+    if (!customerId) {
+      return new Response(JSON.stringify({ ok:false, error:"customerId fehlt." }), { status:400 });
+    }
+    if (items.length === 0) {
+      return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
+    }
 
     const settings = await loadSettings();
     const currency = settings.currency;
