@@ -2,32 +2,68 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-function toCents(input){ if(input==null) return 0; if(typeof input==="number") return Math.round(input*100); let s=String(input).trim(); if(/^\d+$/.test(s)) return parseInt(s,10)*100; s=s.replace(/[^\d.,]/g,""); if(s.includes(",")&&s.includes(".")){const lc=s.lastIndexOf(","), ld=s.lastIndexOf("."); const dec=lc>ld?",":"."; const thou=dec===","?".":","; s=s.replace(new RegExp("\\"+thou,"g"),""); s=s.replace(dec,".");} else if(s.includes(",")&&!s.includes(".")){ s=s.replace(",","."); } const n=Number.parseFloat(s); return Number.isFinite(n)?Math.round(n*100):0; }
-function fromCents(c){ const n = Number(c||0)/100; return n.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmt(c, code="EUR"){ return new Intl.NumberFormat("de-DE",{style:"currency",currency:code}).format((Number(c||0)/100)); }
-function Field({ label, children }){ return <label style={{display:"grid",gap:4}}><span style={{fontSize:12,color:"#6b7280"}}>{label}</span>{children}</label>; }
-const input={ padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
-const btnPrimary={ padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
-const btnGhost={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
-const card={ background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const modalWrap={ position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(980px,96vw)", maxHeight:"86vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
+/* ---------- Utils ---------- */
+function toCents(input){
+  if(input==null) return 0;
+  if(typeof input==="number") return Math.round(input*100);
+  let s=String(input).trim();
+  if(/^\d+$/.test(s)) return parseInt(s,10)*100;
+  s=s.replace(/[^\d.,]/g,"");
+  if(s.includes(",")&&s.includes(".")){
+    const lc=s.lastIndexOf(","), ld=s.lastIndexOf(".");
+    const dec=lc>ld?",":"."; const thou=dec===","?".":",";
+    s=s.replace(new RegExp("\\"+thou,"g"),"");
+    s=s.replace(dec,".");
+  } else if(s.includes(",")&&!s.includes(".")){
+    s=s.replace(",",".");
+  }
+  const n=Number.parseFloat(s);
+  return Number.isFinite(n)?Math.round(n*100):0;
+}
+function fromCents(c){
+  const n = Number(c||0)/100;
+  return n.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmt(c, code="EUR"){
+  return new Intl.NumberFormat("de-DE",{style:"currency",currency:code})
+    .format((Number(c||0)/100));
+}
+function Field({ label, children }){
+  return <label style={{display:"grid",gap:6}}>
+    <span style={{fontSize:12,color:"#6b7280"}}>{label}</span>
+    {children}
+  </label>;
+}
+
+/* ---------- Styles ---------- */
+const input      = { padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
+const btnPrimary = { padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
+const btnGhost   = { padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
+const btnDanger  = { padding:"10px 12px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
+const card       = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
+const modalWrap  = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(980px,96vw)", maxHeight:"86vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
 
 export default function InvoicesPage(){
-  const [rows,setRows]=useState([]); const [loading,setLoading]=useState(true);
-  const [products,setProducts]=useState([]); const [customers,setCustomers]=useState([]);
-  const [expandedId,setExpandedId]=useState(null); const [showNew,setShowNew]=useState(false);
+  const [rows,setRows]=useState([]); 
+  const [loading,setLoading]=useState(true);
+  const [products,setProducts]=useState([]); 
+  const [customers,setCustomers]=useState([]);
+  const [settings,setSettings]=useState({ currency:"EUR", kleinunternehmer:false });
+  const [expandedId,setExpandedId]=useState(null); 
+  const [showNew,setShowNew]=useState(false);
 
   async function load(){
     setLoading(true);
-    const [listRes, prodRes, custRes] = await Promise.all([
+    const [listRes, prodRes, custRes, settingsRes] = await Promise.all([
       fetch("/api/invoices",{cache:"no-store"}),
       fetch("/api/products",{cache:"no-store"}),
-      fetch("/api/customers",{cache:"no-store"})
+      fetch("/api/customers",{cache:"no-store"}),
+      fetch("/api/settings",{cache:"no-store"}),
     ]);
     const list=await listRes.json().catch(()=>({data:[]}));
     const pr=await prodRes.json().catch(()=>({data:[]}));
     const cs=await custRes.json().catch(()=>({data:[]}));
+    const s=await settingsRes.json().catch(()=>({data:{}}));
     setRows(list.data||[]);
     setProducts((pr.data||[]).map(p=>({
       id:p.id, name:p.name, kind:p.kind,
@@ -35,11 +71,21 @@ export default function InvoicesPage(){
       travelBaseCents:p.travelBaseCents||0, travelPerKmCents:p.travelPerKmCents||0
     })));
     setCustomers(cs.data||[]);
+    setSettings({ currency: s?.data?.currency || "EUR", kleinunternehmer: !!s?.data?.kleinunternehmer });
     setLoading(false);
   }
   useEffect(()=>{ load(); },[]);
+
   function toggleExpand(id){ setExpandedId(prev=>prev===id?null:id); }
-  async function removeRow(id){ if(!confirm("Diese Rechnung wirklich löschen?")) return; const res=await fetch(`/api/invoices/${id}`,{method:"DELETE"}); const js=await res.json().catch(()=>({})); if(!js?.ok) return alert(js?.error||"Löschen fehlgeschlagen."); if(expandedId===id) setExpandedId(null); load(); }
+
+  async function removeRow(id){
+    if(!confirm("Diese Rechnung wirklich löschen?")) return;
+    const res=await fetch(`/api/invoices/${id}`,{method:"DELETE"});
+    const js=await res.json().catch(()=>({}));
+    if(!js?.ok) return alert(js?.error||"Löschen fehlgeschlagen.");
+    if(expandedId===id) setExpandedId(null);
+    load();
+  }
 
   return (
     <main>
@@ -51,7 +97,14 @@ export default function InvoicesPage(){
       <div style={{...card,marginTop:12}}>
         <div className="table-wrap">
           <table className="table table-fixed">
-            <thead><tr><th style={{width:"18%"}}>Nr.</th><th style={{width:"37%"}}>Kunde</th><th className="hide-sm" style={{width:"20%"}}>Datum</th><th style={{width:"25%"}}>Betrag</th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{width:"18%"}}>Nr.</th>
+                <th style={{width:"37%"}}>Kunde</th>
+                <th className="hide-sm" style={{width:"20%"}}>Datum</th>
+                <th style={{width:"25%"}}>Betrag</th>
+              </tr>
+            </thead>
             <tbody>
               {rows.map(r=>{
                 const d=r.issueDate? new Date(r.issueDate):null;
@@ -61,15 +114,17 @@ export default function InvoicesPage(){
                       <td>{r.invoiceNo}</td>
                       <td className="ellipsis">{r.customerName||"—"}</td>
                       <td className="hide-sm">{d? d.toLocaleDateString():"—"}</td>
-                      <td>{fmt(r.grossCents)}</td>
+                      <td>{fmt(r.grossCents, settings.currency)}</td>
                     </tr>
                     {expandedId===r.id && (
-                      <tr key={r.id+"-d"}><td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-                        <InvoiceDetails row={r} />
-                        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                          <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
-                        </div>
-                      </td></tr>
+                      <tr key={r.id+"-d"}>
+                        <td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
+                          <InvoiceDetails row={r} currency={settings.currency} />
+                          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+                            <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
+                          </div>
+                        </td>
+                      </tr>
                     )}
                   </>
                 );
@@ -80,7 +135,16 @@ export default function InvoicesPage(){
         </div>
       </div>
 
-      {showNew && <NewInvoiceSheet products={products} customers={customers} onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
+      {showNew && (
+        <NewInvoiceSheet
+          products={products}
+          customers={customers}
+          currency={settings.currency}
+          kleinunternehmer={settings.kleinunternehmer}
+          onClose={()=>setShowNew(false)}
+          onSaved={()=>{ setShowNew(false); load(); }}
+        />
+      )}
 
       <style jsx global>{`
         .table-wrap{overflow-x:auto}
@@ -95,7 +159,7 @@ export default function InvoicesPage(){
   );
 }
 
-function InvoiceDetails({ row }){
+function InvoiceDetails({ row, currency }){
   const items=row.items||[];
   const net = items.reduce((s,it)=> s + (Number(it.unitPriceCents||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0);
   const taxRate = Number(row.taxRate||0);
@@ -105,7 +169,14 @@ function InvoiceDetails({ row }){
     <div style={{display:"grid",gap:12}}>
       <div className="table-wrap">
         <table className="table table-fixed" style={{minWidth:760}}>
-          <thead><tr><th style={{width:"45%"}}>Bezeichnung</th><th style={{width:110}}>Menge</th><th style={{width:170}}>Einzelpreis</th><th style={{width:160}}>Summe</th></tr></thead>
+          <thead>
+            <tr>
+              <th style={{width:"45%"}}>Bezeichnung</th>
+              <th style={{width:110}}>Menge</th>
+              <th style={{width:170}}>Einzelpreis</th>
+              <th style={{width:160}}>Summe</th>
+            </tr>
+          </thead>
           <tbody>
             {items.map((it,idx)=>{
               const sum = Number(it.quantity||0)*Number(it.unitPriceCents||0) + Number(it.extraBaseCents||0);
@@ -113,8 +184,8 @@ function InvoiceDetails({ row }){
                 <tr key={idx}>
                   <td className="ellipsis">{it.name}</td>
                   <td>{it.quantity}</td>
-                  <td>{fmt(it.unitPriceCents)}</td>
-                  <td>{fmt(sum)}</td>
+                  <td>{fmt(it.unitPriceCents, currency)}</td>
+                  <td>{fmt(sum, currency)}</td>
                 </tr>
               );
             })}
@@ -122,19 +193,22 @@ function InvoiceDetails({ row }){
           </tbody>
         </table>
       </div>
-      <div style={{textAlign:"right"}}>Netto: <b>{fmt(net)}</b> · Steuer: <b>{fmt(tax)}</b> · Brutto: <b>{fmt(gross)}</b></div>
+      <div style={{textAlign:"right"}}>Netto: <b>{fmt(net, currency)}</b> · Steuer: <b>{fmt(tax, currency)}</b> · Brutto: <b>{fmt(gross, currency)}</b></div>
     </div>
   );
 }
 
-function NewInvoiceSheet({ products, customers, onClose, onSaved }){
+/* ---------- Modal: Neue Rechnung ---------- */
+function NewInvoiceSheet({ products, customers, currency, kleinunternehmer, onClose, onSaved }){
   const [issueDate,setIssueDate]=useState(new Date().toISOString().slice(0,10));
   const [dueDate,setDueDate]=useState("");
   const [customerId,setCustomerId]=useState("");
-  const [taxRate,setTaxRate]=useState(19);
+  const [taxRate,setTaxRate]=useState(kleinunternehmer ? 0 : 19);
   const [items,setItems]=useState([
     { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }
   ]);
+
+  useEffect(()=>{ if(kleinunternehmer) setTaxRate(0); },[kleinunternehmer]);
 
   const net = useMemo(()=> items.reduce((s,it)=> s + (toCents(it.unitPrice||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0), [items]);
   const tax = Math.round(net * (Number(taxRate||0)/100));
@@ -202,19 +276,38 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
 
       <form onSubmit={save} style={{display:"grid",gap:12}}>
         <div style={{display:"grid",gap:12,gridTemplateColumns:"1fr 1fr 1fr"}}>
-          <Field label="Rechnungsdatum"><input type="date" style={input} value={issueDate} onChange={e=>setIssueDate(e.target.value)} /></Field>
-          <Field label="Fällig am"><input type="date" style={input} value={dueDate} onChange={e=>setDueDate(e.target.value)} /></Field>
-          <Field label="Kunde *"><CustomerPicker value={customerId} onChange={setCustomerId} /></Field>
+          <Field label="Rechnungsdatum">
+            <input type="date" style={input} value={issueDate} onChange={e=>setIssueDate(e.target.value)} />
+          </Field>
+          <Field label="Fällig am">
+            <input type="date" style={input} value={dueDate} onChange={e=>setDueDate(e.target.value)} />
+          </Field>
+          <Field label="Kunde *">
+            <CustomerPicker value={customerId} onChange={setCustomerId} />
+          </Field>
         </div>
         <div>
           <Field label="Steuersatz (%)">
-            <input style={input} value={taxRate} onChange={e=>setTaxRate(e.target.value)} inputMode="decimal" />
+            <input
+              style={{...input, background: kleinunternehmer ? "#f9fafb" : "#fff"}}
+              value={taxRate}
+              onChange={e=>setTaxRate(e.target.value)}
+              inputMode="decimal"
+              disabled={kleinunternehmer}
+              title={kleinunternehmer ? "§19 UStG aktiv – Steuersatz ist 0%" : "Steuersatz in %"}
+            />
+            {kleinunternehmer && (
+              <div style={{ fontSize:12, color:"#6b7280", marginTop:6 }}>
+                Hinweis: Kleinunternehmer-Regelung (§19 UStG) aktiv – Umsatzsteuer = 0 %.
+              </div>
+            )}
           </Field>
         </div>
 
         <PositionsTable
           items={items}
           products={products}
+          currency={currency}
           onPickProduct={onPickProduct}
           onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
           onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
@@ -223,9 +316,9 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
         />
 
         <div style={{display:"flex",justifyContent:"flex-end",gap:16}}>
-          <div>Netto: <b>{fmt(net)}</b></div>
-          <div>Steuer: <b>{fmt(tax)}</b></div>
-          <div>Brutto: <b>{fmt(gross)}</b></div>
+          <div>Netto: <b>{fmt(net, currency)}</b></div>
+          <div>Steuer: <b>{fmt(tax, currency)}</b></div>
+          <div>Brutto: <b>{fmt(gross, currency)}</b></div>
         </div>
 
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
@@ -239,7 +332,10 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
 
 function CustomerPicker({ value, onChange }){
   const [opts,setOpts]=useState([]);
-  useEffect(()=>{ (async()=>{ const js=await fetch("/api/customers").then(r=>r.json()).catch(()=>({data:[]})); setOpts(js.data||[]); })(); },[]);
+  useEffect(()=>{ (async()=>{
+    const js=await fetch("/api/customers",{cache:"no-store"}).then(r=>r.json()).catch(()=>({data:[]}));
+    setOpts(js.data||[]);
+  })(); },[]);
   return (
     <select style={input} value={value} onChange={e=>onChange(e.target.value)} required>
       <option value="">– wählen –</option>
@@ -248,17 +344,19 @@ function CustomerPicker({ value, onChange }){
   );
 }
 
-function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
+function PositionsTable({ items, products, currency, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
   return (
     <div className="table-wrap">
       <table className="table table-fixed" style={{ minWidth: 760 }}>
-        <thead><tr>
-          <th style={{width:"48%"}}>Produkt</th>
-          <th style={{width:110}}>Menge</th>
-          <th style={{width:170}}>Einzelpreis</th>
-          <th style={{width:150}}>Summe</th>
-          <th style={{width:120,textAlign:"right"}}>Aktion</th>
-        </tr></thead>
+        <thead>
+          <tr>
+            <th style={{width:"48%"}}>Produkt</th>
+            <th style={{width:110}}>Menge</th>
+            <th style={{width:170}}>Einzelpreis</th>
+            <th style={{width:150}}>Summe</th>
+            <th style={{width:120,textAlign:"right"}}>Aktion</th>
+          </tr>
+        </thead>
         <tbody>
           {items.map(r=>{
             const qty=Number(r.quantity||0);
@@ -277,7 +375,7 @@ function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, o
                       ))}
                     </select>
                     {Number(r.extraBaseCents||0) > 0 && (
-                      <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
+                      <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents, currency)}</div>
                     )}
                   </div>
                 </td>
@@ -288,10 +386,10 @@ function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, o
                   {r.kind==="travel" ? (
                     <input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />
                   ) : (
-                    <div style={{padding:"10px 0"}}>{fmt(upCents)}</div>
+                    <div style={{padding:"10px 0"}}>{fmt(upCents, currency)}</div>
                   )}
                 </td>
-                <td>{fmt(sum)}</td>
+                <td>{fmt(sum, currency)}</td>
                 <td style={{textAlign:"right"}}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
               </tr>
             );
