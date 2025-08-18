@@ -34,16 +34,42 @@ export async function GET(request) {
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
     const receipts = (await q(
-      `SELECT * FROM "Receipt"
+      `SELECT *
+       FROM "Receipt"
        ${qs ? `WHERE lower("receiptNo") LIKE $1 OR lower(COALESCE("note", '')) LIKE $1` : ""}
-       ORDER BY "date" DESC, "createdAt" DESC`,
+       ORDER BY "createdAt" DESC NULLS LAST, "date" DESC NULLS LAST, "id" DESC`,
       qs ? [`%${qs}%`] : []
     )).rows;
 
-    const withItems = await attachItems(receipts);
-    return Response.json({ ok: true, data: withItems });
+    if (receipts.length) {
+      const ids = receipts.map(r => r.id);
+      const items = (await q(
+        `SELECT * FROM "ReceiptItem"
+         WHERE "receiptId" = ANY($1::uuid[])
+         ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
+        [ids]
+      )).rows;
+
+      const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
+      for (const it of items) {
+        const host = byId.get(it.receiptId);
+        if (host) host.items.push(it);
+      }
+      const withItems = Array.from(byId.values());
+      return new Response(JSON.stringify({ ok: true, data: withItems }), {
+        status: 200,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true, data: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+      status: 500, headers: { "content-type": "application/json" }
+    });
   }
 }
 
