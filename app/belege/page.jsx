@@ -2,44 +2,37 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/** Hilfsfunktionen */
+/** Utils */
 function money(cents, curr = "EUR") {
   const n = Number(cents || 0) / 100;
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
 }
 const toInt = (v) => Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0;
 const clamp = (n, min = 0) => (Number(n) < min ? min : Number(n));
-
-/** Position-Objekt-Factory */
 function makeEmptyItem() {
-  return {
-    productId: "",
-    name: "",
-    quantity: 1,
-    unitPriceCents: 0,
-    lineTotalCents: 0,
-  };
+  return { productId: "", name: "", quantity: 1, unitPriceCents: 0, lineTotalCents: 0 };
 }
 
 export default function ReceiptsPage() {
-  /** Listen-Zustand */
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  /** Settings / Produkte (für Modal) */
+  // Settings
   const [currency, setCurrency] = useState("EUR");
   const [vatExemptDefault, setVatExemptDefault] = useState(true);
-  const [products, setProducts] = useState([]);
 
-  /** Modal „Neuer Beleg“ */
+  // Modal
   const [isOpen, setIsOpen] = useState(false);
   const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [vatExempt, setVatExempt] = useState(true); // §19 UStG
-  const [discount, setDiscount] = useState("0"); // in €, als Text, wird konvertiert
+  const [vatExempt, setVatExempt] = useState(true);
+  const [discount, setDiscount] = useState("0");
   const [items, setItems] = useState([makeEmptyItem()]);
 
-  /** Laden */
+  // Debug
+  const [debug, setDebug] = useState({ receiptsRaw: null, receiptsOk: null, diagRaw: null, productsRaw: null });
+
   async function load() {
     setLoading(true);
     try {
@@ -53,14 +46,13 @@ export default function ReceiptsPage() {
       const pr = await prodRes.json().catch(() => ({}));
       const st = await setRes.json().catch(() => ({}));
 
-      setRows(Array.isArray(list?.data) ? list.data : []);
-
+      // Produkte defensiv normalisieren
       setProducts(
         Array.isArray(pr?.data)
           ? pr.data.map((p) => ({
               id: p.id,
               name: p.name || "-",
-              kind: p.kind || "product", // "product" | "service" | "travel"
+              kind: p.kind || "product",
               priceCents: toInt(p.priceCents || 0),
               hourlyRateCents: toInt(p.hourlyRateCents || 0),
               travelBaseCents: toInt(p.travelBaseCents || 0),
@@ -74,13 +66,37 @@ export default function ReceiptsPage() {
       setCurrency(cur);
       setVatExemptDefault(kU);
       setVatExempt(kU);
+
+      // Primäre Quelle: /api/receipts
+      let useRows = Array.isArray(list?.data) ? list.data : [];
+      const okPrimary = !!(list && list.ok === true);
+
+      // Fallback: /api/_diag, wenn leer oder API nicht ok
+      if ((!okPrimary || useRows.length === 0)) {
+        const diagRes = await fetch("/api/_diag", { cache: "no-store" }).catch(() => null);
+        const diag = diagRes ? await diagRes.json().catch(() => ({})) : {};
+        const diagList = Array.isArray(diag?.latest?.receipts) ? diag.latest.receipts : [];
+        // diag.latest.receipts hat weniger Felder – mappen auf erwartete Struktur
+        useRows = diagList.map((r) => ({
+          id: r.id,
+          receiptNo: r.receiptNo || "-",
+          date: r.date || null,
+          grossCents: Number(r.grossCents || 0),
+          currency: r.currency || cur || "EUR",
+          items: [], // _diag liefert keine Items → leer, aber Tabelle lädt
+        }));
+
+        setDebug({ receiptsRaw: list, receiptsOk: okPrimary, diagRaw: diag, productsRaw: pr });
+      } else {
+        setDebug({ receiptsRaw: list, receiptsOk: okPrimary, diagRaw: null, productsRaw: pr });
+      }
+
+      setRows(useRows);
     } catch (e) {
       console.error("Receipts load error:", e);
       setRows([]);
       setProducts([]);
-      setCurrency("EUR");
-      setVatExemptDefault(true);
-      setVatExempt(true);
+      setDebug((d) => ({ ...d, error: String(e) }));
     } finally {
       setLoading(false);
     }
@@ -88,9 +104,7 @@ export default function ReceiptsPage() {
 
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
 
   /** Modal-Logik */
   function openModal() {
@@ -100,14 +114,11 @@ export default function ReceiptsPage() {
     setItems([makeEmptyItem()]);
     setIsOpen(true);
   }
-  function closeModal() {
-    setIsOpen(false);
-  }
+  function closeModal() { setIsOpen(false); }
 
   function updateItem(idx, patch) {
     setItems((prev) => {
       const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
-      // lineTotalCents stets aktuell halten
       next[idx].lineTotalCents = toInt(next[idx].quantity) * toInt(next[idx].unitPriceCents);
       return next;
     });
@@ -119,30 +130,16 @@ export default function ReceiptsPage() {
       updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
       return;
     }
-    // Standard-Einzelpreis:
-    // - Produkt: priceCents
-    // - Dienstleistung: hourlyRateCents, wenn vorhanden, sonst priceCents
-    // - Fahrtkosten: travelPerKmCents (Basiskosten werden als separate Position typischerweise nicht geführt,
-    //   hier vereinfachen wir: Einzelpreis = Per-Km-Preis; Menge = km)
     let unit = p.priceCents;
     if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
     if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
-
-    updateItem(idx, {
-      productId: p.id,
-      name: p.name,
-      unitPriceCents: toInt(unit),
-    });
+    updateItem(idx, { productId: p.id, name: p.name, unitPriceCents: toInt(unit) });
   }
 
-  function addRow() {
-    setItems((prev) => [...prev, makeEmptyItem()]);
-  }
-  function removeRow(idx) {
-    setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
-  }
+  function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
+  function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /** Summen aus den Positionen + Rabatt */
+  /** Summen */
   const calc = useMemo(() => {
     const netCents = items.reduce((sum, it) => sum + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
     const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
@@ -152,10 +149,9 @@ export default function ReceiptsPage() {
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
   }, [items, discount, vatExempt]);
 
-  /** Beleg speichern */
+  /** Speichern */
   async function saveReceipt() {
     try {
-      // Minimalvalidierung
       const cleanItems = items
         .map((it) => ({
           productId: it.productId || null,
@@ -191,27 +187,35 @@ export default function ReceiptsPage() {
         return;
       }
 
-      // Erfolgreich
       setIsOpen(false);
-      await load(); // Liste auffrischen
-      // optional: Nach oben scrollen
-      // window.scrollTo({ top: 0, behavior: "smooth" });
+      await load();
     } catch (e) {
       console.error("saveReceipt error:", e);
       alert("Speichern fehlgeschlagen (Technischer Fehler).");
     }
   }
 
-  /** Render */
   return (
     <main className="grid-gap-16">
-      {/* Kopf / Aktion */}
+      {/* Kopf */}
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h1 className="page-title" style={{ margin: 0 }}>Belege</h1>
           <button className="btn" onClick={openModal}>+ Neuer Beleg</button>
         </div>
       </div>
+
+      {/* Debug – nur anzeigen, wenn keine Daten da sind */}
+      {!loading && rows.length === 0 && (
+        <div className="card" style={{ background: "#fffbe6", borderColor: "#fde68a" }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Debug-Hinweis</div>
+          <div style={{ fontSize: 13, color: "#6b7280" }}>
+            /api/receipts ok: <b>{String(debug.receiptsOk)}</b><br />
+            /api/receipts payload: <code style={{ wordBreak: "break-all" }}>{JSON.stringify(debug.receiptsRaw)}</code><br />
+            /api/_diag fallback: <code style={{ wordBreak: "break-all" }}>{JSON.stringify(debug.diagRaw)}</code>
+          </div>
+        </div>
+      )}
 
       {/* Tabelle */}
       <div className="card">
@@ -255,18 +259,14 @@ export default function ReceiptsPage() {
       {/* Modal Neuer Beleg */}
       {isOpen && (
         <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,.4)",
-            display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          role="dialog" aria-modal="true"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
         >
           <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <h2 style={{ margin: 0 }}>Neuer Beleg</h2>
-              <button className="btn-ghost" onClick={closeModal}>✕ Schließen</button>
+              <button className="btn-ghost" onClick={() => setIsOpen(false)}>✕ Schließen</button>
             </div>
 
             {/* Stammdaten */}
@@ -274,25 +274,21 @@ export default function ReceiptsPage() {
               <div className="surface" style={{ padding: 12 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                   <div>
-                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Datum</label>
+                    <label style={lbl}>Datum</label>
                     <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Kleinunternehmer (§19 UStG)</label>
+                    <label style={lbl}>Kleinunternehmer (§19 UStG)</label>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                       <input type="checkbox" checked={vatExempt} onChange={(e) => setVatExempt(e.target.checked)} />
                       <span>Keine USt. berechnen</span>
                     </label>
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Rabatt (gesamt, €)</label>
+                    <label style={lbl}>Rabatt (gesamt, €)</label>
                     <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      style={inp}
+                      type="text" inputMode="decimal" placeholder="0,00"
+                      value={discount} onChange={(e) => setDiscount(e.target.value)} style={inp}
                     />
                   </div>
                 </div>
@@ -316,43 +312,20 @@ export default function ReceiptsPage() {
                         return (
                           <tr key={idx}>
                             <td>
-                              <select
-                                value={it.productId}
-                                onChange={(e) => onProductSelect(idx, e.target.value)}
-                                style={{ ...inp, width: "100%" }}
-                              >
+                              <select value={it.productId} onChange={(e) => onProductSelect(idx, e.target.value)} style={{ ...inp, width: "100%" }}>
                                 <option value="">— Produkt wählen —</option>
-                                {products.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
+                                {products.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
                               </select>
-                              <input
-                                type="text"
-                                placeholder="Freitext (optional)"
-                                value={it.name}
-                                onChange={(e) => updateItem(idx, { name: e.target.value })}
-                                style={{ ...inp, marginTop: 6 }}
-                              />
+                              <input type="text" placeholder="Freitext (optional)" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} style={{ ...inp, marginTop: 6 }} />
+                            </td>
+                            <td>
+                              <input type="number" min={0} step="1" value={it.quantity} onChange={(e) => updateItem(idx, { quantity: clamp(e.target.value || 0) })} style={{ ...inp, textAlign: "right" }} />
                             </td>
                             <td>
                               <input
-                                type="number"
-                                min={0}
-                                step="1"
-                                value={it.quantity}
-                                onChange={(e) => updateItem(idx, { quantity: clamp(e.target.value || 0) })}
-                                style={{ ...inp, textAlign: "right" }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                inputMode="decimal"
+                                type="text" inputMode="decimal"
                                 value={(toInt(it.unitPriceCents) / 100).toString().replace(".", ",")}
                                 onChange={(e) => {
-                                  // Nutzer gibt "20,00" etc. ein → in Cents wandeln
                                   const raw = (e.target.value || "0").replace(/\./g, "").replace(",", ".");
                                   const cents = Math.round(parseFloat(raw) * 100) || 0;
                                   updateItem(idx, { unitPriceCents: cents });
@@ -392,7 +365,7 @@ export default function ReceiptsPage() {
 
               {/* Aktionen */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
+                <button className="btn-ghost" onClick={() => setIsOpen(false)}>Abbrechen</button>
                 <button className="btn" onClick={saveReceipt}>Speichern</button>
               </div>
             </div>
@@ -403,7 +376,7 @@ export default function ReceiptsPage() {
   );
 }
 
-/** Eine Tabellenzeile + eingebettete Detailzeile */
+/** Tabellenzeile + Details */
 function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
   const items = Array.isArray(row.items) ? row.items : [];
   return (
@@ -432,9 +405,7 @@ function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
                 </thead>
                 <tbody>
                   {items.length === 0 && (
-                    <tr>
-                      <td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td>
-                    </tr>
+                    <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
                   )}
                   {items.map((it, idx) => {
                     const qty = toInt(it.quantity || 0);
@@ -462,14 +433,10 @@ function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
   );
 }
 
-/** Input Style */
+/** Styles */
+const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 };
 const inp = {
-  width: "100%",
-  display: "block",
-  background: "#fff",
-  border: "1px solid rgba(0,0,0,.12)",
-  borderRadius: 12,
-  padding: "10px 12px",
-  outline: "none",
-  boxShadow: "0 1px 1px rgba(0,0,0,.03) inset",
+  width: "100%", display: "block", background: "#fff",
+  border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "10px 12px",
+  outline: "none", boxShadow: "0 1px 1px rgba(0,0,0,.03) inset",
 };
