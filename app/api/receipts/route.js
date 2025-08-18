@@ -33,8 +33,8 @@ export async function GET(request) {
       });
     }
 
-    // Positionen laden – sicher mit uuid[] cast
-    const ids = receipts.map(r => r.id);
+    // Positionen laden – robust gegen text/uuid-Mismatch
+    const ids = receipts.map(r => String(r.id)); // sicherstellen: String-Array
     const items = (await q(
       `SELECT
          "id",
@@ -46,7 +46,7 @@ export async function GET(request) {
          COALESCE("lineTotalCents", 0)::bigint     AS "lineTotalCents",
          COALESCE("createdAt", now())              AS "createdAt"
        FROM "ReceiptItem"
-       WHERE "receiptId" = ANY($1::uuid[])
+       WHERE "receiptId"::text = ANY($1::text[])
        ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
       [ids]
     )).rows;
@@ -99,10 +99,10 @@ export async function POST(request) {
     for (const it of items) {
       await q(
         `INSERT INTO "ReceiptItem" ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
-         VALUES ($1,$2::uuid,$3::uuid,$4,$5,$6,$7,now(),now())`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
         [
           uuid(),
-          id,
+          id, // Spalte kann text oder uuid sein – Postgres castet text->uuid automatisch, falls nötig
           it.productId || null,
           it.name,
           Number(it.quantity || 0),
