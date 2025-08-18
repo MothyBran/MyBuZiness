@@ -2,287 +2,474 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* Utils */
-function toCents(input){ if(input==null) return 0; if(typeof input==="number") return Math.round(input*100); let s=String(input).trim(); if(/^\d+$/.test(s)) return parseInt(s,10)*100; s=s.replace(/[^\d.,]/g,""); if(s.includes(",")&&s.includes(".")){const lc=s.lastIndexOf(","), ld=s.lastIndexOf("."); const dec=lc>ld?",":"."; const thou=dec===","?".":","; s=s.replace(new RegExp("\\"+thou,"g"),""); s=s.replace(dec,".");} else if(s.includes(",")&&!s.includes(".")){ s=s.replace(",","."); } const n=Number.parseFloat(s); return Number.isFinite(n)?Math.round(n*100):0; }
-function fromCents(c){ const n = Number(c||0)/100; return n.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmt(c, code="EUR"){ return new Intl.NumberFormat("de-DE",{style:"currency",currency:code}).format((Number(c||0)/100)); }
-function Field({ label, children }){ return <label style={{display:"grid",gap:4}}><span style={{fontSize:12,color:"#6b7280"}}>{label}</span>{children}</label>; }
-const input={ padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
-const btnPrimary={ padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
-const btnGhost={ padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger={ padding:"8px 10px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
-const card={ background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const modalWrap={ position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
+/** Hilfsfunktionen */
+function money(cents, curr = "EUR") {
+  const n = Number(cents || 0) / 100;
+  return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
+}
+const toInt = (v) => Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0;
+const clamp = (n, min = 0) => (Number(n) < min ? min : Number(n));
 
-export default function ReceiptsPage(){
-  const [rows,setRows]=useState([]); const [loading,setLoading]=useState(true);
-  const [products,setProducts]=useState([]);
-  const [expandedId,setExpandedId]=useState(null);
-  const [showNew,setShowNew]=useState(false);
-  
-  async function load(){
+/** Position-Objekt-Factory */
+function makeEmptyItem() {
+  return {
+    productId: "",
+    name: "",
+    quantity: 1,
+    unitPriceCents: 0,
+    lineTotalCents: 0,
+  };
+}
+
+export default function ReceiptsPage() {
+  /** Listen-Zustand */
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+
+  /** Settings / Produkte (für Modal) */
+  const [currency, setCurrency] = useState("EUR");
+  const [vatExemptDefault, setVatExemptDefault] = useState(true);
+  const [products, setProducts] = useState([]);
+
+  /** Modal „Neuer Beleg“ */
+  const [isOpen, setIsOpen] = useState(false);
+  const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [vatExempt, setVatExempt] = useState(true); // §19 UStG
+  const [discount, setDiscount] = useState("0"); // in €, als Text, wird konvertiert
+  const [items, setItems] = useState([makeEmptyItem()]);
+
+  /** Laden */
+  async function load() {
     setLoading(true);
     try {
-      const [listRes, prodRes] = await Promise.all([
-        fetch("/api/receipts",{cache:"no-store"}),
-        fetch("/api/products",{cache:"no-store"})
+      const [listRes, prodRes, setRes] = await Promise.all([
+        fetch("/api/receipts", { cache: "no-store" }),
+        fetch("/api/products", { cache: "no-store" }),
+        fetch("/api/settings", { cache: "no-store" }),
       ]);
 
-      const list = await listRes.json().catch(()=>({}));
-      const pr = await prodRes.json().catch(()=>({}));
+      const list = await listRes.json().catch(() => ({}));
+      const pr = await prodRes.json().catch(() => ({}));
+      const st = await setRes.json().catch(() => ({}));
 
-      setRows(Array.isArray(list.data) ? list.data : []);   // ✅ robust
-      setProducts(Array.isArray(pr.data) ? pr.data.map(p=>({
-        id:p.id, name:p.name, kind:p.kind,
-        priceCents:p.priceCents||0,
-        hourlyRateCents:p.hourlyRateCents||0,
-        travelBaseCents:p.travelBaseCents||0,
-        travelPerKmCents:p.travelPerKmCents||0
-      })) : []);
+      setRows(Array.isArray(list?.data) ? list.data : []);
 
-    } catch(e){
-      console.error("Fehler beim Laden:", e);
-      setRows([]); setProducts([]);
+      setProducts(
+        Array.isArray(pr?.data)
+          ? pr.data.map((p) => ({
+              id: p.id,
+              name: p.name || "-",
+              kind: p.kind || "product", // "product" | "service" | "travel"
+              priceCents: toInt(p.priceCents || 0),
+              hourlyRateCents: toInt(p.hourlyRateCents || 0),
+              travelBaseCents: toInt(p.travelBaseCents || 0),
+              travelPerKmCents: toInt(p.travelPerKmCents || 0),
+            }))
+          : []
+      );
+
+      const cur = st?.data?.currencyDefault || "EUR";
+      const kU = typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true;
+      setCurrency(cur);
+      setVatExemptDefault(kU);
+      setVatExempt(kU);
+    } catch (e) {
+      console.error("Receipts load error:", e);
+      setRows([]);
+      setProducts([]);
+      setCurrency("EUR");
+      setVatExemptDefault(true);
+      setVatExempt(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
-  useEffect(()=>{ load(); },[]);
-  function toggleExpand(id){ setExpandedId(prev=>prev===id?null:id); }
-  async function removeRow(id){ if(!confirm("Diesen Beleg wirklich löschen?")) return; const res=await fetch(`/api/receipts/${id}`,{method:"DELETE"}); const js=await res.json().catch(()=>({})); if(!js?.ok) return alert(js?.error||"Löschen fehlgeschlagen."); if(expandedId===id) setExpandedId(null); load(); }
 
+  useEffect(() => { load(); }, []);
+
+  function toggleExpand(id) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
+  /** Modal-Logik */
+  function openModal() {
+    setFormDate(new Date().toISOString().slice(0, 10));
+    setVatExempt(vatExemptDefault);
+    setDiscount("0");
+    setItems([makeEmptyItem()]);
+    setIsOpen(true);
+  }
+  function closeModal() {
+    setIsOpen(false);
+  }
+
+  function updateItem(idx, patch) {
+    setItems((prev) => {
+      const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+      // lineTotalCents stets aktuell halten
+      next[idx].lineTotalCents = toInt(next[idx].quantity) * toInt(next[idx].unitPriceCents);
+      return next;
+    });
+  }
+
+  function onProductSelect(idx, productId) {
+    const p = products.find((x) => x.id === productId);
+    if (!p) {
+      updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
+      return;
+    }
+    // Standard-Einzelpreis:
+    // - Produkt: priceCents
+    // - Dienstleistung: hourlyRateCents, wenn vorhanden, sonst priceCents
+    // - Fahrtkosten: travelPerKmCents (Basiskosten werden als separate Position typischerweise nicht geführt,
+    //   hier vereinfachen wir: Einzelpreis = Per-Km-Preis; Menge = km)
+    let unit = p.priceCents;
+    if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
+    if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
+
+    updateItem(idx, {
+      productId: p.id,
+      name: p.name,
+      unitPriceCents: toInt(unit),
+    });
+  }
+
+  function addRow() {
+    setItems((prev) => [...prev, makeEmptyItem()]);
+  }
+  function removeRow(idx) {
+    setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  }
+
+  /** Summen aus den Positionen + Rabatt */
+  const calc = useMemo(() => {
+    const netCents = items.reduce((sum, it) => sum + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
+    const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
+    const netAfterDiscount = Math.max(0, netCents - discountCents);
+    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19);
+    const grossCents = netAfterDiscount + taxCents;
+    return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
+  }, [items, discount, vatExempt]);
+
+  /** Beleg speichern */
+  async function saveReceipt() {
+    try {
+      // Minimalvalidierung
+      const cleanItems = items
+        .map((it) => ({
+          productId: it.productId || null,
+          name: (it.name || "").trim() || "Position",
+          quantity: clamp(it.quantity || 0, 0),
+          unitPriceCents: toInt(it.unitPriceCents || 0),
+        }))
+        .filter((it) => it.quantity > 0 && it.unitPriceCents >= 0);
+
+      if (cleanItems.length === 0) {
+        alert("Bitte mindestens eine Position mit Menge > 0 anlegen.");
+        return;
+      }
+
+      const payload = {
+        date: formDate || null,
+        vatExempt: !!vatExempt,
+        currency,
+        discountCents: calc.discountCents,
+        items: cleanItems,
+      };
+
+      const res = await fetch("/api/receipts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const js = await res.json().catch(() => ({}));
+
+      if (!res.ok || !js?.ok) {
+        console.error("POST /api/receipts failed:", js?.error || res.statusText);
+        alert("Speichern fehlgeschlagen. Details in der Konsole.");
+        return;
+      }
+
+      // Erfolgreich
+      setIsOpen(false);
+      await load(); // Liste auffrischen
+      // optional: Nach oben scrollen
+      // window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      console.error("saveReceipt error:", e);
+      alert("Speichern fehlgeschlagen (Technischer Fehler).");
+    }
+  }
+
+  /** Render */
   return (
-    <main>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <h1 style={{margin:0}}>Belege</h1>
-        <button style={btnPrimary} onClick={()=>setShowNew(true)}>+ Neuer Beleg</button>
+    <main className="grid-gap-16">
+      {/* Kopf / Aktion */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h1 className="page-title" style={{ margin: 0 }}>Belege</h1>
+          <button className="btn" onClick={openModal}>+ Neuer Beleg</button>
+        </div>
       </div>
 
-      <div style={{...card,marginTop:12}}>
+      {/* Tabelle */}
+      <div className="card">
         <div className="table-wrap">
           <table className="table table-fixed">
-            <thead><tr><th style={{width:"20%"}}>Nr.</th><th className="hide-sm" style={{width:"25%"}}>Datum</th><th style={{width:"25%"}}>Betrag</th><th style={{width:"30%"}}></th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ width: "18%" }}>Nr.</th>
+                <th style={{ width: "28%" }}>Datum</th>
+                <th style={{ width: "28%" }}>Betrag</th>
+                <th style={{ width: "26%" }}></th>
+              </tr>
+            </thead>
             <tbody>
-              {rows.map(r=>{
-                const d=r.date? new Date(r.date):null;
+              {loading && (
+                <tr><td colSpan={4} style={{ color: "#6b7280" }}>Lade…</td></tr>
+              )}
+
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
+              )}
+
+              {!loading && rows.map((r) => {
+                const d = r.date ? new Date(r.date) : null;
                 return (
-                  <>
-                    <tr key={r.id} className="row-clickable" onClick={()=>toggleExpand(r.id)}>
-                      <td>{r.receiptNo}</td>
-                      <td className="hide-sm">{d? d.toLocaleDateString():"—"}</td>
-                      <td>{fmt(r.grossCents)}</td>
-                      <td></td>
-                    </tr>
-                    {expandedId===r.id && (
-                      <tr key={r.id+"-d"}><td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-                        <ReceiptDetails row={r} />
-                        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                          <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
-                        </div>
-                      </td></tr>
-                    )}
-                  </>
+                  <RowWithDetails
+                    key={r.id}
+                    row={r}
+                    expanded={expandedId === r.id}
+                    onToggle={() => setExpandedId((prev) => (prev === r.id ? null : r.id))}
+                    dateStr={d ? d.toLocaleDateString() : "—"}
+                    currency={r.currency || currency}
+                  />
                 );
               })}
-              {rows.length===0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#999"}}>{loading?"Lade…":"Keine Belege vorhanden."}</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      {showNew && <NewReceiptSheet products={products} onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
+      {/* Modal Neuer Beleg */}
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,.4)",
+            display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <h2 style={{ margin: 0 }}>Neuer Beleg</h2>
+              <button className="btn-ghost" onClick={closeModal}>✕ Schließen</button>
+            </div>
 
-      <style jsx global>{`
-        .table-wrap{overflow-x:auto}
-        .table{width:100%; border-collapse:collapse}
-        .table th,.table td{border-bottom:1px solid #eee; padding:10px; vertical-align:middle}
-        .table-fixed{table-layout:fixed}
-        .row-clickable{cursor:pointer}
-        .ellipsis{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-        @media (max-width: 760px){ .hide-sm{display:none} }
-      `}</style>
+            {/* Stammdaten */}
+            <div className="grid-gap-16" style={{ marginTop: 12 }}>
+              <div className="surface" style={{ padding: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Datum</label>
+                    <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Kleinunternehmer (§19 UStG)</label>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <input type="checkbox" checked={vatExempt} onChange={(e) => setVatExempt(e.target.checked)} />
+                      <span>Keine USt. berechnen</span>
+                    </label>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Rabatt (gesamt, €)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={discount}
+                      onChange={(e) => setDiscount(e.target.value)}
+                      style={inp}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Positionen */}
+              <div className="surface" style={{ padding: 12 }}>
+                <div className="table-wrap">
+                  <table className="table pos-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "44%" }}>Produkt/Dienstleistung</th>
+                        <th style={{ width: "12%" }}>Menge</th>
+                        <th style={{ width: "22%" }}>Einzelpreis</th>
+                        <th style={{ width: "22%" }}>Summe</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, idx) => {
+                        const sum = toInt(it.quantity) * toInt(it.unitPriceCents);
+                        return (
+                          <tr key={idx}>
+                            <td>
+                              <select
+                                value={it.productId}
+                                onChange={(e) => onProductSelect(idx, e.target.value)}
+                                style={{ ...inp, width: "100%" }}
+                              >
+                                <option value="">— Produkt wählen —</option>
+                                {products.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="Freitext (optional)"
+                                value={it.name}
+                                onChange={(e) => updateItem(idx, { name: e.target.value })}
+                                style={{ ...inp, marginTop: 6 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                step="1"
+                                value={it.quantity}
+                                onChange={(e) => updateItem(idx, { quantity: clamp(e.target.value || 0) })}
+                                style={{ ...inp, textAlign: "right" }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={(toInt(it.unitPriceCents) / 100).toString().replace(".", ",")}
+                                onChange={(e) => {
+                                  // Nutzer gibt "20,00" etc. ein → in Cents wandeln
+                                  const raw = (e.target.value || "0").replace(/\./g, "").replace(",", ".");
+                                  const cents = Math.round(parseFloat(raw) * 100) || 0;
+                                  updateItem(idx, { unitPriceCents: cents });
+                                }}
+                                style={{ ...inp, textAlign: "right" }}
+                              />
+                            </td>
+                            <td style={{ textAlign: "right", fontWeight: 600 }}>{money(sum, currency)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button className="btn-ghost" onClick={addRow}>+ Position</button>
+                  <button className="btn-ghost" onClick={() => removeRow(items.length - 1)} disabled={items.length <= 1}>– Entfernen</button>
+                </div>
+              </div>
+
+              {/* Summen */}
+              <div className="surface" style={{ padding: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end" }}>
+                  <div className="subtle">Rabatt wird vor Steuer abgezogen.</div>
+                  <div style={{ textAlign: "right" }}>
+                    <div>Zwischensumme: <strong>{money(calc.netCents, currency)}</strong></div>
+                    <div>Rabatt: <strong>- {money(calc.discountCents, currency)}</strong></div>
+                    <div>Netto: <strong>{money(calc.netAfterDiscount, currency)}</strong></div>
+                    <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(calc.taxCents, currency)}</strong></div>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
+                      Gesamt: {money(calc.grossCents, currency)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aktionen */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
+                <button className="btn" onClick={saveReceipt}>Speichern</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-function ReceiptDetails({ row }){
-  const items=row.items||[];
+/** Eine Tabellenzeile + eingebettete Detailzeile */
+function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
+  const items = Array.isArray(row.items) ? row.items : [];
   return (
-    <div style={{display:"grid",gap:12}}>
-      <div className="table-wrap">
-        <table className="table table-fixed" style={{minWidth:720}}>
-          <thead><tr><th style={{width:"45%"}}>Bezeichnung</th><th style={{width:100}}>Menge</th><th style={{width:160}}>Einzelpreis</th><th style={{width:160}}>Summe</th></tr></thead>
-          <tbody>
-            {items.map((it,idx)=>{
-              const sum = Number(it.quantity||0)*Number(it.unitPriceCents||0) + Number(it.extraBaseCents||0);
-              return (
-                <tr key={idx}>
-                  <td className="ellipsis">{it.name}</td>
-                  <td>{it.quantity}</td>
-                  <td>{fmt(it.unitPriceCents)}</td>
-                  <td>{fmt(sum)}</td>
-                </tr>
-              );
-            })}
-            {items.length===0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#999"}}>Keine Positionen.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      <div style={{textAlign:"right",fontWeight:800}}>Gesamt: {fmt(row.grossCents)}</div>
-    </div>
-  );
-}
+    <>
+      <tr className="row-clickable" onClick={onToggle}>
+        <td className="ellipsis">#{row.receiptNo || "-"}</td>
+        <td>{dateStr}</td>
+        <td>{money(row.grossCents, currency)}</td>
+        <td style={{ textAlign: "right", color: "var(--muted)" }}>
+          {expanded ? "▲ Details" : "▼ Details"}
+        </td>
+      </tr>
 
-function NewReceiptSheet({ products, onClose, onSaved }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0,10));
-  const [discount, setDiscount] = useState("");
-  const [items, setItems] = useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }
-  ]);
-
-  const itemsTotal = useMemo(()=> items.reduce((s,it)=> s + (toCents(it.unitPrice||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0), [items]);
-  const gross = Math.max(0, itemsTotal - toCents(discount||0));
-
-  function addRow(){ setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]); }
-  function updateRow(id, patch){ setItems(prev=>prev.map(r=>r.id===id? {...r,...patch}:r)); }
-  function removeRowLocal(id){ setItems(prev=>prev.filter(r=>r.id!==id)); }
-
-  function onPickProduct(rowId, productId){
-    const p = products.find(x=>x.id===productId);
-    if(!p) return updateRow(rowId, { productId:"", kind:"", name:"", unitPrice:"", extraBaseCents:0 });
-
-    if (p.kind === "product") {
-      updateRow(rowId, { productId, kind:p.kind, name:p.name, unitPrice: fromCents(p.priceCents), extraBaseCents: 0 });
-    } else if (p.kind === "service") {
-      if (p.hourlyRateCents > 0) {
-        updateRow(rowId, {
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.hourlyRateCents),   // €/Std.
-          extraBaseCents: p.priceCents || 0          // Grundpreis einmalig
-        });
-      } else {
-        updateRow(rowId, {
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.priceCents),        // nur Grundpreis pro Einheit
-          extraBaseCents: 0
-        });
-      }
-    } else if (p.kind === "travel") {
-      updateRow(rowId, {
-        productId, kind:p.kind, name:p.name,
-        unitPrice: fromCents(p.travelPerKmCents),    // €/km editierbar
-        extraBaseCents: p.travelBaseCents || 0       // Grundpreis einmalig
-      });
-    }
-  }
-
-  async function save(e){
-    e.preventDefault();
-    if(items.length===0) return alert("Mindestens eine Position ist erforderlich.");
-    const payload = {
-      date,
-      discountCents: toCents(discount||0),
-      items: items.map(it=>({
-        productId: it.productId || null,
-        name: it.name,
-        quantity: Number(it.quantity||0),
-        unitPriceCents: toCents(it.unitPrice||0),
-        extraBaseCents: Number(it.extraBaseCents||0),
-      })),
-    };
-    const res = await fetch("/api/receipts",{ method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
-    const js = await res.json().catch(()=>({}));
-    if(!js?.ok) return alert(js?.error||"Speichern fehlgeschlagen.");
-    onSaved?.();
-  }
-
-  return (
-    <div className="surface" style={modalWrap} onClick={(e)=>e.stopPropagation()}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <b>Neuen Beleg erfassen</b>
-        <button onClick={onClose} className="btn-ghost" style={{padding:"6px 10px"}}>×</button>
-      </div>
-
-      <form onSubmit={save} style={{display:"grid",gap:12}}>
-        <div style={{display:"grid",gap:12,gridTemplateColumns:"1fr 1fr"}}>
-          <Field label="Datum"><input type="date" style={input} value={date} onChange={e=>setDate(e.target.value)} /></Field>
-          <Field label="Rabatt gesamt"><input style={input} value={discount} onChange={e=>setDiscount(e.target.value)} inputMode="decimal" placeholder="z. B. 10,00" /></Field>
-        </div>
-
-        <PositionsTable
-          items={items}
-          products={products}
-          onPickProduct={onPickProduct}
-          onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
-          onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
-          onRemove={removeRowLocal}
-          onAdd={addRow}
-        />
-
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div />
-          <div style={{fontWeight:800}}>Gesamt: {fmt(gross)}</div>
-        </div>
-
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-          <button type="button" onClick={onClose} style={btnGhost}>Abbrechen</button>
-          <button type="submit" style={btnPrimary}>Speichern</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
-  return (
-    <div className="table-wrap">
-      <table className="table table-fixed" style={{ minWidth: 760 }}>
-        <thead><tr>
-          <th style={{width:"48%"}}>Produkt</th>
-          <th style={{width:110}}>Menge</th>
-          <th style={{width:170}}>Einzelpreis</th>
-          <th style={{width:150}}>Summe</th>
-          <th style={{width:120,textAlign:"right"}}>Aktion</th>
-        </tr></thead>
-        <tbody>
-          {items.map(r=>{
-            const qty=Number(r.quantity||0);
-            const upCents=toCents(r.unitPrice||0);
-            const sum=qty*upCents + Number(r.extraBaseCents||0);
-            return (
-              <tr key={r.id}>
-                <td>
-                  <div style={{display:"grid",gap:6}}>
-                    <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input, width:"100%"}}>
-                      <option value="">– auswählen –</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {p.kind==="travel" ? "(Fahrtkosten)" : p.kind==="service" ? "(Dienstleistung)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {Number(r.extraBaseCents||0) > 0 && (
-                      <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <input type="number" min={0} step={1} value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} />
-                </td>
-                <td>
-                  {r.kind==="travel" ? (
-                    <input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />
-                  ) : (
-                    <div style={{padding:"10px 0"}}>{fmt(upCents)}</div>
+      {expanded && (
+        <tr>
+          <td colSpan={4} style={{ background: "#fafafa" }}>
+            <div className="table-wrap" style={{ padding: "8px 8px 2px" }}>
+              <table className="table table-fixed" style={{ minWidth: 720 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: "50%" }}>Bezeichnung</th>
+                    <th style={{ width: "10%" }}>Menge</th>
+                    <th style={{ width: "20%" }}>Einzelpreis</th>
+                    <th style={{ width: "20%" }}>Summe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td>
+                    </tr>
                   )}
-                </td>
-                <td>{fmt(sum)}</td>
-                <td style={{textAlign:"right"}}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div style={{marginTop:8}}><button type="button" onClick={onAdd} style={btnGhost}>+ Position</button></div>
-    </div>
+                  {items.map((it, idx) => {
+                    const qty = toInt(it.quantity || 0);
+                    const unit = toInt(it.unitPriceCents || 0);
+                    const line = toInt(it.lineTotalCents || qty * unit);
+                    return (
+                      <tr key={idx}>
+                        <td className="ellipsis">{it.name || "—"}</td>
+                        <td>{qty}</td>
+                        <td>{money(unit, currency)}</td>
+                        <td>{money(line, currency)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
+              Gesamt: {money(row.grossCents, currency)}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
+
+/** Input Style */
+const inp = {
+  width: "100%",
+  display: "block",
+  background: "#fff",
+  border: "1px solid rgba(0,0,0,.12)",
+  borderRadius: 12,
+  padding: "10px 12px",
+  outline: "none",
+  boxShadow: "0 1px 1px rgba(0,0,0,.03) inset",
+};
