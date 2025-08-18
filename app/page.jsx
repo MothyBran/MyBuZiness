@@ -16,21 +16,23 @@ export default function DashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [cs, iv, rc, st] = await Promise.all([
-          fetch("/api/customers", { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/invoices",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/receipts",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: [] })),
-          fetch("/api/settings",  { cache: "no-store" }).then(r => r.json()).catch(() => ({ data: { currencyDefault: "EUR" } })),
-        ]);
-        setCustomers(cs.data || []);
-        setInvoices(iv.data || []);
-        setReceipts(rc.data || []);
-        setCurrencyCode(st?.data?.currencyDefault || "EUR");
+        const res = await fetch("/api/dashboard", { cache: "no-store" });
+        const js = await res.json();
+        if (!js.ok) throw new Error(js.error || "Dashboard-Fehler");
+  
+        // Aus den gelieferten Daten setzen:
+        setTotals(js.data.totals);
+        setCounts(js.data.counts);
+        setRecentReceipts(js.data.recentReceipts || []);
+        setRecentInvoices(js.data.recentInvoices || []);
+      } catch (e) {
+        console.error("Dashboard load error", e);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
 
   const ym = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
   const nowYM = ym(new Date());
