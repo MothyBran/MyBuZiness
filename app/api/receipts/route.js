@@ -78,12 +78,19 @@ export async function POST(request) {
     const items = Array.isArray(body.items) ? body.items : [];
 
     if (items.length === 0) {
-      return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
+      return new Response(JSON.stringify({ ok: false, error: "Mindestens eine Position ist erforderlich." }), { status: 400 });
     }
 
     const id = uuid();
-    const seq = (await q(`SELECT nextval('"ReceiptNumberSeq"') AS n`)).rows[0].n;
-    const receiptNo = String(seq);
+
+    // Hol die letzte Belegnummer aus der Tabelle
+    const last = (await q(`SELECT "receiptNo" FROM "Receipt" ORDER BY "createdAt" DESC LIMIT 1`)).rows[0];
+    let nextNo = 1;
+    if (last && !isNaN(Number(last.receiptNo))) {
+      nextNo = Number(last.receiptNo) + 1;
+    }
+
+    const receiptNo = String(nextNo);
 
     const netCents = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unitPriceCents || 0), 0);
     const netAfterDiscount = Math.max(0, netCents - Number(discountCents || 0));
@@ -99,10 +106,10 @@ export async function POST(request) {
     for (const it of items) {
       await q(
         `INSERT INTO "ReceiptItem" ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
+         VALUES ($1,$2::uuid,$3::uuid,$4,$5,$6,$7,now(),now())`,
         [
           uuid(),
-          id, // Spalte kann text oder uuid sein – Postgres castet text->uuid automatisch, falls nötig
+          id,
           it.productId || null,
           it.name,
           Number(it.quantity || 0),
