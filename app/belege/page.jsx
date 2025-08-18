@@ -2,38 +2,36 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/** Utils */
+/* Utils */
 function money(cents, curr = "EUR") {
   const n = Number(cents || 0) / 100;
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
 }
-const toInt = (v) => Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0;
-const clamp = (n, min = 0) => (Number(n) < min ? min : Number(n));
+const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
 function makeEmptyItem() {
   return { productId: "", name: "", quantity: 1, unitPriceCents: 0, lineTotalCents: 0 };
 }
 
 export default function ReceiptsPage() {
+  /* Listen- & UI-State */
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Settings
+  /* Settings */
   const [currency, setCurrency] = useState("EUR");
-  const [vatExemptDefault, setVatExemptDefault] = useState(true);
+  const [vatExemptDefault, setVatExemptDefault] = useState(true); // §19 aus Einstellungen
 
-  // Modal (Neu/Bearbeiten)
+  /* Modal (Neu/Bearbeiten) */
   const [isOpen, setIsOpen] = useState(false);
-  const [editId, setEditId] = useState(null); // null = neu, sonst ID
-  const [editReceiptNo, setEditReceiptNo] = useState(null); // Anzeige im Edit-Fall
+  const [editId, setEditId] = useState(null);     // null = neu
+  const [receiptNo, setReceiptNo] = useState(""); // editierbar
   const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [discount, setDiscount] = useState("0"); // als Euro-Text
+  const [discount, setDiscount] = useState("0");
   const [items, setItems] = useState([makeEmptyItem()]);
 
-  // Debug (optional)
-  const [debug, setDebug] = useState({ receiptsOk: null, receiptsRaw: null, diagRaw: null });
-
+  /* Laden */
   async function load() {
     setLoading(true);
     try {
@@ -47,13 +45,13 @@ export default function ReceiptsPage() {
       const pr = await prodRes.json().catch(() => ({}));
       const st = await setRes.json().catch(() => ({}));
 
-      // Produkte normalisieren
+      /* Produkte normalisieren */
       setProducts(
         Array.isArray(pr?.data)
           ? pr.data.map((p) => ({
               id: p.id,
               name: p.name || "-",
-              kind: p.kind || "product",            // product | service | travel
+              kind: p.kind || "product",              // product | service | travel
               priceCents: toInt(p.priceCents || 0),
               hourlyRateCents: toInt(p.hourlyRateCents || 0),
               travelBaseCents: toInt(p.travelBaseCents || 0),
@@ -62,63 +60,54 @@ export default function ReceiptsPage() {
           : []
       );
 
-      const cur = st?.data?.currencyDefault || "EUR";
-      const kU = typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true;
-      setCurrency(cur);
-      setVatExemptDefault(kU);
+      setCurrency(st?.data?.currencyDefault || "EUR");
+      setVatExemptDefault(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
 
-      // Primärquelle
-      let useRows = Array.isArray(list?.data) ? list.data : [];
-      const okPrimary = !!(list && list.ok === true);
-
-      // Fallback /api/_diag, wenn leer/nicht ok
-      if ((!okPrimary || useRows.length === 0)) {
-        const diagRes = await fetch("/api/_diag", { cache: "no-store" }).catch(() => null);
-        const diag = diagRes ? await diagRes.json().catch(() => ({})) : {};
-        const diagList = Array.isArray(diag?.latest?.receipts) ? diag.latest.receipts : [];
-        useRows = diagList.map((r) => ({
-          id: r.id,
-          receiptNo: r.receiptNo || "-",
-          date: r.date || null,
-          grossCents: Number(r.grossCents || 0),
-          currency: r.currency || cur || "EUR",
-          items: [],
-        }));
-        setDebug({ receiptsOk: okPrimary, receiptsRaw: list, diagRaw: diag });
-      } else {
-        setDebug({ receiptsOk: okPrimary, receiptsRaw: list, diagRaw: null });
-      }
-
-      setRows(useRows);
+      setRows(Array.isArray(list?.data) ? list.data : []);
     } catch (e) {
       console.error("Receipts load error:", e);
       setRows([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
   }
-
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
+  function toggleExpand(id) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
 
-  /** Modal öffnen (Neu) */
-  function openNew() {
+  /* Nächste Belegnummer holen (optional Backend /api/receipts/nextNo) */
+  async function fetchNextReceiptNo() {
+    try {
+      const res = await fetch("/api/receipts/nextNo", { cache: "no-store" });
+      if (res.ok) {
+        const js = await res.json().catch(() => ({}));
+        if (js?.nextNo) return String(js.nextNo);
+      }
+    } catch {}
+    // Fallback (Zeitstempel), falls Endpoint (noch) nicht existiert
+    return String(Date.now());
+  }
+
+  /* Modal öffnen (Neu) */
+  async function openNew() {
     setEditId(null);
-    setEditReceiptNo(null);
     setFormDate(new Date().toISOString().slice(0, 10));
     setDiscount("0");
     setItems([makeEmptyItem()]);
+    const nextNo = await fetchNextReceiptNo();
+    setReceiptNo(nextNo);
     setIsOpen(true);
   }
 
-  /** Modal öffnen (Bearbeiten) */
+  /* Modal öffnen (Bearbeiten) */
   function openEdit(row) {
     setEditId(row.id);
-    setEditReceiptNo(row.receiptNo || null);
+    setReceiptNo(row.receiptNo || "");
     setFormDate(row.date ? String(row.date).slice(0, 10) : new Date().toISOString().slice(0, 10));
-    // Rabatt ist im GET nicht vorhanden – wenn du ihn speicherst, hier setzen. Sonst 0.
-    setDiscount("0");
+    setDiscount("0"); // falls du Rabatt speicherst, hier setzen
     const its = Array.isArray(row.items) ? row.items : [];
     setItems(
       its.length
@@ -150,14 +139,14 @@ export default function ReceiptsPage() {
       updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
       return;
     }
-    // Einzelpreis aus Produkt ableiten (nicht editierbar)
+    // Einzelpreis automatisch (nicht editierbar)
     let unit = p.priceCents;
     if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
     if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
 
     updateItem(idx, {
       productId: p.id,
-      name: p.name,               // Name direkt vom Produkt, kein Freitext mehr
+      name: p.name,                 // kein Freitext mehr – Name aus Produkt
       unitPriceCents: toInt(unit)
     });
   }
@@ -165,9 +154,9 @@ export default function ReceiptsPage() {
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /** Summen für Modal (Rabatt jetzt unter Positionen) */
+  /* Summen (Rabatt unter Positionen) */
   const calc = useMemo(() => {
-    const netCents = items.reduce((sum, it) => sum + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
+    const netCents = items.reduce((s, it) => s + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
     const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
     const netAfterDiscount = Math.max(0, netCents - discountCents);
     const taxCents = vatExemptDefault ? 0 : Math.round(netAfterDiscount * 0.19);
@@ -175,7 +164,8 @@ export default function ReceiptsPage() {
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
   }, [items, discount, vatExemptDefault]);
 
-  /** Speichern (Neu/Update) */
+  /* Speichern (Neu/Update) – Hinweis: Dein aktuelles Backend ignoriert receiptNo und vergibt selbst.
+     Wenn du die editierte/benutzerdefinierte Nummer speichern willst, musst du /api/receipts (POST/PUT) entsprechend anpassen. */
   async function saveReceipt() {
     try {
       const cleanItems = items
@@ -193,37 +183,32 @@ export default function ReceiptsPage() {
       }
 
       const payload = {
+        receiptNo,                   // wird evtl. vom Backend überschrieben (siehe Hinweis oben)
         date: formDate || null,
-        vatExempt: !!vatExemptDefault,     // aus Einstellungen
+        vatExempt: !!vatExemptDefault,
         currency,
         discountCents: calc.discountCents,
         items: cleanItems,
       };
 
       if (editId) {
-        // Optional: PUT-Endpoint, falls vorhanden
         const res = await fetch(`/api/receipts/${editId}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          alert("Bearbeiten fehlgeschlagen (PUT fehlt evtl. im Backend).");
-          console.warn("PUT /api/receipts/[id] response:", res.status, txt);
+        }).catch(() => null);
+        if (!res || !res.ok) {
+          alert("Aktualisieren fehlgeschlagen (PUT /api/receipts/[id] fehlt evtl.).");
           return;
         }
       } else {
-        // Neu
         const res = await fetch("/api/receipts", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
-        });
-        const js = await res.json().catch(() => ({}));
-        if (!res.ok || !js?.ok) {
-          console.error("POST /api/receipts failed:", js?.error || res.statusText);
-          alert("Speichern fehlgeschlagen. Details in der Konsole.");
+        }).catch(() => null);
+        if (!res || !res.ok) {
+          alert("Speichern fehlgeschlagen.");
           return;
         }
       }
@@ -236,15 +221,13 @@ export default function ReceiptsPage() {
     }
   }
 
-  /** Löschen */
+  /* Löschen */
   async function deleteReceipt(id) {
     if (!confirm("Beleg wirklich löschen?")) return;
     try {
-      const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        alert("Löschen fehlgeschlagen (DELETE fehlt evtl. im Backend).");
-        console.warn("DELETE /api/receipts/[id] response:", res.status, txt);
+      const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" }).catch(() => null);
+      if (!res || !res.ok) {
+        alert("Löschen fehlgeschlagen (DELETE /api/receipts/[id] fehlt evtl.).");
         return;
       }
       if (expandedId === id) setExpandedId(null);
@@ -265,18 +248,6 @@ export default function ReceiptsPage() {
         </div>
       </div>
 
-      {/* Debug – falls leer */}
-      {!loading && rows.length === 0 && (
-        <div className="card" style={{ background: "#fffbe6", borderColor: "#fde68a" }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Debug-Hinweis</div>
-          <div style={{ fontSize: 13, color: "#6b7280" }}>
-            /api/receipts ok: <b>{String(debug.receiptsOk)}</b><br />
-            /api/receipts payload: <code style={{ wordBreak: "break-all" }}>{JSON.stringify(debug.receiptsRaw)}</code><br />
-            /api/_diag fallback: <code style={{ wordBreak: "break-all" }}>{JSON.stringify(debug.diagRaw)}</code>
-          </div>
-        </div>
-      )}
-
       {/* Tabelle */}
       <div className="card">
         <div className="table-wrap">
@@ -289,12 +260,11 @@ export default function ReceiptsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr><td colSpan={3} style={{ color: "#6b7280" }}>Lade…</td></tr>
-              )}
+              {loading && <tr><td colSpan={3} style={{ color: "#6b7280" }}>Lade…</td></tr>}
               {!loading && rows.length === 0 && (
                 <tr><td colSpan={3} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
               )}
+
               {!loading && rows.map((r) => {
                 const d = r.date ? new Date(r.date) : null;
                 const dateStr = d ? d.toLocaleDateString() : "—";
@@ -370,31 +340,32 @@ export default function ReceiptsPage() {
       {/* Modal (Neu/Bearbeiten) */}
       {isOpen && (
         <div
-          role="dialog" aria-modal="true"
+          role="dialog"
+          aria-modal="true"
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50 }}
           onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
         >
           <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <h2 style={{ margin: 0 }}>{editId ? `Beleg #${editReceiptNo || editId.slice(0, 6)} bearbeiten` : "Neuer Beleg"}</h2>
-              <button className="btn-ghost" onClick={() => setIsOpen(false)}>✕ Schließen</button>
+              <h2 style={{ margin: 0 }}>{editId ? "Beleg bearbeiten" : "Neuer Beleg"}</h2>
+              {/* kein X-Button mehr */}
             </div>
 
-            {/* Kopfzeile: Datum + Beleg-Nr. (Anzeige) */}
+            {/* Kopfzeile: Beleg‑Nr. + Datum */}
             <div className="surface" style={{ padding: 12, marginTop: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={lbl}>Datum</label>
-                  <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
-                </div>
                 <div>
                   <label style={lbl}>Beleg‑Nr.</label>
                   <input
                     type="text"
-                    value={editId ? (editReceiptNo || "") : "(automatisch)"}
-                    readOnly
-                    style={{ ...inp, background: "#f5f5f5", color: "#6b7280" }}
+                    value={receiptNo}
+                    onChange={(e) => setReceiptNo(e.target.value)}
+                    style={inp}
                   />
+                </div>
+                <div>
+                  <label style={lbl}>Datum</label>
+                  <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
                 </div>
               </div>
             </div>
@@ -441,7 +412,6 @@ export default function ReceiptsPage() {
                             </select>
                           </td>
                           <td style={{ textAlign: "right", fontWeight: 600 }}>
-                            {/* nur Anzeige, nicht editierbar */}
                             {money(toInt(it.unitPriceCents), currency)}
                           </td>
                           <td style={{ textAlign: "right", fontWeight: 700 }}>
@@ -460,7 +430,7 @@ export default function ReceiptsPage() {
               </div>
             </div>
 
-            {/* Rabatt + Summen */}
+            {/* Rabatt + Summen (Rabatt unter Positionen) */}
             <div className="surface" style={{ padding: 12, marginTop: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
                 <div>
@@ -501,70 +471,7 @@ export default function ReceiptsPage() {
   );
 }
 
-/** Tabellenzeile + Details */
-function RowWithDetails({ row, expanded, onToggle, dateStr, currency }) {
-  const items = Array.isArray(row.items) ? row.items : [];
-  return (
-    <>
-      <tr className="row-clickable" onClick={onToggle}>
-        <td className="ellipsis">#{row.receiptNo || "-"}</td>
-        <td>{dateStr}</td>
-        <td>{money(row.grossCents, currency)}</td>
-      </tr>
-
-      {expanded && (
-        <tr>
-          <td colSpan={3} style={{ background: "#fafafa" }}>
-            {/* Aktionszeile */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "8px" }}>
-              <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("open-edit-receipt", { detail: { row } })); }}>⚙️ Bearbeiten</button>
-              <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("delete-receipt", { detail: { id: row.id } })); }}>❌ Löschen</button>
-            </div>
-
-            {/* Positionsliste */}
-            <div className="table-wrap" style={{ padding: "0 8px 2px" }}>
-              <table className="table table-fixed" style={{ minWidth: 720 }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: "50%" }}>Bezeichnung</th>
-                    <th style={{ width: "10%" }}>Menge</th>
-                    <th style={{ width: "20%" }}>Einzelpreis</th>
-                    <th style={{ width: "20%" }}>Summe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 && (
-                    <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
-                  )}
-                  {items.map((it, idx) => {
-                    const qty = toInt(it.quantity || 0);
-                    const unit = toInt(it.unitPriceCents || 0);
-                    const line = toInt(it.lineTotalCents || qty * unit);
-                    return (
-                      <tr key={idx}>
-                        <td className="ellipsis">{it.name || "—"}</td>
-                        <td>{qty}</td>
-                        <td>{money(unit, currency)}</td>
-                        <td>{money(line, currency)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Gesamtsumme */}
-            <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
-              Gesamt: {money(row.grossCents, currency)}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-/** Styles */
+/* Styles (lokal) */
 const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 };
 const inp = {
   width: "100%", display: "block", background: "#fff",
