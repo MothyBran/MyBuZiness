@@ -19,23 +19,31 @@ export default function ReceiptsPage(){
   const [products,setProducts]=useState([]);
   const [expandedId,setExpandedId]=useState(null);
   const [showNew,setShowNew]=useState(false);
-
+  
   async function load(){
     setLoading(true);
-    const [listRes, prodRes] = await Promise.all([
-      fetch("/api/receipts",{cache:"no-store"}),
-      fetch("/api/products",{cache:"no-store"})
-    ]);
-    const list=await listRes.json().catch(()=>({data:[]}));
-    const pr=await prodRes.json().catch(()=>({data:[]}));
-    setRows(list.data||[]);
-    setProducts((pr.data||[]).map(p=>({
-      id:p.id, name:p.name, kind:p.kind,
-      priceCents:p.priceCents||0,
-      hourlyRateCents:p.hourlyRateCents||0,
-      travelBaseCents:p.travelBaseCents||0,
-      travelPerKmCents:p.travelPerKmCents||0
-    })));
+    try {
+      const [listRes, prodRes] = await Promise.all([
+        fetch("/api/receipts",{cache:"no-store"}),
+        fetch("/api/products",{cache:"no-store"})
+      ]);
+
+      const list = await listRes.json().catch(()=>({}));
+      const pr = await prodRes.json().catch(()=>({}));
+
+      setRows(Array.isArray(list.data) ? list.data : []);   // ✅ robust
+      setProducts(Array.isArray(pr.data) ? pr.data.map(p=>({
+        id:p.id, name:p.name, kind:p.kind,
+        priceCents:p.priceCents||0,
+        hourlyRateCents:p.hourlyRateCents||0,
+        travelBaseCents:p.travelBaseCents||0,
+        travelPerKmCents:p.travelPerKmCents||0
+      })) : []);
+
+    } catch(e){
+      console.error("Fehler beim Laden:", e);
+      setRows([]); setProducts([]);
+    }
     setLoading(false);
   }
   useEffect(()=>{ load(); },[]);
