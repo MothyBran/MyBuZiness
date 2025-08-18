@@ -1,203 +1,127 @@
 // app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
-/**
- * GET /api/receipts?q=...
- * - Gibt Belege inkl. Items zurück (Aggregat als JSON-Array)
- * - Sortiert: Datum DESC, createdAt DESC (falls Spalte vorhanden)
- */
+/** Settings laden (Währung / Kleinunternehmer) */
+async function loadSettings() {
+  const row = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0];
+  return {
+    currency: row?.currency || "EUR",
+    kleinunternehmer: !!row?.kleinunternehmer,
+  };
+}
+
+/** Positionen zu einem Satz Belege nachladen und in JS gruppieren */
+async function attachItems(receipts) {
+  if (!receipts.length) return receipts;
+  const ids = receipts.map(r => r.id);
+  const items = (await q(
+    `SELECT * FROM "ReceiptItem" WHERE "receiptId" = ANY($1::uuid[]) ORDER BY "createdAt" ASC`,
+    [ids]
+  )).rows;
+
+  const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
+  for (const it of items) {
+    const r = byId.get(it.receiptId);
+    if (r) r.items.push(it);
+  }
+  return Array.from(byId.values());
+}
+
 export async function GET(request) {
   try {
     await initDb();
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
-    // Mit Items aggregiert zurückgeben
-    const sql = `
-      SELECT
-        r.*,
-        COALESCE(
-          (
-            SELECT json_agg(
-              json_build_object(
-                'id', ri."id",
-                'productId', ri."productId",
-                'name', ri."name",
-                'quantity', ri."quantity",
-                'unitPriceCents', ri."unitPriceCents",
-                'lineTotalCents', ri."lineTotalCents"
-              ) ORDER BY ri."id"
-            )
-            FROM "ReceiptItem" ri
-            WHERE ri."receiptId" = r."id"
-          ),
-          '[]'::json
-        ) AS items
-      FROM "Receipt" r
-      ${
-        qs
-          ? `WHERE lower(r."receiptNo") LIKE $1 OR lower(COALESCE(r."note", '')) LIKE $1`
-          : ""
-      }
-      ORDER BY r."date" DESC, r."createdAt" DESC
-    `;
+    const receipts = (await q(
+      `SELECT * FROM "Receipt"
+       ${qs ? `WHERE lower("receiptNo") LIKE $1 OR lower(COALESCE("note", '')) LIKE $1` : ""}
+       ORDER BY "date" DESC, "createdAt" DESC`,
+      qs ? [`%${qs}%`] : []
+    )).rows;
 
-    const params = qs ? [`%${qs}%`] : [];
-    const rows = (await q(sql, params)).rows;
-
-    return Response.json({ ok: true, data: rows });
+    const withItems = await attachItems(receipts);
+    return Response.json({ ok: true, data: withItems });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-    });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
-/**
- * POST /api/receipts
- * Body (JSON):
- * {
- *   receiptNo?: string | null     // optional manuell
- *   date?: string (YYYY-MM-DD)
- *   vatExempt?: boolean           // §19 UStG -> true = steuerfrei
- *   currency?: "EUR" | ...
- *   discountCents?: number        // bereits in Cent!
- *   items: Array<{
- *     productId?: string | null
- *     name: string
- *     quantity: number
- *     unitPriceCents: number      // bereits in Cent!
- *   }>
- * }
- */
 export async function POST(request) {
   try {
     await initDb();
     const body = await request.json().catch(() => ({}));
-
-    const {
-      // manuelle Belegnummer erlauben (sonst auto aus Sequenz)
-      receiptNo: providedReceiptNo = null,
-      date,
-      vatExempt = true,
-      currency = "EUR",
-      discountCents = 0,
-    } = body;
-
+    const { date, discountCents = 0 } = body;
     const items = Array.isArray(body.items) ? body.items : [];
     if (items.length === 0) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: "Mindestens eine Position ist erforderlich.",
-        }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ ok: false, error: "Mindestens eine Position ist erforderlich." }), { status: 400 });
     }
 
-    // IDs & Nummern
+    const settings = await loadSettings();
+    const vatExempt = settings.kleinunternehmer; // §19 → steuerfrei
+    const currency = settings.currency;
+
+    // Nummer ziehen
+    const seq = (await q(`SELECT nextval('\"ReceiptNumberSeq\"') AS n`)).rows[0].n;
     const id = uuid();
-    const seq =
-      (await q(`SELECT nextval('\"ReceiptNumberSeq\"') AS n`)).rows?.[0]?.n ??
-      null;
-    const receiptNo =
-      (providedReceiptNo && String(providedReceiptNo)) ||
-      (seq !== null ? String(seq) : uuid().slice(0, 8));
+    const receiptNo = String(seq);
 
-    // Beträge (in Cent) — KEINE Multiplikation hier!
-    const itemsSafe = items.map((it) => ({
-      productId: it.productId || null,
-      name: String(it.name || "").trim(),
-      quantity: Number(it.quantity || 0),
-      unitPriceCents: Number(it.unitPriceCents || 0),
-    }));
+    // Zeilensummen inkl. extraBaseCents
+    let netCents = 0;
+    const normalizedItems = items.map(it => {
+      const qty = Number(it.quantity || 0);
+      const unit = Number(it.unitPriceCents || 0);
+      const extra = Number(it.extraBaseCents || 0);
+      const lineTotalCents = qty * unit + extra;
+      netCents += lineTotalCents;
+      return {
+        id: uuid(),
+        receiptId: id,
+        productId: it.productId || null,
+        name: String(it.name || "").trim(),
+        quantity: qty,
+        unitPriceCents: unit,
+        extraBaseCents: extra,
+        lineTotalCents,
+      };
+    });
 
-    const netCents = itemsSafe.reduce(
-      (s, it) => s + it.quantity * it.unitPriceCents,
-      0
-    );
-    const discount = Number(discountCents || 0); // schon Cent
-    const netAfterDiscount = Math.max(0, netCents - discount);
-    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19);
+    // Rabatt abziehen (auf Gesamtnetto)
+    const netAfterDiscount = Math.max(0, netCents - Number(discountCents || 0));
+    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19); // 19% falls NICHT §19
     const grossCents = netAfterDiscount + taxCents;
 
-    // Beleg speichern
+    // Insert Receipt
     await q(
-      `
-      INSERT INTO "Receipt"
-      ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents")
-      VALUES ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7,$8,$9)
-    `,
-      [
-        id,
-        receiptNo,
-        date || null,
-        !!vatExempt,
-        currency,
-        netAfterDiscount, // netto nach Rabatt (vor Steuer)
-        taxCents,
-        grossCents,
-        discount,
-      ]
+      `INSERT INTO "Receipt" (
+        "id","receiptNo","date","vatExempt","currency",
+        "netCents","taxCents","grossCents","discountCents","createdAt","updatedAt"
+      ) VALUES (
+        $1,$2,COALESCE($3, CURRENT_DATE),$4,$5,
+        $6,$7,$8,$9, now(), now()
+      )`,
+      [id, receiptNo, date || null, vatExempt, currency, netAfterDiscount, taxCents, grossCents, Number(discountCents || 0)]
     );
 
-    // Positionen speichern
-    for (const it of itemsSafe) {
+    // Insert Items
+    for (const it of normalizedItems) {
       await q(
-        `
-        INSERT INTO "ReceiptItem"
-        ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents")
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `,
+        `INSERT INTO "ReceiptItem" (
+          "id","receiptId","productId","name","quantity",
+          "unitPriceCents","extraBaseCents","lineTotalCents","createdAt","updatedAt"
+        ) VALUES (
+          $1,$2,$3,$4,$5,
+          $6,$7,$8, now(), now()
+        )`,
         [
-          uuid(),
-          id,
-          it.productId,
-          it.name,
-          it.quantity,
-          it.unitPriceCents,
-          it.quantity * it.unitPriceCents,
+          it.id, it.receiptId, it.productId, it.name, it.quantity,
+          it.unitPriceCents, it.extraBaseCents, it.lineTotalCents
         ]
       );
     }
 
-    // Vollständiges Objekt inkl. Items zurückgeben
-    const created = (
-      await q(
-        `
-        SELECT
-          r.*,
-          COALESCE(
-            (
-              SELECT json_agg(
-                json_build_object(
-                  'id', ri."id",
-                  'productId', ri."productId",
-                  'name', ri."name",
-                  'quantity', ri."quantity",
-                  'unitPriceCents', ri."unitPriceCents",
-                  'lineTotalCents', ri."lineTotalCents"
-                ) ORDER BY ri."id"
-              )
-              FROM "ReceiptItem" ri
-              WHERE ri."receiptId" = r."id"
-            ),
-            '[]'::json
-          ) AS items
-        FROM "Receipt" r
-        WHERE r."id" = $1
-      `,
-        [id]
-      )
-    ).rows?.[0];
-
-    return Response.json(
-      { ok: true, data: created || { id, receiptNo } },
-      { status: 201 }
-    );
+    return Response.json({ ok: true, data: { id, receiptNo } }, { status: 201 });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 400,
-    });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
