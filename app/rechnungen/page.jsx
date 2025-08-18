@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 function toCents(input){ if(input==null) return 0; if(typeof input==="number") return Math.round(input*100); let s=String(input).trim(); if(/^\d+$/.test(s)) return parseInt(s,10)*100; s=s.replace(/[^\d.,]/g,""); if(s.includes(",")&&s.includes(".")){const lc=s.lastIndexOf(","), ld=s.lastIndexOf("."); const dec=lc>ld?",":"."; const thou=dec===","?".":","; s=s.replace(new RegExp("\\"+thou,"g"),""); s=s.replace(dec,".");} else if(s.includes(",")&&!s.includes(".")){ s=s.replace(",","."); } const n=Number.parseFloat(s); return Number.isFinite(n)?Math.round(n*100):0; }
-function fromCents(c){ const n = Number(c||0)/100; return n.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmt(c, code="EUR"){ return new Intl.NumberFormat("de-DE",{style:"currency",currency:code}).format((Number(c||0)/100)); }
 function Field({ label, children }){ return <label style={{display:"grid",gap:4}}><span style={{fontSize:12,color:"#6b7280"}}>{label}</span>{children}</label>; }
 const input={ padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
@@ -29,11 +28,7 @@ export default function InvoicesPage(){
     const pr=await prodRes.json().catch(()=>({data:[]}));
     const cs=await custRes.json().catch(()=>({data:[]}));
     setRows(list.data||[]);
-    setProducts((pr.data||[]).map(p=>({
-      id:p.id, name:p.name, kind:p.kind,
-      priceCents:p.priceCents||0, hourlyRateCents:p.hourlyRateCents||0,
-      travelBaseCents:p.travelBaseCents||0, travelPerKmCents:p.travelPerKmCents||0
-    })));
+    setProducts((pr.data||[]).map(p=>({ id:p.id, name:p.name, kind:p.kind, priceCents:p.priceCents||0, hourlyRateCents:p.hourlyRateCents||0, travelBaseCents:p.travelBaseCents||0, travelPerKmCents:p.travelPerKmCents||0 })));
     setCustomers(cs.data||[]);
     setLoading(false);
   }
@@ -50,14 +45,14 @@ export default function InvoicesPage(){
 
       <div style={{...card,marginTop:12}}>
         <div className="table-wrap">
-          <table className="table table-fixed">
-            <thead><tr><th style={{width:"18%"}}>Nr.</th><th style={{width:"37%"}}>Kunde</th><th className="hide-sm" style={{width:"20%"}}>Datum</th><th style={{width:"25%"}}>Betrag</th></tr></thead>
+          <table className="table">
+            <thead><tr><th>Nr.</th><th>Kunde</th><th className="hide-sm">Datum</th><th>Betrag</th></tr></thead>
             <tbody>
               {rows.map(r=>{
                 const d=r.issueDate? new Date(r.issueDate):null;
                 return (
                   <>
-                    <tr key={r.id} className="row-clickable" onClick={()=>toggleExpand(r.id)}>
+                    <tr key={r.id} className="row-clickable" style={{cursor:"pointer"}} onClick={()=>toggleExpand(r.id)}>
                       <td>{r.invoiceNo}</td>
                       <td className="ellipsis">{r.customerName||"—"}</td>
                       <td className="hide-sm">{d? d.toLocaleDateString():"—"}</td>
@@ -67,6 +62,7 @@ export default function InvoicesPage(){
                       <tr key={r.id+"-d"}><td colSpan={4} style={{background:"#fafafa",padding:12,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
                         <InvoiceDetails row={r} />
                         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+                          {/* Bearbeiten könnte hier ergänzt werden */}
                           <button className="btn-ghost" style={btnDanger} onClick={(e)=>{ e.stopPropagation(); removeRow(r.id); }}>❌ Löschen</button>
                         </div>
                       </td></tr>
@@ -81,16 +77,6 @@ export default function InvoicesPage(){
       </div>
 
       {showNew && <NewInvoiceSheet products={products} customers={customers} onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
-
-      <style jsx global>{`
-        .table-wrap{overflow-x:auto}
-        .table{width:100%; border-collapse:collapse}
-        .table th,.table td{border-bottom:1px solid #eee; padding:10px; vertical-align:middle}
-        .table-fixed{table-layout:fixed}
-        .row-clickable{cursor:pointer}
-        .ellipsis{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-        @media (max-width: 760px){ .hide-sm{display:none} }
-      `}</style>
     </main>
   );
 }
@@ -104,8 +90,8 @@ function InvoiceDetails({ row }){
   return (
     <div style={{display:"grid",gap:12}}>
       <div className="table-wrap">
-        <table className="table table-fixed" style={{minWidth:760}}>
-          <thead><tr><th style={{width:"45%"}}>Bezeichnung</th><th style={{width:110}}>Menge</th><th style={{width:170}}>Einzelpreis</th><th style={{width:160}}>Summe</th></tr></thead>
+        <table className="table">
+          <thead><tr><th>Bezeichnung</th><th style={{width:110}}>Menge</th><th style={{width:160}}>Einzelpreis</th><th style={{width:160}}>Summe</th></tr></thead>
           <tbody>
             {items.map((it,idx)=>{
               const sum = Number(it.quantity||0)*Number(it.unitPriceCents||0) + Number(it.extraBaseCents||0);
@@ -132,51 +118,32 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
   const [dueDate,setDueDate]=useState("");
   const [customerId,setCustomerId]=useState("");
   const [taxRate,setTaxRate]=useState(19);
-  const [items,setItems]=useState([
-    { id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }
-  ]);
+  const [items,setItems]=useState([{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]);
 
   const net = useMemo(()=> items.reduce((s,it)=> s + (toCents(it.unitPrice||0)*Number(it.quantity||0) + Number(it.extraBaseCents||0)), 0), [items]);
   const tax = Math.round(net * (Number(taxRate||0)/100));
   const gross = net + tax;
 
-  function addRow(){ setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", kind:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]); }
+  function addRow(){ setItems(prev=>[...prev,{ id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()), productId:"", name:"", quantity:1, unitPrice:"", extraBaseCents:0 }]); }
   function updateRow(id,patch){ setItems(prev=>prev.map(r=>r.id===id? {...r,...patch}:r)); }
   function removeRowLocal(id){ setItems(prev=>prev.filter(r=>r.id!==id)); }
 
   function onPickProduct(rowId, productId){
     const p=products.find(x=>x.id===productId);
-    if(!p) return updateRow(rowId,{ productId:"", kind:"", name:"", unitPrice:"", extraBaseCents:0 });
-
+    if(!p) return updateRow(rowId,{ productId:"", name:"", unitPrice:"", extraBaseCents:0 });
     if(p.kind==="product"){
-      updateRow(rowId,{ productId, kind:p.kind, name:p.name, unitPrice: fromCents(p.priceCents), extraBaseCents:0 });
+      updateRow(rowId,{ productId, name:p.name, unitPrice:(p.priceCents/100).toFixed(2), extraBaseCents:0 });
     } else if(p.kind==="service"){
-      if (p.hourlyRateCents > 0) {
-        updateRow(rowId,{
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.hourlyRateCents),
-          extraBaseCents: p.priceCents || 0
-        });
-      } else {
-        updateRow(rowId,{
-          productId, kind:p.kind, name:p.name,
-          unitPrice: fromCents(p.priceCents),
-          extraBaseCents: 0
-        });
-      }
+      const perUnit = p.hourlyRateCents || p.priceCents;
+      updateRow(rowId,{ productId, name:p.name, unitPrice:(perUnit/100).toFixed(2), extraBaseCents:p.priceCents||0 });
     } else if(p.kind==="travel"){
-      updateRow(rowId,{
-        productId, kind:p.kind, name:p.name,
-        unitPrice: fromCents(p.travelPerKmCents),
-        extraBaseCents: p.travelBaseCents || 0
-      });
+      updateRow(rowId,{ productId, name:p.name, unitPrice:(p.travelPerKmCents/100).toFixed(2), extraBaseCents:p.travelBaseCents||0 });
     }
   }
 
   async function save(e){
     e.preventDefault();
     if(!customerId) return alert("Bitte Kunde wählen.");
-    if(items.length===0) return alert("Mindestens eine Position ist erforderlich.");
     const payload = {
       customerId, issueDate, dueDate: dueDate || null, taxRate: Number(taxRate||0),
       items: items.map(it=>({
@@ -206,18 +173,15 @@ function NewInvoiceSheet({ products, customers, onClose, onSaved }){
           <Field label="Fällig am"><input type="date" style={input} value={dueDate} onChange={e=>setDueDate(e.target.value)} /></Field>
           <Field label="Kunde *"><CustomerPicker value={customerId} onChange={setCustomerId} /></Field>
         </div>
-        <div>
-          <Field label="Steuersatz (%)">
-            <input style={input} value={taxRate} onChange={e=>setTaxRate(e.target.value)} inputMode="decimal" />
-          </Field>
+        <div style={{display:"grid",gap:12,gridTemplateColumns:"1fr"}}>
+          <Field label="Steuersatz (%)"><input style={input} value={taxRate} onChange={e=>setTaxRate(e.target.value)} inputMode="decimal" /></Field>
         </div>
 
         <PositionsTable
           items={items}
           products={products}
           onPickProduct={onPickProduct}
-          onQty={(id,v)=>updateRow(id,{ quantity: Math.max(0, Number(v)) })}
-          onChangeUnit={(id,v)=>updateRow(id,{ unitPrice: v })}
+          onQty={(id,v)=>updateRow(id,{ quantity: parseInt(v||"1",10) })}
           onRemove={removeRowLocal}
           onAdd={addRow}
         />
@@ -248,18 +212,13 @@ function CustomerPicker({ value, onChange }){
   );
 }
 
-function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, onRemove, onAdd }){
+function PositionsTable({ items, products, onPickProduct, onQty, onRemove, onAdd }){
   return (
-    <div className="table-wrap">
-      <table className="table table-fixed" style={{ minWidth: 760 }}>
-        <thead><tr>
-          <th style={{width:"48%"}}>Produkt</th>
-          <th style={{width:110}}>Menge</th>
-          <th style={{width:170}}>Einzelpreis</th>
-          <th style={{width:150}}>Summe</th>
-          <th style={{width:120,textAlign:"right"}}>Aktion</th>
-        </tr></thead>
+    <div className="table-wrap" style={{ overflowX:"auto" }}>
+      <table className="table pos-table" style={{ minWidth: 720 }}>
+        <thead><tr><th>Produkt</th><th style={{width:96}}>Menge</th><th style={{width:160}}>Einzelpreis</th><th style={{width:160}}>Summe</th><th style={{width:120,textAlign:"right"}}>Aktion</th></tr></thead>
         <tbody>
+          {products.length===0 && <tr><td colSpan={5} style={{textAlign:"center",color:"#777"}}>Keine Produkte. Lege zuerst unter <a href="/produkte">/produkte</a> an.</td></tr>}
           {items.map(r=>{
             const qty=Number(r.quantity||0);
             const upCents=toCents(r.unitPrice||0);
@@ -267,30 +226,16 @@ function PositionsTable({ items, products, onPickProduct, onQty, onChangeUnit, o
             return (
               <tr key={r.id}>
                 <td>
-                  <div style={{display:"grid",gap:6}}>
-                    <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input, width:"100%"}}>
-                      <option value="">– auswählen –</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {p.kind==="travel" ? "(Fahrtkosten)" : p.kind==="service" ? "(Dienstleistung)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {Number(r.extraBaseCents||0) > 0 && (
-                      <div style={{ fontSize:12, color:"#6b7280" }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <input type="number" min={0} step={1} value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} />
-                </td>
-                <td>
-                  {r.kind==="travel" ? (
-                    <input inputMode="decimal" value={r.unitPrice} onChange={e=>onChangeUnit(r.id, e.target.value)} onBlur={e=>onChangeUnit(r.id, fromCents(toCents(e.target.value)))} style={input} />
-                  ) : (
-                    <div style={{padding:"10px 0"}}>{fmt(upCents)}</div>
+                  <select value={r.productId} onChange={e=>onPickProduct(r.id, e.target.value)} style={{...input,minWidth:220}}>
+                    <option value="">– auswählen –</option>
+                    {products.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  {Number(r.extraBaseCents||0) > 0 && (
+                    <div style={{ fontSize:12, color:"#6b7280", marginTop:6 }}>inkl. Grundpreis: {fmt(r.extraBaseCents)}</div>
                   )}
                 </td>
+                <td><input value={r.quantity} onChange={e=>onQty(r.id, e.target.value)} style={input} inputMode="numeric" /></td>
+                <td>{fmt(upCents)}</td>
                 <td>{fmt(sum)}</td>
                 <td style={{textAlign:"right"}}><button type="button" onClick={()=>onRemove(r.id)} style={btnDanger}>Entfernen</button></td>
               </tr>
