@@ -7,10 +7,9 @@ export default function DashboardPage() {
   const [counts, setCounts] = useState({ customers: 0, products: 0, invoices: 0, receipts: 0 });
   const [recentReceipts, setRecentReceipts] = useState([]);
   const [recentInvoices, setRecentInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // Currency kommt aus Settings in /api/dashboard
   const [currency, setCurrency] = useState("EUR");
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -23,11 +22,8 @@ export default function DashboardPage() {
         setCounts(js.data.counts || {});
         setRecentReceipts(js.data.recentReceipts || []);
         setRecentInvoices(js.data.recentInvoices || []);
-
-        // falls Settings im Backend ergänzt wurden
-        if (js.data.settings?.currencyDefault) {
-          setCurrency(js.data.settings.currencyDefault);
-        }
+        setCurrency(js.data.settings?.currencyDefault || "EUR");
+        setSettings(js.data.settings || null);
       } catch (e) {
         console.error("Dashboard error:", e);
       } finally {
@@ -42,6 +38,22 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 space-y-6">
+      {/* CSS Variablen global setzen */}
+      {settings && (
+        <style>{`
+          :root {
+            --color-primary: ${settings.primaryColor || "#0aa"};
+            --color-secondary: ${settings.secondaryColor || "#0f766e"};
+            --font-family: ${settings.fontFamily || "Inter, sans-serif"};
+            --font-color: ${settings.fontColor || "#111111"};
+          }
+          body {
+            font-family: var(--font-family);
+            color: var(--font-color);
+          }
+        `}</style>
+      )}
+
       {/* Umsätze */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard title="Heute" value={totals.today} currency={currency} />
