@@ -1,5 +1,6 @@
 // app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { renderNumber, nextDigitSequence } from "@/lib/numbering";
 
 /** Integer-Helfer */
 const toInt = (v) => {
@@ -22,13 +23,13 @@ export async function GET(request) {
     const receipts = (await q(
       `SELECT
          "id",
-         COALESCE("receiptNo",'')                 AS "receiptNo",
+         COALESCE("receiptNo", '')                 AS "receiptNo",
          "date",
-         COALESCE("netCents",0)::bigint          AS "netCents",
-         COALESCE("taxCents",0)::bigint          AS "taxCents",
-         COALESCE("grossCents",0)::bigint        AS "grossCents",
-         COALESCE("discountCents",0)::bigint     AS "discountCents",
-         COALESCE("currency",'EUR')              AS "currency",
+         COALESCE("netCents", 0)::bigint           AS "netCents",
+         COALESCE("taxCents", 0)::bigint           AS "taxCents",
+         COALESCE("grossCents", 0)::bigint         AS "grossCents",
+         COALESCE("discountCents", 0)::bigint      AS "discountCents",
+         COALESCE("currency", 'EUR')               AS "currency",
          "createdAt","updatedAt"
        FROM "Receipt"
        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
@@ -43,18 +44,17 @@ export async function GET(request) {
       });
     }
 
-    // Positionen holen (text-basierte Joins gegen ID)
+    // Positionen laden (IDs als TEXT behandeln)
     const ids = receipts.map(r => String(r.id));
     const items = (await q(
       `SELECT
-         "id",
-         "receiptId",
-         COALESCE("productId", NULL)              AS "productId",
-         COALESCE("name",'')                      AS "name",
-         COALESCE("quantity",0)                   AS "quantity",
-         COALESCE("unitPriceCents",0)::bigint     AS "unitPriceCents",
-         COALESCE("lineTotalCents",0)::bigint     AS "lineTotalCents",
-         COALESCE("createdAt", now())             AS "createdAt"
+         "id","receiptId",
+         COALESCE("productId", NULL)               AS "productId",
+         COALESCE("name", '')                      AS "name",
+         COALESCE("quantity", 0)                   AS "quantity",
+         COALESCE("unitPriceCents", 0)::bigint     AS "unitPriceCents",
+         COALESCE("lineTotalCents", 0)::bigint     AS "lineTotalCents",
+         COALESCE("createdAt", now())              AS "createdAt"
        FROM "ReceiptItem"
        WHERE "receiptId"::text = ANY($1::text[])
        ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
@@ -88,28 +88,26 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
     }
 
-    // Settings: §19/USt + Währung
+    // Settings laden (KU, Währung, Format)
     const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const currency = body.currency || settings.currency || "EUR";
+    const format = settings.receiptNumberFormat || "{YYYY}.{SEQ4}";
 
-    // Belegnummer: manuell oder automatisch (höchste Ziffernfolge +1)
+    // Belegnummer: manuell oder über Format + Sequence
     let receiptNo = (body.receiptNo || "").trim();
     if (!receiptNo) {
-      const row = (await q(
-        `SELECT COALESCE(MAX(NULLIF(regexp_replace("receiptNo",'\\D','','g'), '')::bigint),0)::bigint AS last
-         FROM "Receipt"`
-      )).rows[0];
-      receiptNo = String(Number(row?.last || 0) + 1);
+      const seq = await nextDigitSequence(q, `"Receipt"`, `"receiptNo"`);
+      receiptNo = renderNumber(format, seq, body.date ? new Date(body.date) : new Date());
     }
 
     const id = uuid();
 
-    // Produkte für Grundpreis/Einheit holen
+    // Produkte (für Grundpreise) holen
     const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
     let prodMap = new Map();
     if (prodIds.length) {
-      const pr = (await q(
+      const rows = (await q(
         `SELECT "id"::text AS id,
                 COALESCE("name",'') AS name,
                 COALESCE("kind",'product') AS kind,
@@ -121,16 +119,16 @@ export async function POST(request) {
           WHERE "id"::text = ANY($1::text[])`,
         [prodIds]
       )).rows;
-      prodMap = new Map(pr.map(p => [p.id, p]));
+      prodMap = new Map(rows.map(p => [p.id, p]));
     }
 
-    // Preislogik & Summen (inkl. Grundpreis)
+    // Items + Summen
     const prepared = [];
     let net = 0;
 
     for (const raw of items) {
       const qty  = toInt(raw.quantity || 0);
-      let unit   = toInt(raw.unitPriceCents || 0); // Fallback
+      let unit   = toInt(raw.unitPriceCents || 0);
       let base   = 0;
       let name   = (raw.name || "").trim();
       const pid  = raw.productId || null;
@@ -151,21 +149,22 @@ export async function POST(request) {
         }
       }
 
-      const lineTotal = base + qty * unit;
-      net += lineTotal;
+      const line = base + qty * unit;
+      net += line;
 
       prepared.push({
         productId: pid,
         name: name || "Position",
         quantity: qty,
         unitPriceCents: unit,
-        lineTotalCents: lineTotal
+        lineTotalCents: line
       });
     }
 
     const discountCents = toInt(body.discountCents || 0);
     const netAfterDiscount = Math.max(0, net - discountCents);
-    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * (Number(settings.taxRateDefault ?? 19) / 100));
+    const taxRate = vatExempt ? 0 : Number(settings.taxRateDefault ?? 19);
+    const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
     const grossCents = netAfterDiscount + taxCents;
 
     await q(
