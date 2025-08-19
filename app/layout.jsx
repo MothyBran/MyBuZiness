@@ -1,44 +1,38 @@
 import "./globals.css";
-import HeaderTop from "./components/HeaderTop";
-import AppThemeClient from "@/components/AppThemeClient";
+import HeaderTop from "@/components/HeaderTop";
+import InfoStripe from "@/components/InfoStripe";
+import FooterStripe from "@/components/FooterStripe";
+import ThemeBridge from "@/components/ThemeBridge";
 
 export const metadata = {
-  title: "BuZiness",
-  description: "Schnell erfassen, sicher verwalten.",
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
-  },
+  title: "BuZiness – Schnell erfassen, sicher verwalten.",
+  description: "Leichtgewichtiges WebApp-Tool für Kleingewerbe",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
-      <body style={{ overflowX: "hidden", width: "100%", maxWidth: "100%" }}>
-        {/* Obere Kopfzeile bleibt unverändert */}
+      <body>
+        {/* Globale Theme-Kopplung */}
+        <ThemeBridge />
+
+        {/* Top-Header der App (deine bestehende Komponente) */}
         <HeaderTop />
-        {/* Farbstreifen darunter (Text ein/aus je nach Position) */}
-        <AppThemeClient position="top" showText={true} />
 
-        {/* Seiten-Container */}
-        <main className="container" style={{ width: "100%", maxWidth: "100%" }}>
+        {/* Info-Streifen (Farbleiste + Firmeninfos) */}
+        <InfoStripe />
+
+        {/* Haupt-Container */}
+        <div className="container">
           {children}
-        </main>
+        </div>
 
-        {/* Unterer Farbstreifen ohne Text */}
-        <AppThemeClient position="bottom" showText={false} />
+        {/* Farbstreifen über der Fußzeile */}
+        <FooterStripe />
 
-        {/* Footer */}
-        <footer
-          className="container"
-          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--muted)", fontSize: 13 }}
-        >
-          <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 14 }}>
-            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte vorbehalten.
-            <br />
-            Kleinunternehmerregelung gem. § 19 UStG: Es erfolgt kein Ausweis der Umsatzsteuer.
-          </div>
+        {/* Fußzeile (falls vorhanden – hier sehr schlicht) */}
+        <footer style={{ padding: "24px 16px", textAlign: "center", color: "var(--color-text,#0f172a)" }}>
+          <small>© {new Date().getFullYear()} BuZiness – Schnell erfassen, sicher verwalten.</small>
         </footer>
       </body>
     </html>
