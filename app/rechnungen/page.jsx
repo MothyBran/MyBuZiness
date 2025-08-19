@@ -39,6 +39,7 @@ const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 
 const btn = { padding: "10px 12px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" };
 const btnGhost = { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" };
 const btnDanger = { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" };
+const card = { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 16 };
 
 /* ───────────────────────────── Page ───────────────────────────── */
 export default function InvoicesPage() {
@@ -46,10 +47,10 @@ export default function InvoicesPage() {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [currency, setCurrency] = useState("EUR");
+  const [vatExempt, setVatExempt] = useState(true); // §19 aus Einstellungen (true => 0% USt)
 
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [isOpen, setIsOpen] = useState(false);
 
   async function load() {
@@ -82,15 +83,14 @@ export default function InvoicesPage() {
       );
       setCustomers(Array.isArray(cs?.data) ? cs.data : []);
       setCurrency(st?.data?.currencyDefault || "EUR");
+      setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
     } finally {
       setLoading(false);
     }
   }
   useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
 
   async function deleteInvoice(id) {
     if (!confirm("Rechnung wirklich löschen?")) return;
@@ -167,7 +167,7 @@ export default function InvoicesPage() {
                                 {Array.isArray(r.items) && r.items.map((it, idx) => {
                                   const qty = toInt(it.quantity || 0);
                                   const unit = toInt(it.unitPriceCents || 0);
-                                  const base = toInt(it.extraBaseCents || 0); // kommt aus API GET vorbereitet
+                                  const base = toInt(it.extraBaseCents || 0); // aus API GET vorbereitet
                                   const line = base + qty * unit;
                                   return (
                                     <tr key={idx}>
@@ -203,6 +203,7 @@ export default function InvoicesPage() {
           customers={customers}
           products={products}
           currency={currency}
+          vatExempt={vatExempt}
           onClose={() => setIsOpen(false)}
           onSaved={() => { setIsOpen(false); load(); }}
         />
@@ -223,12 +224,14 @@ export default function InvoicesPage() {
 }
 
 /* ───────────────────────────── NewInvoiceModal ───────────────────────────── */
-function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
+function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, onSaved }) {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [taxRate, setTaxRate] = useState(19);
+
+  // Rabatt (wie bei Belegen; vor Steuer)
+  const [discount, setDiscount] = useState("0");
 
   // Positions-Zeile
   function makeRow() {
@@ -238,14 +241,14 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
       name: "",
       kind: "product",
       quantity: 1,
-      unitPriceCents: 0,  // als Cents gespeichert
-      baseCents: 0,       // Grundpreis (nur UI)
-      unitDisplay: "0,00" // String für Eingabeanzeige (nur travel)
+      unitPriceCents: 0,  // in Cents (fix außer travel)
+      baseCents: 0,       // Grundpreis (nur UI/Summen)
+      unitDisplay: "0,00" // String-Eingabe nur für travel
     };
   }
   const [items, setItems] = useState([makeRow()]);
 
-  // nächste Rechnungsnummer vorab holen (optional)
+  // nächste Rechnungsnummer vorab holen (optional Endpoint)
   useEffect(() => {
     (async () => {
       try {
@@ -298,14 +301,18 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
   }
   function lineSum(row) {
     return toInt(row.baseCents || 0) + toInt(row.quantity || 0) * toInt(row.unitPriceCents || 0);
-    }
+  }
 
+  // Summen inkl. Rabatt & USt (USt gemäß Einstellungen)
   const totals = useMemo(() => {
     const net = items.reduce((s, r) => s + lineSum(r), 0);
-    const tax = Math.round(net * (Number(taxRate || 0) / 100));
-    const gross = net + tax;
-    return { net, tax, gross };
-  }, [items, taxRate]);
+    const discountCents = Math.max(0, toCents(discount || "0"));
+    const netAfterDiscount = Math.max(0, net - discountCents);
+    const taxRate = vatExempt ? 0 : 19;
+    const tax = Math.round(netAfterDiscount * (taxRate / 100));
+    const gross = netAfterDiscount + tax;
+    return { net, discountCents, netAfterDiscount, taxRate, tax, gross };
+  }, [items, discount, vatExempt]);
 
   async function save(e) {
     e.preventDefault();
@@ -317,7 +324,8 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
       customerId,
       issueDate,
       dueDate: dueDate || null,
-      taxRate: Number(taxRate || 0),
+      taxRate: totals.taxRate,           // aus Einstellungen (0% bei §19, sonst 19)
+      discountCents: totals.discountCents, // wird vom Server aktuell evtl. ignoriert – kann ich dir in der Route aktivieren
       items: items.map((r) => ({
         productId: r.productId || null,
         name: r.name || "Position",
@@ -348,10 +356,10 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <div className="surface" style={{ width: "min(980px,100%)", marginTop: 24 }}>
+      <div className="surface" style={{ width: "min(980px,100%)", marginTop: 24 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <h2 style={{ margin: 0 }}>Neue Rechnung</h2>
-          {/* X bewusst weggelassen, Schließen via Klick auf Overlay & Abbrechen */}
+          {/* kein X: schließen via Overlay oder Abbrechen */}
         </div>
 
         {/* Kopf */}
@@ -370,17 +378,10 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={input} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 12 }}>
             <div>
               <label style={lbl}>Kunde *</label>
-              <select style={input} value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
-                <option value="">— wählen —</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={lbl}>Steuersatz (%)</label>
-              <input inputMode="decimal" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} style={input} />
+              <CustomerPicker value={customerId} onChange={setCustomerId} />
             </div>
           </div>
         </div>
@@ -418,7 +419,7 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
                         )}
                       </td>
                       <td>
-                        <select value={String(r.quantity ?? 1)} onChange={(e) => patchRow(r.id, { quantity: toInt(e.target.value) })} style={input}>
+                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={input}>
                           {Array.from({ length: 20 }).map((_, i) => {
                             const v = i + 1;
                             return <option key={v} value={v}>{v}</option>;
@@ -438,7 +439,9 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
                           money(r.unitPriceCents, currency)
                         )}
                       </td>
-                      <td style={{ textAlign: "right", fontWeight: 700 }}>{money(sum, currency)}</td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>
+                        {money(sum, currency)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -447,18 +450,36 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button className="btn-ghost" style={btnGhost} onClick={addRow}>+ Position</button>
-            <button className="btn-ghost" style={btnGhost} onClick={() => removeRow(items[items.length - 1]?.id)} disabled={items.length <= 1}>– Entfernen</button>
+            <button className="btn-ghost" style={btnGhost} onClick={() => setItems((p) => [...p, makeRow()])}>+ Position</button>
+            <button className="btn-ghost" style={btnGhost} onClick={() => setItems((p) => (p.length <= 1 ? p : p.slice(0, -1)))} disabled={items.length <= 1}>– Entfernen</button>
           </div>
         </div>
 
-        {/* Summen */}
+        {/* Rabatt + Summen (inkl. Grundpreis, Rabatt, USt gemäß Einstellungen) */}
         <div className="surface" style={{ padding: 12, marginTop: 16 }}>
-          <div style={{ textAlign: "right" }}>
-            <div>Netto: <strong>{money(totals.net, currency)}</strong></div>
-            <div>USt: <strong>{money(totals.tax, currency)}</strong></div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
-              Gesamt: {money(totals.gross, currency)}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
+            <div>
+              <label style={lbl}>Rabatt gesamt (€, optional)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                style={input}
+              />
+              <div className="subtle" style={{ marginTop: 6 }}>
+                Rabatt wird vor Steuer abgezogen. USt {vatExempt ? "(befreit §19)" : "19%"}.
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div>Zwischensumme: <strong>{money(totals.net, currency)}</strong></div>
+              <div>Rabatt: <strong>- {money(totals.discountCents, currency)}</strong></div>
+              <div>Netto: <strong>{money(totals.netAfterDiscount, currency)}</strong></div>
+              <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(totals.tax, currency)}</strong></div>
+              <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
+                Gesamt: {money(totals.gross, currency)}
+              </div>
             </div>
           </div>
         </div>
@@ -470,5 +491,19 @@ function NewInvoiceModal({ customers, products, currency, onClose, onSaved }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomerPicker({ value, onChange }) {
+  const [opts, setOpts] = useState([]);
+  useEffect(() => { (async () => {
+    const js = await fetch("/api/customers").then(r => r.json()).catch(() => ({ data: [] }));
+    setOpts(js.data || []);
+  })(); }, []);
+  return (
+    <select style={input} value={value} onChange={(e) => onChange(e.target.value)} required>
+      <option value="">– wählen –</option>
+      {opts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
   );
 }
