@@ -12,7 +12,7 @@ function Field({ label, children, hint }) {
     </label>
   );
 }
-const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 10, width: "100%", outline: "none" };
+const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 10, width: "100%", outline: "none", background: "#fff" };
 const btnPrimary = { padding: "12px 14px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer", fontWeight: 600 };
 const btnGhost = { padding: "12px 14px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer", fontWeight: 600 };
 const card = { background: "#fff", border: "1px solid #eee", borderRadius: 16, padding: 16, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" };
@@ -42,12 +42,13 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-
-  // Rechtliches/Bank
+  const [currency, setCurrency] = useState("EUR");
   const [bankAccount, setBankAccount] = useState("");
+
+  // Steuerdaten (eigener Abschnitt)
   const [vatId, setVatId] = useState("");
   const [kleinunternehmer, setKleinunternehmer] = useState(true);
-  const [currency, setCurrency] = useState("EUR");
+  const [taxRateDefault, setTaxRateDefault] = useState(19); // nur relevant, wenn NICHT KU
 
   // Branding
   const [logoUrl, setLogoUrl] = useState("");
@@ -66,6 +67,8 @@ export default function SettingsPage() {
       setLoading(true);
       const js = await fetch("/api/settings", { cache: "no-store" }).then(r => r.json()).catch(() => ({ ok:false }));
       const s = js?.data || {};
+
+      // Firmendaten
       setCompanyName(s.companyName || "");
       setOwnerName(s.ownerName || "");
       setAddress1(s.address1 || "");
@@ -76,9 +79,14 @@ export default function SettingsPage() {
       setEmail(s.email || "");
       setWebsite(s.website || "");
       setBankAccount(s.bankAccount || "");
+      setCurrency(s.currency || "EUR");
+
+      // Steuerdaten
       setVatId(s.vatId || "");
       setKleinunternehmer(!!s.kleinunternehmer);
-      setCurrency(s.currency || "EUR");
+      setTaxRateDefault(Number.isFinite(Number(s.taxRateDefault)) ? Number(s.taxRateDefault) : 19);
+
+      // Branding
       setLogoUrl(s.logoUrl || "");
       setPrimaryColor(s.primaryColor || "#06b6d4");
       setSecondaryColor(s.secondaryColor || "#0ea5e9");
@@ -118,8 +126,12 @@ export default function SettingsPage() {
     e?.preventDefault?.();
     setSaving(true);
     const payload = {
+      // Firmendaten
       companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-      bankAccount, vatId, kleinunternehmer, currency,
+      currency, bankAccount,
+      // Steuerdaten
+      vatId, kleinunternehmer, taxRateDefault,
+      // Branding
       logoUrl, primaryColor, secondaryColor, fontFamily, textColor
     };
     const res = await fetch("/api/settings", {
@@ -151,38 +163,82 @@ export default function SettingsPage() {
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <Field label="Firmenname"><input style={input} value={companyName} onChange={e=>setCompanyName(e.target.value)} /></Field>
           <Field label="Inhaber"><input style={input} value={ownerName} onChange={e=>setOwnerName(e.target.value)} /></Field>
+
           <Field label="Adresszeile 1"><input style={input} value={address1} onChange={e=>setAddress1(e.target.value)} /></Field>
           <Field label="Adresszeile 2 (optional)"><input style={input} value={address2} onChange={e=>setAddress2(e.target.value)} /></Field>
+
           <Field label="PLZ"><input style={input} value={postalCode} onChange={e=>setPostalCode(e.target.value)} /></Field>
           <Field label="Ort"><input style={input} value={city} onChange={e=>setCity(e.target.value)} /></Field>
+
           <Field label="Telefon"><input style={input} value={phone} onChange={e=>setPhone(e.target.value)} /></Field>
-          <Field label="E-Mail"><input style={input} type="email" value={email} onChange={e=>setEmail(e.target.value)} /></Field>
+          <Field label="E‑Mail"><input style={input} type="email" value={email} onChange={e=>setEmail(e.target.value)} /></Field>
           <Field label="Webseite (optional)"><input style={input} type="url" value={website} onChange={e=>setWebsite(e.target.value)} placeholder="https://…" /></Field>
-          <Field label="Bankverbindung"><textarea style={{ ...input, minHeight: 80 }} value={bankAccount} onChange={e=>setBankAccount(e.target.value)} placeholder="IBAN / BIC / Bankname" /></Field>
-          <Field label="USt-ID"><input style={input} value={vatId} onChange={e=>setVatId(e.target.value)} /></Field>
+
           <Field label="Währung">
             <select style={input} value={currency} onChange={e=>setCurrency(e.target.value)}>
               {currencies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
-          <Field label="Kleinunternehmer-Regelung § 19 UStG">
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <input id="ku" type="checkbox" checked={kleinunternehmer} onChange={e=>setKleinunternehmer(e.target.checked)} />
-              <label htmlFor="ku" style={{ userSelect:"none" }}>Aktiv</label>
-            </div>
+
+          <Field label="Bankverbindung">
+            <textarea style={{ ...input, minHeight: 80 }} value={bankAccount} onChange={e=>setBankAccount(e.target.value)} placeholder="IBAN / BIC / Bankname" />
           </Field>
         </div>
       </section>
 
-      {/* Branding */}
+      {/* Steuerdaten – eigener Abschnitt */}
+      <section style={{ ...card, marginTop:12 }}>
+        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Steuerdaten</h2>
+
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+          <Field label="USt‑ID">
+            <input style={input} value={vatId} onChange={e=>setVatId(e.target.value)} placeholder="z. B. DE123456789" />
+          </Field>
+
+          <Field label="Kleinunternehmer‑Regelung § 19 UStG">
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <input
+                id="ku"
+                type="checkbox"
+                checked={kleinunternehmer}
+                onChange={e=>setKleinunternehmer(e.target.checked)}
+              />
+              <label htmlFor="ku" style={{ userSelect:"none" }}>Aktiv (0 % USt, Hinweis in Fußzeile)</label>
+            </div>
+          </Field>
+
+          {!kleinunternehmer && (
+            <Field label="Standard‑Steuersatz (%)" hint="Wird in Rechnungen ohne abweichenden Satz verwendet.">
+              <input
+                style={input}
+                inputMode="decimal"
+                value={taxRateDefault}
+                onChange={e=>setTaxRateDefault(e.target.value)}
+                placeholder="z. B. 19"
+              />
+            </Field>
+          )}
+        </div>
+      </section>
+
+      {/* Branding & Design */}
       <section style={{ ...card, marginTop:12 }}>
         <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Branding & Design</h2>
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <Field label="Logo">
             <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-              {logoUrl ? <img src={logoUrl} alt="Logo" style={{ width:72, height:72, objectFit:"contain", border:"1px solid #eee", borderRadius:10, background:"#fff" }} /> : <div style={{ width:72, height:72, border:"1px dashed #ddd", borderRadius:10, display:"grid", placeItems:"center", color:"#9ca3af" }}>kein Logo</div>}
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  style={{ width:72, height:72, objectFit:"contain", border:"1px solid #eee", borderRadius:10, background:"#fff" }}
+                  onError={(e)=>{ e.currentTarget.style.display="none"; }}
+                />
+              ) : (
+                <div style={{ width:72, height:72, border:"1px dashed #ddd", borderRadius:10, display:"grid", placeItems:"center", color:"#9ca3af" }}>kein Logo</div>
+              )}
               <input type="file" accept="image/*" onChange={e=>onUploadLogo(e.target.files?.[0])} />
-              <input style={{ ...input, flex:"1 1 280px" }} value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="Logo-URL (optional, falls kein Upload)" />
+              <input style={{ ...input, flex:"1 1 280px" }} value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="Logo‑URL (optional, falls kein Upload)" />
             </div>
           </Field>
 
@@ -198,12 +254,14 @@ export default function SettingsPage() {
               <input style={input} value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)} />
             </div>
           </Field>
+
           <Field label="Sekundärfarbe">
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <input type="color" value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)} />
               <input style={input} value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)} />
             </div>
           </Field>
+
           <Field label="Schriftfarbe">
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)} />
@@ -265,7 +323,7 @@ function BrandPreview({ settings }) {
           <div><b>Inhaber:</b> {ownerName || "—"}</div>
           <div><b>Adresse:</b> {address1 || "—"} {address2 ? `, ${address2}` : ""}</div>
           <div><b>PLZ/Ort:</b> {(postalCode || "—") + " " + (city || "")}</div>
-          <div><b>Telefon:</b> {phone || "—"} · <b>E-Mail:</b> {email || "—"}</div>
+          <div><b>Telefon:</b> {phone || "—"} · <b>E‑Mail:</b> {email || "—"}</div>
           {website ? <div><b>Web:</b> {website}</div> : null}
           <div><b>Währung:</b> {currency}</div>
           {kleinunternehmer && (
