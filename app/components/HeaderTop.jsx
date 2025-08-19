@@ -1,48 +1,94 @@
 "use client";
 
-import Image from "next/image";
-import { useState } from "react";
-import ModuleLauncher from "./ModuleLauncher";
+import Link from "next/link";
+import { BRAND } from "@/lib/appBrand";
 
 export default function HeaderTop() {
-  const [openModules, setOpenModules] = useState(false);
-
   return (
-    <header className="hero" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
-      <div className="container" style={{ paddingTop: 10, paddingBottom: 10 }}>
-        
-        {/* Logo + Überschrift */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <Image src="/logo.png" alt="BuZiness Logo" width={64} height={64} priority style={{ borderRadius: 6 }} />
-          <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-            <h1 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>BuZiness</h1>
-            <p className="subtle" style={{ marginTop: 2 }}>„Schnell erfassen, sicher verwalten.“</p>
-          </div>
-        </div>
-
-        {/* Menü links – Login rechts */}
-        <div className="header-row">
-          {/* Hamburger Menü */}
+    <header style={wrap}>
+      <div style={inner}>
+        {/* Zeile 1: Links Hamburger (gleich groß wie Login), rechts Login */}
+        <div style={rowTop}>
           <button
             type="button"
-            className="btn header-btn"
-            aria-label={openModules ? "Module schließen" : "Module öffnen"}
-            aria-expanded={openModules ? "true" : "false"}
-            aria-controls="module-panel"
-            onClick={() => setOpenModules(v => !v)}
+            aria-label="Menü öffnen"
+            style={btn}
+            onClick={() => {
+              const el = document.getElementById("modules-panel");
+              if (el) el.toggleAttribute("data-open");
+            }}
           >
-            <span className="hamburger" aria-hidden="true">
-              <span></span><span></span><span></span>
-            </span>
+            {/* Hamburger-Icon */}
+            <span style={{ fontSize: 18, lineHeight: "1" }}>☰</span>
           </button>
 
-          {/* Login rechts */}
-          <a href="/login" className="btn header-btn">Login</a>
+          <Link href="/login" style={{ ...btn, textDecoration: "none", display: "inline-grid", placeItems: "center" }}>
+            Login
+          </Link>
         </div>
 
-        {/* Modul-Panel */}
-        <ModuleLauncher open={openModules} id="module-panel" onClose={() => setOpenModules(false)} />
+        {/* Zeile 2: Logo + Name/Claim zentriert */}
+        <div style={brandRow}>
+          {BRAND?.logoPath ? (
+            <img
+              src={BRAND.logoPath}
+              alt={BRAND.appName || "Logo"}
+              height={48}
+              style={{ display: "block", objectFit: "contain", maxWidth: 220 }}
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          ) : null}
+
+          <div style={{ lineHeight: 1.15, textAlign: "center" }}>
+            <div style={{ fontWeight: 800, letterSpacing: 0.2, fontSize: 20 }}>
+              {BRAND?.appName || "BuZiness"}
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.95 }}>
+              {BRAND?.tagline || "Schnell erfassen, sicher verwalten."}
+            </div>
+          </div>
+        </div>
       </div>
     </header>
   );
 }
+
+/* ---------- Styles ---------- */
+const wrap = {
+  background: "var(--color-primary, #06b6d4)",
+  color: "#fff",
+};
+
+const inner = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "12px 16px 10px",
+};
+
+const rowTop = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  alignItems: "center",
+  marginBottom: 10,
+};
+
+const btn = {
+  justifySelf: "start",
+  background: "#fff",
+  color: "var(--color-primary, #06b6d4)",
+  border: "1px solid #fff",
+  borderRadius: 12,
+  height: 36,
+  minWidth: 100,
+  padding: "0 12px",
+  fontWeight: 700,
+  cursor: "pointer",
+  boxShadow: "0 2px 10px rgba(0,0,0,.1)",
+};
+
+const brandRow = {
+  display: "grid",
+  justifyItems: "center",
+  alignItems: "center",
+  gap: 8,
+};
