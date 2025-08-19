@@ -1,6 +1,7 @@
 import "./globals.css";
 import HeaderTop from "./components/HeaderTop";
 import InfoStripe from "./components/InfoStripe";
+import AppThemeClient from "@/components/AppThemeClient";
 
 export const metadata = {
   title: "BuZiness",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }) {
         <HeaderTop />
         {/* Farbstreifen darunter (Text ein/aus je nach Position) */}
         <InfoStripe position="top" showText={true} />
+        <AppThemeClient />
 
         {/* Seiten-Container */}
         <main className="container" style={{ width: "100%", maxWidth: "100%" }}>
