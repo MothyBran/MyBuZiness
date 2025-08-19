@@ -9,7 +9,7 @@ function money(cents, curr = "EUR") {
 }
 const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
 function makeEmptyItem() {
-  return { productId: "", name: "", quantity: 1, unitPriceCents: 0, lineTotalCents: 0 };
+  return { productId: "", name: "", quantity: 1, unitPriceCents: 0, baseCents: 0, kind: "product", lineTotalCents: 0 };
 }
 
 export default function ReceiptsPage() {
@@ -134,22 +134,31 @@ export default function ReceiptsPage() {
   }
 
   function onProductSelect(idx, productId) {
-    const p = products.find((x) => x.id === productId);
-    if (!p) {
-      updateItem(idx, { productId: "", name: "", unitPriceCents: 0 });
-      return;
-    }
-    // Einzelpreis automatisch (nicht editierbar)
-    let unit = p.priceCents;
-    if (p.kind === "service" && p.hourlyRateCents) unit = p.hourlyRateCents;
-    if (p.kind === "travel" && p.travelPerKmCents) unit = p.travelPerKmCents;
-
-    updateItem(idx, {
-      productId: p.id,
-      name: p.name,                 // kein Freitext mehr – Name aus Produkt
-      unitPriceCents: toInt(unit)
-    });
+  const p = products.find((x) => x.id === productId);
+  if (!p) {
+    updateItem(idx, { productId: "", name: "", unitPriceCents: 0, baseCents: 0, kind: "product" });
+    return;
   }
+  let unit = p.priceCents;
+  let base = 0;
+  if (p.kind === "service") {
+    base = toInt(p.priceCents || 0);
+    unit = toInt(p.hourlyRateCents || 0);
+  } else if (p.kind === "travel") {
+    base = toInt(p.travelBaseCents || 0);
+    unit = toInt(p.travelPerKmCents || 0);
+  } else {
+    base = 0;
+    unit = toInt(p.priceCents || 0);
+  }
+  updateItem(idx, {
+    productId: p.id,
+    name: p.name,
+    unitPriceCents: unit,
+    baseCents: base,
+    kind: p.kind || "product"
+  });
+}
 
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
@@ -384,7 +393,7 @@ export default function ReceiptsPage() {
                   </thead>
                   <tbody>
                     {items.map((it, idx) => {
-                      const sum = toInt(it.quantity) * toInt(it.unitPriceCents);
+                      const sum = toInt(it.baseCents || 0) + (toInt(it.quantity) * toInt(it.unitPriceCents));
                       return (
                         <tr key={idx}>
                           <td>
