@@ -1,13 +1,20 @@
 // app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
+/**
+ * Hilfsfunktion: sichert ein Integer (>=0)
+ */
+function toInt(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
 export async function GET(request) {
   try {
     await initDb();
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
 
-    // Belege laden – mit defensiven Defaults
     const receipts = (await q(
       `SELECT
          "id",
@@ -33,8 +40,8 @@ export async function GET(request) {
       });
     }
 
-    // Positionen laden – robust gegen text/uuid-Mismatch
-    const ids = receipts.map(r => String(r.id)); // sicherstellen: String-Array
+    // Positionen – robust gegen text/uuid-Mismatch
+    const ids = receipts.map(r => String(r.id));
     const items = (await q(
       `SELECT
          "id",
@@ -51,7 +58,6 @@ export async function GET(request) {
       [ids]
     )).rows;
 
-    // Items an Belege mappen
     const byId = new Map(receipts.map(r => [r.id, { ...r, items: [] }]));
     for (const it of items) {
       const host = byId.get(it.receiptId);
@@ -76,45 +82,116 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const { date, vatExempt = true, currency = "EUR", discountCents = 0 } = body;
     const items = Array.isArray(body.items) ? body.items : [];
+    let manualNo = (body.receiptNo || "").trim();
 
     if (items.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: "Mindestens eine Position ist erforderlich." }), { status: 400 });
+      return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
+    }
+
+    // 1) Belegnummer bestimmen: manuell oder automatisch aus Tabelle
+    let receiptNo = manualNo;
+    if (!receiptNo) {
+      // Nimm die höchste Ziffernfolge aus "receiptNo" (z. B. "#121" -> 121) und zähle hoch
+      const row = (await q(
+        `SELECT COALESCE(MAX(
+            NULLIF(regexp_replace("receiptNo", '\\D', '', 'g'), '')::bigint
+          ), 0)::bigint AS last
+         FROM "Receipt"`
+      )).rows[0];
+      const next = Number(row?.last || 0) + 1;
+      receiptNo = String(next);
     }
 
     const id = uuid();
 
-    // Hol die letzte Belegnummer aus der Tabelle
-    const last = (await q(`SELECT "receiptNo" FROM "Receipt" ORDER BY "createdAt" DESC LIMIT 1`)).rows[0];
-    let nextNo = 1;
-    if (last && !isNaN(Number(last.receiptNo))) {
-      nextNo = Number(last.receiptNo) + 1;
+    // 2) Relevante Produkte in einem Schlag holen (für Grundpreis-Logik)
+    const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
+    let prodMap = new Map();
+    if (prodIds.length > 0) {
+      const prows = (await q(
+        `SELECT
+           "id"::text                                        AS "id",
+           COALESCE("name",'')                               AS "name",
+           COALESCE("kind",'product')                        AS "kind",
+           COALESCE("priceCents",0)::bigint                  AS "priceCents",
+           COALESCE("hourlyRateCents",0)::bigint             AS "hourlyRateCents",
+           COALESCE("travelBaseCents",0)::bigint             AS "travelBaseCents",
+           COALESCE("travelPerKmCents",0)::bigint            AS "travelPerKmCents"
+         FROM "Product"
+         WHERE "id"::text = ANY($1::text[])`,
+        [prodIds]
+      )).rows;
+      prodMap = new Map(prows.map(p => [p.id, p]));
     }
 
-    const receiptNo = String(nextNo);
+    // 3) Netto ermitteln und Items vorbereiten (Grundpreis berücksichtigen)
+    const prepared = [];
+    let netCents = 0;
 
-    const netCents = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unitPriceCents || 0), 0);
-    const netAfterDiscount = Math.max(0, netCents - Number(discountCents || 0));
+    for (const raw of items) {
+      const qty = toInt(raw.quantity || 0);
+      let unit = toInt(raw.unitPriceCents || 0);  // Fallback
+      let base = 0;
+      let name = (raw.name || "").trim();
+      let productId = raw.productId || null;
+
+      if (productId && prodMap.has(String(productId))) {
+        const p = prodMap.get(String(productId));
+        name = p.name || name;
+
+        if (p.kind === "service") {
+          base = toInt(p.priceCents || 0);
+          unit = toInt(p.hourlyRateCents || 0);
+        } else if (p.kind === "travel") {
+          base = toInt(p.travelBaseCents || 0);
+          unit = toInt(p.travelPerKmCents || 0);
+        } else {
+          // "product"
+          base = 0;
+          unit = toInt(p.priceCents || 0);
+        }
+      }
+
+      const lineTotal = base + (qty * unit);
+      netCents += lineTotal;
+
+      prepared.push({
+        productId,
+        name: name || "Position",
+        quantity: qty,
+        unitPriceCents: unit,         // zeigt im UI den Stück-/Stundensatz/Km‑Satz
+        lineTotalCents: lineTotal,    // enthält Grundpreis + qty*unit
+      });
+    }
+
+    const disc = toInt(discountCents || 0);
+    const netAfterDiscount = Math.max(0, netCents - disc);
     const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19);
     const grossCents = netAfterDiscount + taxCents;
 
+    // 4) INSERT (optional: Transaktion, hier sequentiell)
     await q(
-      `INSERT INTO "Receipt" ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt")
-       VALUES ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7,$8,$9,now(),now())`,
-      [id, receiptNo, date || null, !!vatExempt, currency, netAfterDiscount, taxCents, grossCents, Number(discountCents || 0)]
+      `INSERT INTO "Receipt"
+         ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt")
+       VALUES
+         ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7,$8,$9,now(),now())`,
+      [id, receiptNo, date || null, !!vatExempt, currency, netAfterDiscount, taxCents, grossCents, disc]
     );
 
-    for (const it of items) {
+    for (const it of prepared) {
       await q(
-        `INSERT INTO "ReceiptItem" ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
-         VALUES ($1,$2::uuid,$3::uuid,$4,$5,$6,$7,now(),now())`,
+        `INSERT INTO "ReceiptItem"
+           ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
+         VALUES
+           ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
         [
           uuid(),
           id,
-          it.productId || null,
+          it.productId,
           it.name,
-          Number(it.quantity || 0),
-          Number(it.unitPriceCents || 0),
-          Number(it.quantity || 0) * Number(it.unitPriceCents || 0)
+          it.quantity,
+          it.unitPriceCents,
+          it.lineTotalCents
         ]
       );
     }
