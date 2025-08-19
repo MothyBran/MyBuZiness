@@ -1,79 +1,68 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
-function useSettings() {
-  const [s, setS] = useState(null);
-  useEffect(() => {
-    (async () => {
-      const js = await fetch("/api/settings", { cache: "no-store" })
-        .then(r => r.json())
-        .catch(() => ({}));
-      setS(js?.data || null);
-    })();
-  }, []);
-  return s;
-}
+import { useEffect, useState } from "react";
 
 /**
- * InfoStripe
- * - position: "top" | "bottom" (nur semantisch, falls du später Unterschiede willst)
- * - showText: true => "Firmenname • E-Mail • Ort"
- *             false => nur Farbfläche (z. B. über der Fußzeile)
+ * Zeigt: "Firmenname • E‑Mail • Ort" im Farbverlauf aus --color-primary/--color-secondary.
+ * Liest die Daten aus /api/settings (no-store).
  */
-export default function InfoStripe({ position = "top", showText = true }) {
-  const s = useSettings();
+export default function InfoStripe() {
+  const [companyName, setCompanyName] = useState("");
+  const [email, setEmail] = useState("");
+  const [city, setCity] = useState("");
 
-  const primary = s?.primaryColor || "#06b6d4";
-  const secondary = s?.secondaryColor || "#0ea5e9";
-  const gradient = `linear-gradient(90deg, ${primary} 0%, ${secondary} 100%)`;
+  async function load() {
+    try {
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      const js = await res.json();
+      const s = js?.data || {};
+      setCompanyName(s.companyName || "");
+      setEmail(s.email || "");
+      setCity(s.city || "");
+    } catch {
+      // soft-fail
+    }
+  }
 
-  const text = useMemo(() => {
-    if (!showText) return "";
-    const parts = [
-      s?.companyName || null,
-      s?.email || null,
-      s?.city || null,
-    ].filter(Boolean);
-    return parts.join(" • ");
-  }, [s, showText]);
+  useEffect(() => {
+    load();
+
+    // Live-Refresh, wenn /einstellungen speichert
+    const onPing = () => load();
+    window.addEventListener("settings:saved", onPing);
+    return () => window.removeEventListener("settings:saved", onPing);
+  }, []);
+
+  const parts = [
+    companyName && String(companyName).trim(),
+    email && String(email).trim(),
+    city && String(city).trim()
+  ].filter(Boolean);
 
   return (
-    <div
-      style={{
-        width: "100%",
-        background: gradient,
-        color: "#fff",
-        boxShadow: "inset 0 -1px 0 rgba(255,255,255,.2)",
-      }}
-      aria-hidden={!showText}
-    >
-      <div
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: showText ? "6px 16px" : "4px 16px",
-          minHeight: 12,
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        {showText ? (
-          <div
-            style={{
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-            title={text}
-          >
-            {text || "—"}
-          </div>
-        ) : (
-          <div style={{ height: 4, width: "100%" }} />
-        )}
+    <div style={wrap} aria-label="InfoStripe">
+      <div style={inner}>
+        <div style={text}>
+          {parts.length ? parts.join(" • ") : "—"}
+        </div>
       </div>
     </div>
   );
 }
+
+const wrap = {
+  background: "linear-gradient(135deg, var(--color-primary,#06b6d4) 0%, var(--color-secondary,#0ea5e9) 100%)",
+  color: "#fff"
+};
+const inner = {
+  maxWidth: 960,
+  margin: "0 auto",
+  padding: "6px 16px",
+};
+const text = {
+  fontSize: 13,
+  letterSpacing: 0.2,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
+};
