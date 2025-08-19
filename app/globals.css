@@ -168,3 +168,35 @@ table.pos-table { min-width: 640px; }
 .module-pill { will-change: transform; }
 .module-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: rgba(0,0,0,.12); }
 .module-pill:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
+
+/* === Info-/Footer-Streifen === */
+.infoStripe {
+  background: linear-gradient(135deg, var(--color-primary, #06b6d4) 0%, var(--color-secondary, #0ea5e9) 100%);
+  color: #fff;
+}
+.infoStripe .container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 16px;
+}
+.infoStripe__text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.footerStripe {
+  height: 6px;
+  background: linear-gradient(135deg, var(--color-primary, #06b6d4) 0%, var(--color-secondary, #0ea5e9) 100%);
+  margin-top: 24px; /* sitzt über der Fußzeile */
+}
+
+/* Optional: Container-Helfer (falls nicht vorhanden) */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
