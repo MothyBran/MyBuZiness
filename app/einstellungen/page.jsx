@@ -145,6 +145,21 @@ export default function SettingsPage() {
 
     // Anwendung sofort aktualisieren
     applyTheme({ primaryColor, secondaryColor, textColor, fontFamily });
+    // ... in save() NACH applyTheme({ ... }) und VOR alert(...)
+try {
+  // andere Seiten aktualisieren (InfoStripe + ThemeBridge hören darauf)
+  window.dispatchEvent(new CustomEvent("settings:saved", {
+    detail: {
+      primaryColor,
+      secondaryColor,
+      textColor,
+      fontFamily,
+      companyName,
+      email,
+      city,
+    }
+  }));
+} catch {}
     alert("Einstellungen gespeichert.");
   }
 
