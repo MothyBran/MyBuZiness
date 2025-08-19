@@ -1,5 +1,6 @@
 // app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { renderNumber, nextDigitSequence } from "@/lib/numbering";
 
 /** Helpers */
 const toInt = (v) => {
@@ -57,8 +58,7 @@ export async function GET(request) {
     const ids = invoices.map(r => String(r.id));
     const items = (await q(
       `SELECT
-          "id",
-          "invoiceId",
+          "id","invoiceId",
           COALESCE("productId", NULL)            AS "productId",
           COALESCE("name", '')                   AS "name",
           COALESCE("description", NULL)          AS "description",
@@ -72,7 +72,7 @@ export async function GET(request) {
       [ids]
     )).rows;
 
-    // Produkte laden für extraBaseCents Anzeige
+    // Produkte laden (für extraBaseCents Anzeige)
     const productIds = [...new Set(items.map(it => it.productId).filter(Boolean).map(String))];
     let productMap = new Map();
     if (productIds.length) {
@@ -129,21 +129,19 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
     }
 
-    // Settings: §19, taxRateDefault, currency
+    // Settings: KU, taxRateDefault, currency, invoiceNumberFormat
     const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
     const currency = body.currency || settings.currency || "EUR";
+    const format = settings.invoiceNumberFormat || "{YYYY}-{SEQ5}";
 
-    // Rechnungsnummer bestimmen (manuell oder automatisch)
+    // Rechnungsnummer: manuell oder per Format + Sequenz
     let invoiceNo = (body.invoiceNo || "").trim();
     if (!invoiceNo) {
-      const r = (await q(
-        `SELECT COALESCE(MAX(NULLIF(regexp_replace("invoiceNo",'\\D','','g'), '')::bigint),0)::bigint AS last
-         FROM "Invoice"`
-      )).rows[0];
-      invoiceNo = String(Number(r?.last || 0) + 1);
+      const seq = await nextDigitSequence(q, `"Invoice"`, `"invoiceNo"`);
+      invoiceNo = renderNumber(format, seq, body.issueDate ? new Date(body.issueDate) : new Date());
     }
 
     const id = uuid();
@@ -167,13 +165,13 @@ export async function POST(request) {
       productMap = new Map(prows.map(p => [p.id, p]));
     }
 
-    // Items aufbereiten (Grundpreis + Menge×Einheit)
+    // Items + Summen (Grundpreis berücksichtigen)
     const prepared = [];
     let net = 0;
 
     for (const raw of items) {
       const qty = toInt(raw.quantity || 0);
-      let unit = toInt(raw.unitPriceCents || 0); // Fallback
+      let unit = toInt(raw.unitPriceCents || 0);
       let base = 0;
       let name = (raw.name || "").trim();
       const pid = raw.productId || null;
@@ -198,22 +196,20 @@ export async function POST(request) {
       });
     }
 
-    // Rabatt (optional) aus Body; wird nicht separat persistiert, aber in Summen berücksichtigt
+    // Rabatt optional: in Summen berücksichtigen (persistieren nur bei Bedarf)
     const discountCents = toInt(body.discountCents || 0);
     const netAfterDiscount = Math.max(0, net - discountCents);
     const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
     const grossCents = netAfterDiscount + taxCents;
 
-    // Insert Invoice
     await q(
       `INSERT INTO "Invoice"
          ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt")
        VALUES
-         ($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now())`,
+         ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now())`,
       [id, invoiceNo, customerId, body.issueDate || null, body.dueDate || null, currency, netAfterDiscount, taxCents, grossCents, taxRate]
     );
 
-    // Insert Items
     for (const it of prepared) {
       await q(
         `INSERT INTO "InvoiceItem"
