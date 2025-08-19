@@ -1,20 +1,12 @@
 // app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
-/** kleine Helfer */
+/** Helpers */
 const toInt = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 };
 
-/**
- * Preislogik nach Produkt-Art:
- * - product:        base=0,           unit=priceCents
- * - service:
- *    - hourlyRate>0 base=priceCents,  unit=hourlyRateCents
- *    - sonst        base=0,           unit=priceCents
- * - travel:         base=travelBaseCents, unit=travelPerKmCents
- */
 function computeBaseAndUnit(p) {
   const kind = p?.kind || "product";
   if (kind === "service") {
@@ -38,16 +30,21 @@ export async function GET(request) {
     await initDb();
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
+    const no = (searchParams.get("no") || "").trim();
 
-    // Rechnungen laden (+ Kundenname)
+    const where = [];
+    const params = [];
+    if (qs) { params.push(`%${qs}%`); where.push(`(lower(i."invoiceNo") LIKE $${params.length} OR lower(c."name") LIKE $${params.length})`); }
+    if (no) { params.push(no); where.push(`i."invoiceNo" = $${params.length}`); }
+
     const invoices = (await q(
       `SELECT i.*,
               c."name" AS "customerName"
          FROM "Invoice" i
          JOIN "Customer" c ON c."id" = i."customerId"
-        ${qs ? `WHERE lower(i."invoiceNo") LIKE $1 OR lower(c."name") LIKE $1` : ""}
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
         ORDER BY i."issueDate" DESC NULLS LAST, i."createdAt" DESC NULLS LAST`,
-      qs ? [`%${qs}%`] : []
+      params
     )).rows;
 
     if (invoices.length === 0) {
@@ -57,7 +54,6 @@ export async function GET(request) {
       });
     }
 
-    // Alle Items zu diesen Rechnungen holen
     const ids = invoices.map(r => String(r.id));
     const items = (await q(
       `SELECT
@@ -76,7 +72,7 @@ export async function GET(request) {
       [ids]
     )).rows;
 
-    // Produkte dazu holen, damit wir extraBaseCents (nur für Anzeige) berechnen können
+    // Produkte laden für extraBaseCents Anzeige
     const productIds = [...new Set(items.map(it => it.productId).filter(Boolean).map(String))];
     let productMap = new Map();
     if (productIds.length) {
@@ -95,7 +91,6 @@ export async function GET(request) {
       productMap = new Map(prows.map(p => [p.id, p]));
     }
 
-    // Items auf Rechnungen mappen + extraBaseCents fürs Frontend berechnen (nur Response-Feld)
     const byId = new Map(invoices.map(r => [r.id, { ...r, items: [] }]));
     for (const it of items) {
       let extraBaseCents = 0;
@@ -124,9 +119,8 @@ export async function POST(request) {
   try {
     await initDb();
     const body = await request.json().catch(() => ({}));
-    const { customerId, issueDate, dueDate, currency = "EUR", taxRate = 19 } = body;
     const items = Array.isArray(body.items) ? body.items : [];
-    let manualNo = (body.invoiceNo || "").trim();
+    const customerId = body.customerId;
 
     if (!customerId) {
       return new Response(JSON.stringify({ ok:false, error:"customerId fehlt." }), { status:400 });
@@ -135,13 +129,18 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
     }
 
-    // Rechnungsnummer bestimmen (manuell oder automatisch aus max. Ziffernfolge)
-    let invoiceNo = manualNo;
+    // Settings: §19, taxRateDefault, currency
+    const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
+    const vatExempt = !!settings.kleinunternehmer;
+    const taxRateDefault = Number(settings.taxRateDefault ?? 19);
+    const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
+    const currency = body.currency || settings.currency || "EUR";
+
+    // Rechnungsnummer bestimmen (manuell oder automatisch)
+    let invoiceNo = (body.invoiceNo || "").trim();
     if (!invoiceNo) {
       const r = (await q(
-        `SELECT COALESCE(MAX(
-            NULLIF(regexp_replace("invoiceNo", '\\D', '', 'g'), '')::bigint
-          ), 0)::bigint AS last
+        `SELECT COALESCE(MAX(NULLIF(regexp_replace("invoiceNo",'\\D','','g'), '')::bigint),0)::bigint AS last
          FROM "Invoice"`
       )).rows[0];
       invoiceNo = String(Number(r?.last || 0) + 1);
@@ -149,10 +148,10 @@ export async function POST(request) {
 
     const id = uuid();
 
-    // Produkte für Preislogik in einem Rutsch holen
+    // Produkte für Preislogik
     const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
     let productMap = new Map();
-    if (prodIds.length > 0) {
+    if (prodIds.length) {
       const prows = (await q(
         `SELECT "id"::text AS id,
                 COALESCE("name",'') AS name,
@@ -168,48 +167,50 @@ export async function POST(request) {
       productMap = new Map(prows.map(p => [p.id, p]));
     }
 
-    // Items vorbereiten (Server-seitige Wahrheit: Grundpreis + Menge*Einzelpreis)
+    // Items aufbereiten (Grundpreis + Menge×Einheit)
     const prepared = [];
-    let netCents = 0;
+    let net = 0;
 
     for (const raw of items) {
       const qty = toInt(raw.quantity || 0);
       let unit = toInt(raw.unitPriceCents || 0); // Fallback
       let base = 0;
       let name = (raw.name || "").trim();
-      let productId = raw.productId || null;
+      const pid = raw.productId || null;
 
-      if (productId && productMap.has(String(productId))) {
-        const p = productMap.get(String(productId));
-        const c = computeBaseAndUnit(p);
-        base = c.base;
-        unit = c.unit;
+      if (pid && productMap.has(String(pid))) {
+        const p = productMap.get(String(pid));
+        const { base: b, unit: u } = computeBaseAndUnit(p);
+        base = b; unit = u;
         if (!name) name = p.name || "Position";
       }
 
-      const lineTotal = base + (qty * unit);
-      netCents += lineTotal;
+      const line = base + qty * unit;
+      net += line;
 
       prepared.push({
-        productId,
+        productId: pid,
         name: name || "Position",
         description: null,
         quantity: qty,
-        unitPriceCents: unit,      // Anzeige-/Satzwert
-        lineTotalCents: lineTotal, // enthält Grundpreis + qty*unit
+        unitPriceCents: unit,
+        lineTotalCents: line
       });
     }
 
-    const taxCents = Math.round(netCents * (Number(taxRate || 0) / 100));
-    const grossCents = netCents + taxCents;
+    // Rabatt (optional) aus Body; wird nicht separat persistiert, aber in Summen berücksichtigt
+    const discountCents = toInt(body.discountCents || 0);
+    const netAfterDiscount = Math.max(0, net - discountCents);
+    const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
+    const grossCents = netAfterDiscount + taxCents;
 
     // Insert Invoice
     await q(
       `INSERT INTO "Invoice"
          ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt")
        VALUES
-         ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now())`,
-      [id, invoiceNo, customerId, issueDate || null, dueDate || null, currency, netCents, taxCents, grossCents, Number(taxRate || 0)]
+         ($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now())`,
+      [id, invoiceNo, customerId, body.issueDate || null, body.dueDate || null, currency, netAfterDiscount, taxCents, grossCents, taxRate]
     );
 
     // Insert Items
@@ -219,16 +220,7 @@ export async function POST(request) {
            ("id","invoiceId","productId","name","description","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
          VALUES
            ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
-        [
-          uuid(),
-          id,
-          it.productId,
-          it.name,
-          it.description,
-          it.quantity,
-          it.unitPriceCents,
-          it.lineTotalCents
-        ]
+        [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents]
       );
     }
 
