@@ -10,7 +10,7 @@ function money(cents, curr = "EUR") {
 const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
 
 function makeEmptyItem() {
-  // Enthält baseCents (Grundpreis) und kind, damit die Summen korrekt sind
+  // baseCents (Grundpreis), kind für saubere Summen
   return { productId: "", name: "", quantity: 1, unitPriceCents: 0, baseCents: 0, kind: "product", lineTotalCents: 0 };
 }
 
@@ -118,7 +118,6 @@ export default function ReceiptsPage() {
             name: it.name || "",
             quantity: toInt(it.quantity || 1),
             unitPriceCents: toInt(it.unitPriceCents || 0),
-            // Falls bestehende Items (aus der DB) den Grundpreis nicht enthalten:
             baseCents: 0,
             kind: "product",
             lineTotalCents: toInt(it.lineTotalCents || 0),
@@ -139,39 +138,52 @@ export default function ReceiptsPage() {
     });
   }
 
+  /** FIX: Preislogik beim Produktwechsel */
   function onProductSelect(idx, productId) {
     const p = products.find((x) => x.id === productId);
     if (!p) {
       updateItem(idx, { productId: "", name: "", unitPriceCents: 0, baseCents: 0, kind: "product" });
       return;
     }
-    // Einzelpreis + Grundpreis gemäß Art setzen (nicht editierbar im UI)
-    let unit = p.priceCents;
-    let base = 0;
-    if (p.kind === "service") {
-      base = toInt(p.priceCents || 0);           // Grundpreis
-      unit = toInt(p.hourlyRateCents || 0);      // Satz/Std.
-    } else if (p.kind === "travel") {
-      base = toInt(p.travelBaseCents || 0);      // Grundpreis
-      unit = toInt(p.travelPerKmCents || 0);     // Pauschale/km
+
+    let unit = 0;  // was als "Einzelpreis" angezeigt wird
+    let base = 0;  // Grundpreis je Beleg
+    let kind = p.kind || "product";
+
+    if (kind === "service") {
+      const hr = toInt(p.hourlyRateCents || 0);
+      const gp = toInt(p.priceCents || 0);
+      if (hr > 0) {
+        // Dienstleistung mit Stundensatz: Grundpreis + Stunden*Stundensatz
+        base = gp;
+        unit = hr;
+      } else {
+        // Dienstleistung OHNE Stundensatz: wie "pro Stück" – kein Grundpreis, Einzelpreis = Grundpreis
+        base = 0;
+        unit = gp;
+      }
+    } else if (kind === "travel") {
+      base = toInt(p.travelBaseCents || 0);
+      unit = toInt(p.travelPerKmCents || 0);
     } else {
       // product
       base = 0;
       unit = toInt(p.priceCents || 0);
     }
+
     updateItem(idx, {
       productId: p.id,
-      name: p.name,                 // Name aus Produkt
+      name: p.name,
       unitPriceCents: unit,
       baseCents: base,
-      kind: p.kind || "product"
+      kind
     });
   }
 
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /* Summen (jetzt inkl. Grundpreis je Position) */
+  /* Summen (inkl. Grundpreis je Position) */
   const calc = useMemo(() => {
     const netCents = items.reduce((s, it) => {
       const base = toInt(it.baseCents || 0);
@@ -187,9 +199,7 @@ export default function ReceiptsPage() {
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
   }, [items, discount, vatExemptDefault]);
 
-  /* Speichern (Neu/Update)
-     Hinweis: Server rechnet final korrekt inkl. Grundpreis nach (per Produkt-Art).
-     Wir senden wie gehabt productId/quantity/unitPriceCents (baseCents wird serverseitig bestimmt). */
+  /* Speichern (Neu/Update) – Server rechnet final inkl. Grundpreis */
   async function saveReceipt() {
     try {
       const cleanItems = items
@@ -207,7 +217,7 @@ export default function ReceiptsPage() {
       }
 
       const payload = {
-        receiptNo,                   // optional benutzerdefiniert
+        receiptNo,
         date: formDate || null,
         vatExempt: !!vatExemptDefault,
         currency,
@@ -372,7 +382,6 @@ export default function ReceiptsPage() {
           <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <h2 style={{ margin: 0 }}>{editId ? "Beleg bearbeiten" : "Neuer Beleg"}</h2>
-              {/* kein X-Button mehr */}
             </div>
 
             {/* Kopfzeile: Beleg‑Nr. + Datum */}
