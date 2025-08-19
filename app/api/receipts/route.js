@@ -1,36 +1,39 @@
 // app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
 
-/**
- * Hilfsfunktion: sichert ein Integer (>=0)
- */
-function toInt(v) {
+/** Integer-Helfer */
+const toInt = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
-}
+};
 
 export async function GET(request) {
   try {
     await initDb();
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
+    const no = (searchParams.get("no") || "").trim();
+
+    const where = [];
+    const params = [];
+    if (qs) { params.push(`%${qs}%`); where.push(`(lower(COALESCE("receiptNo",'')) LIKE $${params.length} OR lower(COALESCE("note",'')) LIKE $${params.length})`); }
+    if (no) { params.push(no); where.push(`"receiptNo" = $${params.length}`); }
 
     const receipts = (await q(
       `SELECT
          "id",
-         COALESCE("receiptNo", '')                 AS "receiptNo",
+         COALESCE("receiptNo",'')                 AS "receiptNo",
          "date",
-         COALESCE("netCents", 0)::bigint           AS "netCents",
-         COALESCE("taxCents", 0)::bigint           AS "taxCents",
-         COALESCE("grossCents", 0)::bigint         AS "grossCents",
-         COALESCE("discountCents", 0)::bigint      AS "discountCents",
-         COALESCE("currency", 'EUR')               AS "currency",
-         "createdAt",
-         "updatedAt"
+         COALESCE("netCents",0)::bigint          AS "netCents",
+         COALESCE("taxCents",0)::bigint          AS "taxCents",
+         COALESCE("grossCents",0)::bigint        AS "grossCents",
+         COALESCE("discountCents",0)::bigint     AS "discountCents",
+         COALESCE("currency",'EUR')              AS "currency",
+         "createdAt","updatedAt"
        FROM "Receipt"
-       ${qs ? `WHERE lower(COALESCE("receiptNo",'')) LIKE $1 OR lower(COALESCE("note",'')) LIKE $1` : ""}
+       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
        ORDER BY "createdAt" DESC NULLS LAST, "date" DESC NULLS LAST, "id" DESC`,
-      qs ? [`%${qs}%`] : []
+      params
     )).rows;
 
     if (receipts.length === 0) {
@@ -40,18 +43,18 @@ export async function GET(request) {
       });
     }
 
-    // Positionen – robust gegen text/uuid-Mismatch
+    // Positionen holen (text-basierte Joins gegen ID)
     const ids = receipts.map(r => String(r.id));
     const items = (await q(
       `SELECT
          "id",
          "receiptId",
-         COALESCE("productId", NULL)               AS "productId",
-         COALESCE("name", '')                      AS "name",
-         COALESCE("quantity", 0)                   AS "quantity",
-         COALESCE("unitPriceCents", 0)::bigint     AS "unitPriceCents",
-         COALESCE("lineTotalCents", 0)::bigint     AS "lineTotalCents",
-         COALESCE("createdAt", now())              AS "createdAt"
+         COALESCE("productId", NULL)              AS "productId",
+         COALESCE("name",'')                      AS "name",
+         COALESCE("quantity",0)                   AS "quantity",
+         COALESCE("unitPriceCents",0)::bigint     AS "unitPriceCents",
+         COALESCE("lineTotalCents",0)::bigint     AS "lineTotalCents",
+         COALESCE("createdAt", now())             AS "createdAt"
        FROM "ReceiptItem"
        WHERE "receiptId"::text = ANY($1::text[])
        ORDER BY "createdAt" ASC NULLS LAST, "id" ASC`,
@@ -80,102 +83,97 @@ export async function POST(request) {
   try {
     await initDb();
     const body = await request.json().catch(() => ({}));
-    const { date, vatExempt = true, currency = "EUR", discountCents = 0 } = body;
     const items = Array.isArray(body.items) ? body.items : [];
-    let manualNo = (body.receiptNo || "").trim();
-
     if (items.length === 0) {
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
     }
 
-    // 1) Belegnummer bestimmen: manuell oder automatisch aus Tabelle
-    let receiptNo = manualNo;
+    // Settings: §19/USt + Währung
+    const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
+    const vatExempt = !!settings.kleinunternehmer;
+    const currency = body.currency || settings.currency || "EUR";
+
+    // Belegnummer: manuell oder automatisch (höchste Ziffernfolge +1)
+    let receiptNo = (body.receiptNo || "").trim();
     if (!receiptNo) {
-      // Nimm die höchste Ziffernfolge aus "receiptNo" (z. B. "#121" -> 121) und zähle hoch
       const row = (await q(
-        `SELECT COALESCE(MAX(
-            NULLIF(regexp_replace("receiptNo", '\\D', '', 'g'), '')::bigint
-          ), 0)::bigint AS last
+        `SELECT COALESCE(MAX(NULLIF(regexp_replace("receiptNo",'\\D','','g'), '')::bigint),0)::bigint AS last
          FROM "Receipt"`
       )).rows[0];
-      const next = Number(row?.last || 0) + 1;
-      receiptNo = String(next);
+      receiptNo = String(Number(row?.last || 0) + 1);
     }
 
     const id = uuid();
 
-    // 2) Relevante Produkte in einem Schlag holen (für Grundpreis-Logik)
+    // Produkte für Grundpreis/Einheit holen
     const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
     let prodMap = new Map();
-    if (prodIds.length > 0) {
-      const prows = (await q(
-        `SELECT
-           "id"::text                                        AS "id",
-           COALESCE("name",'')                               AS "name",
-           COALESCE("kind",'product')                        AS "kind",
-           COALESCE("priceCents",0)::bigint                  AS "priceCents",
-           COALESCE("hourlyRateCents",0)::bigint             AS "hourlyRateCents",
-           COALESCE("travelBaseCents",0)::bigint             AS "travelBaseCents",
-           COALESCE("travelPerKmCents",0)::bigint            AS "travelPerKmCents"
-         FROM "Product"
-         WHERE "id"::text = ANY($1::text[])`,
+    if (prodIds.length) {
+      const pr = (await q(
+        `SELECT "id"::text AS id,
+                COALESCE("name",'') AS name,
+                COALESCE("kind",'product') AS kind,
+                COALESCE("priceCents",0)::bigint AS "priceCents",
+                COALESCE("hourlyRateCents",0)::bigint AS "hourlyRateCents",
+                COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
+                COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
+           FROM "Product"
+          WHERE "id"::text = ANY($1::text[])`,
         [prodIds]
       )).rows;
-      prodMap = new Map(prows.map(p => [p.id, p]));
+      prodMap = new Map(pr.map(p => [p.id, p]));
     }
 
-    // 3) Netto ermitteln und Items vorbereiten (Grundpreis berücksichtigen)
+    // Preislogik & Summen (inkl. Grundpreis)
     const prepared = [];
-    let netCents = 0;
+    let net = 0;
 
     for (const raw of items) {
-      const qty = toInt(raw.quantity || 0);
-      let unit = toInt(raw.unitPriceCents || 0);  // Fallback
-      let base = 0;
-      let name = (raw.name || "").trim();
-      let productId = raw.productId || null;
+      const qty  = toInt(raw.quantity || 0);
+      let unit   = toInt(raw.unitPriceCents || 0); // Fallback
+      let base   = 0;
+      let name   = (raw.name || "").trim();
+      const pid  = raw.productId || null;
 
-      if (productId && prodMap.has(String(productId))) {
-        const p = prodMap.get(String(productId));
+      if (pid && prodMap.has(String(pid))) {
+        const p = prodMap.get(String(pid));
         name = p.name || name;
-
         if (p.kind === "service") {
           base = toInt(p.priceCents || 0);
-          unit = toInt(p.hourlyRateCents || 0);
+          const hr = toInt(p.hourlyRateCents || 0);
+          unit = hr > 0 ? hr : toInt(p.priceCents || 0);
         } else if (p.kind === "travel") {
           base = toInt(p.travelBaseCents || 0);
           unit = toInt(p.travelPerKmCents || 0);
         } else {
-          // "product"
           base = 0;
           unit = toInt(p.priceCents || 0);
         }
       }
 
-      const lineTotal = base + (qty * unit);
-      netCents += lineTotal;
+      const lineTotal = base + qty * unit;
+      net += lineTotal;
 
       prepared.push({
-        productId,
+        productId: pid,
         name: name || "Position",
         quantity: qty,
-        unitPriceCents: unit,         // zeigt im UI den Stück-/Stundensatz/Km‑Satz
-        lineTotalCents: lineTotal,    // enthält Grundpreis + qty*unit
+        unitPriceCents: unit,
+        lineTotalCents: lineTotal
       });
     }
 
-    const disc = toInt(discountCents || 0);
-    const netAfterDiscount = Math.max(0, netCents - disc);
-    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * 0.19);
+    const discountCents = toInt(body.discountCents || 0);
+    const netAfterDiscount = Math.max(0, net - discountCents);
+    const taxCents = vatExempt ? 0 : Math.round(netAfterDiscount * (Number(settings.taxRateDefault ?? 19) / 100));
     const grossCents = netAfterDiscount + taxCents;
 
-    // 4) INSERT (optional: Transaktion, hier sequentiell)
     await q(
       `INSERT INTO "Receipt"
          ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt")
        VALUES
          ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7,$8,$9,now(),now())`,
-      [id, receiptNo, date || null, !!vatExempt, currency, netAfterDiscount, taxCents, grossCents, disc]
+      [id, receiptNo, body.date || null, vatExempt, currency, netAfterDiscount, taxCents, grossCents, discountCents]
     );
 
     for (const it of prepared) {
@@ -184,15 +182,7 @@ export async function POST(request) {
            ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
          VALUES
            ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
-        [
-          uuid(),
-          id,
-          it.productId,
-          it.name,
-          it.quantity,
-          it.unitPriceCents,
-          it.lineTotalCents
-        ]
+        [uuid(), id, it.productId, it.name, it.quantity, it.unitPriceCents, it.lineTotalCents]
       );
     }
 
