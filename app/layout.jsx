@@ -1,6 +1,5 @@
 import "./globals.css";
 import HeaderTop from "./components/HeaderTop";
-import InfoStripe from "./components/InfoStripe";
 import AppThemeClient from "@/components/AppThemeClient";
 
 export const metadata = {
@@ -20,8 +19,7 @@ export default function RootLayout({ children }) {
         {/* Obere Kopfzeile bleibt unverändert */}
         <HeaderTop />
         {/* Farbstreifen darunter (Text ein/aus je nach Position) */}
-        <InfoStripe position="top" showText={true} />
-        <AppThemeClient />
+        <AppThemeClient position="top" showText={true} />
 
         {/* Seiten-Container */}
         <main className="container" style={{ width: "100%", maxWidth: "100%" }}>
@@ -29,7 +27,7 @@ export default function RootLayout({ children }) {
         </main>
 
         {/* Unterer Farbstreifen ohne Text */}
-        <InfoStripe position="bottom" showText={false} />
+        <AppThemeClient position="bottom" showText={false} />
 
         {/* Footer */}
         <footer
