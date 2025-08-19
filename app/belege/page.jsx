@@ -8,7 +8,9 @@ function money(cents, curr = "EUR") {
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
 }
 const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
+
 function makeEmptyItem() {
+  // Enthält baseCents (Grundpreis) und kind, damit die Summen korrekt sind
   return { productId: "", name: "", quantity: 1, unitPriceCents: 0, baseCents: 0, kind: "product", lineTotalCents: 0 };
 }
 
@@ -87,7 +89,7 @@ export default function ReceiptsPage() {
         if (js?.nextNo) return String(js.nextNo);
       }
     } catch {}
-    // Fallback (Zeitstempel), falls Endpoint (noch) nicht existiert
+    // Fallback, falls Endpoint (noch) nicht existiert
     return String(Date.now());
   }
 
@@ -116,6 +118,9 @@ export default function ReceiptsPage() {
             name: it.name || "",
             quantity: toInt(it.quantity || 1),
             unitPriceCents: toInt(it.unitPriceCents || 0),
+            // Falls bestehende Items (aus der DB) den Grundpreis nicht enthalten:
+            baseCents: 0,
+            kind: "product",
             lineTotalCents: toInt(it.lineTotalCents || 0),
           }))
         : [makeEmptyItem()]
@@ -128,44 +133,53 @@ export default function ReceiptsPage() {
   function updateItem(idx, patch) {
     setItems((prev) => {
       const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
-      next[idx].lineTotalCents = toInt(next[idx].quantity) * toInt(next[idx].unitPriceCents);
+      const x = next[idx];
+      x.lineTotalCents = toInt(x.baseCents || 0) + (toInt(x.quantity) * toInt(x.unitPriceCents));
       return next;
     });
   }
 
   function onProductSelect(idx, productId) {
-  const p = products.find((x) => x.id === productId);
-  if (!p) {
-    updateItem(idx, { productId: "", name: "", unitPriceCents: 0, baseCents: 0, kind: "product" });
-    return;
+    const p = products.find((x) => x.id === productId);
+    if (!p) {
+      updateItem(idx, { productId: "", name: "", unitPriceCents: 0, baseCents: 0, kind: "product" });
+      return;
+    }
+    // Einzelpreis + Grundpreis gemäß Art setzen (nicht editierbar im UI)
+    let unit = p.priceCents;
+    let base = 0;
+    if (p.kind === "service") {
+      base = toInt(p.priceCents || 0);           // Grundpreis
+      unit = toInt(p.hourlyRateCents || 0);      // Satz/Std.
+    } else if (p.kind === "travel") {
+      base = toInt(p.travelBaseCents || 0);      // Grundpreis
+      unit = toInt(p.travelPerKmCents || 0);     // Pauschale/km
+    } else {
+      // product
+      base = 0;
+      unit = toInt(p.priceCents || 0);
+    }
+    updateItem(idx, {
+      productId: p.id,
+      name: p.name,                 // Name aus Produkt
+      unitPriceCents: unit,
+      baseCents: base,
+      kind: p.kind || "product"
+    });
   }
-  let unit = p.priceCents;
-  let base = 0;
-  if (p.kind === "service") {
-    base = toInt(p.priceCents || 0);
-    unit = toInt(p.hourlyRateCents || 0);
-  } else if (p.kind === "travel") {
-    base = toInt(p.travelBaseCents || 0);
-    unit = toInt(p.travelPerKmCents || 0);
-  } else {
-    base = 0;
-    unit = toInt(p.priceCents || 0);
-  }
-  updateItem(idx, {
-    productId: p.id,
-    name: p.name,
-    unitPriceCents: unit,
-    baseCents: base,
-    kind: p.kind || "product"
-  });
-}
 
   function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
   function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
 
-  /* Summen (Rabatt unter Positionen) */
+  /* Summen (jetzt inkl. Grundpreis je Position) */
   const calc = useMemo(() => {
-    const netCents = items.reduce((s, it) => s + (toInt(it.quantity) * toInt(it.unitPriceCents)), 0);
+    const netCents = items.reduce((s, it) => {
+      const base = toInt(it.baseCents || 0);
+      const unit = toInt(it.unitPriceCents || 0);
+      const qty  = toInt(it.quantity || 0);
+      return s + base + (qty * unit);
+    }, 0);
+
     const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
     const netAfterDiscount = Math.max(0, netCents - discountCents);
     const taxCents = vatExemptDefault ? 0 : Math.round(netAfterDiscount * 0.19);
@@ -173,15 +187,16 @@ export default function ReceiptsPage() {
     return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
   }, [items, discount, vatExemptDefault]);
 
-  /* Speichern (Neu/Update) – Hinweis: Dein aktuelles Backend ignoriert receiptNo und vergibt selbst.
-     Wenn du die editierte/benutzerdefinierte Nummer speichern willst, musst du /api/receipts (POST/PUT) entsprechend anpassen. */
+  /* Speichern (Neu/Update)
+     Hinweis: Server rechnet final korrekt inkl. Grundpreis nach (per Produkt-Art).
+     Wir senden wie gehabt productId/quantity/unitPriceCents (baseCents wird serverseitig bestimmt). */
   async function saveReceipt() {
     try {
       const cleanItems = items
         .map((it) => ({
           productId: it.productId || null,
           name: (it.name || "").trim() || "Position",
-          quantity: Math.max(0, toInt(it.quantity || 0)),
+          quantity: toInt(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
         }))
         .filter((it) => it.quantity > 0 && it.unitPriceCents >= 0);
@@ -192,7 +207,7 @@ export default function ReceiptsPage() {
       }
 
       const payload = {
-        receiptNo,                   // wird evtl. vom Backend überschrieben (siehe Hinweis oben)
+        receiptNo,                   // optional benutzerdefiniert
         date: formDate || null,
         vatExempt: !!vatExemptDefault,
         currency,
@@ -317,7 +332,7 @@ export default function ReceiptsPage() {
                                 {Array.isArray(r.items) && r.items.map((it, idx) => {
                                   const qty = toInt(it.quantity || 0);
                                   const unit = toInt(it.unitPriceCents || 0);
-                                  const line = toInt(it.lineTotalCents || qty * unit);
+                                  const line = toInt(it.lineTotalCents || (qty * unit)); // DB enthält lineTotalCents bereits korrekt
                                   return (
                                     <tr key={idx}>
                                       <td className="ellipsis">{it.name || "—"}</td>
@@ -439,7 +454,7 @@ export default function ReceiptsPage() {
               </div>
             </div>
 
-            {/* Rabatt + Summen (Rabatt unter Positionen) */}
+            {/* Rabatt + Summen (inkl. Grundpreis) */}
             <div className="surface" style={{ padding: 12, marginTop: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
                 <div>
