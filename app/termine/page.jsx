@@ -3,11 +3,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
-import { de } from "date-fns/locale";
 
+// ---- Locale-Formatter (de-DE) ohne externe Lib ----
+const fmtMonthYear = (d) =>
+  new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(d);
+const fmtLong = (d) =>
+  new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(d);
+
+// ---- Datums-Helper ----
 function startOfMonth(d){ const x=new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
 function addMonths(d, m){ const x=new Date(d); x.setMonth(x.getMonth()+m); return x; }
+// TZ-stabil auf YYYY-MM-DD normalisieren (Mittag erzwingen, dann ISO-Schnitt)
 function toYMD(d){ const z=new Date(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
 function ym(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
@@ -30,10 +36,16 @@ export default function TerminePage(){
   },[monthString]);
 
   const days = useMemo(()=>{
+    // Raster: Montag–Sonntag, 6 Reihen
     const first = startOfMonth(cursor);
     const weekday = (first.getDay()+6)%7; // Mo=0..So=6
-    const start = new Date(first); start.setDate(first.getDate() - weekday);
-    const out = []; for (let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); out.push(d); }
+    const start = new Date(first);
+    start.setDate(first.getDate() - weekday);
+    const out = [];
+    for (let i=0;i<42;i++){
+      const d=new Date(start); d.setDate(start.getDate()+i);
+      out.push(d);
+    }
     return out;
   },[cursor]);
 
@@ -49,11 +61,11 @@ export default function TerminePage(){
       {/* Card 1: Monatskalender */}
       <div className="surface card">
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <h2>Kalender – {format(cursor, "LLLL yyyy", { locale: de })}</h2>
+          <h2>Kalender – {fmtMonthYear(cursor)}</h2>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn" onClick={()=>setCursor(addMonths(cursor,-1))}>◀︎</button>
+            <button className="btn" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vorheriger Monat">◀︎</button>
             <button className="btn" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
-            <button className="btn" onClick={()=>setCursor(addMonths(cursor,1))}>▶︎</button>
+            <button className="btn" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Nächster Monat">▶︎</button>
           </div>
         </div>
 
@@ -64,8 +76,15 @@ export default function TerminePage(){
             const key = toYMD(d);
             const list = byDate[key]||[];
             return (
-              <Link href={`/termine/${key}`} key={i} className={`calendar-cell ${inMonth?"":"muted"}`} title={`Details für ${format(d,"PPP",{locale:de})}`}>
-                <div className="calendar-cell-top"><span className="daynum">{d.getDate()}</span></div>
+              <Link
+                href={`/termine/${key}`}
+                key={i}
+                className={`calendar-cell ${inMonth?"":"muted"}`}
+                title={`Details für ${fmtLong(d)}`}
+              >
+                <div className="calendar-cell-top">
+                  <span className="daynum">{d.getDate()}</span>
+                </div>
                 <div className="calendar-cell-events">
                   {list.slice(0,3).map(ev=>(
                     <div key={ev.id} className={`pill ${ev.kind==='order'?'pill-accent':'pill-info'}`}>
@@ -85,7 +104,7 @@ export default function TerminePage(){
 
       {/* Card 2: Monatsübersicht */}
       <div className="surface card">
-        <div className="card-header"><h2>Termine / Aufträge – Übersicht ({format(cursor, "LLLL yyyy", { locale: de })})</h2></div>
+        <div className="card-header"><h2>Termine / Aufträge – Übersicht ({fmtMonthYear(cursor)})</h2></div>
         <div className="table">
           <div className="table-row head">
             <div>Datum</div><div>Start</div><div>Art</div><div>Bezeichnung</div><div>Kunde</div><div>Status</div>
