@@ -13,7 +13,7 @@ export default function ModuleLauncher({ open, onClose, id }) {
     <div id={id} className="surface" style={{ marginTop: 12, padding: 12, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)" }}>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
         <ModuleLink href="/">Dashboard</ModuleLink>
-        <ModuleLink href="/termine'">Termine</ModuleLink>
+        <ModuleLink href="/termine">Termine</ModuleLink>
         <ModuleLink href="/kunden">Kunden</ModuleLink>
         <ModuleLink href="/produkte">Produkte & Dienstleistungen</ModuleLink>
         <ModuleLink href="/rechnungen">Rechnungen</ModuleLink>
