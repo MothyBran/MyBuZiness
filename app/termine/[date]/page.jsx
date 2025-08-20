@@ -6,11 +6,16 @@ import Link from "next/link";
 import Modal from "@/app/components/Modal";
 import { useRouter } from "next/navigation";
 
-// 30-Minuten Raster 00:00..23:30
-function times(){ const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);} return out; }
+const SLOT_MINUTES = 30;         // Rasterbreite
+const SLOT_HEIGHT  = 28;         // px pro 30 Minuten
+const DAY_MINUTES  = 24*60;
 
-// Status-Helfer
+const fmtDateDE = (ymd)=> ymd && ymd.length>=10 ? ymd.split("-").reverse().join(".") : (ymd||"");
 const STATUS_LABEL = { open: "offen", cancelled: "abgesagt", done: "abgeschlossen" };
+
+// 30-Minuten-Liste für Dropdowns
+function times(){ const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);} return out; }
+function hhmmToMinutes(hhmm){ const [h,m]=String(hhmm||"00:00").split(":").map(Number); return (h*60 + (m||0)); }
 
 export default function DayPage({ params }) {
   const router = useRouter();
@@ -31,12 +36,14 @@ export default function DayPage({ params }) {
       .catch(()=>setItems([]));
   },[date]);
 
-  // Load customers for dropdown (robust mapping)
+  // Load customers robust
   useEffect(()=>{ 
     fetch(`/api/customers`)
       .then(r=>r.json())
       .then(rows=>{
-        const mapped = (rows||[]).map(c=>{
+        const arr = Array.isArray(rows) ? rows
+          : rows?.rows || rows?.data || rows?.items || rows?.customers || [];
+        const mapped = (arr||[]).map(c=>{
           const id = c.id ?? c.customerId ?? c.uuid ?? c._id ?? "";
           const name = c.name ?? c.fullName ?? c.company ?? c.title ?? "";
           return { id: String(id), name: String(name) };
@@ -46,13 +53,15 @@ export default function DayPage({ params }) {
       .catch(()=>setCustomers([])); 
   },[]);
 
-  const grouped = useMemo(()=>{
-    const map = {}; 
-    for(const t of items){ 
-      const key = (t.startAt||"00:00").slice(0,5); 
-      (map[key] ||= []).push(t); 
-    }
-    return map;
+  // Absolut positionierte Balken (top/height in px)
+  const blocks = useMemo(()=>{
+    return (items||[]).map(ev=>{
+      const startMin = hhmmToMinutes(ev.startAt||"00:00");
+      const endMin   = hhmmToMinutes(ev.endAt || ev.startAt || "00:00");
+      const top = (startMin / SLOT_MINUTES) * SLOT_HEIGHT;
+      const height = Math.max(SLOT_HEIGHT, Math.max(1, (endMin - startMin) / SLOT_MINUTES) * SLOT_HEIGHT);
+      return { ...ev, top, height };
+    }).sort((a,b)=> a.top - b.top || a.title.localeCompare(b.title));
   },[items]);
 
   async function handleDelete(id, title){
@@ -71,49 +80,56 @@ export default function DayPage({ params }) {
       <div className="surface card">
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <h2>Tagesansicht – {date}</h2>
+            <h2>Tagesansicht – {fmtDateDE(date)}</h2>
             <Link href="/termine" className="btn" style={{marginTop:8}}>← Zurück zum Kalender</Link>
           </div>
           <button className="btn btn-primary" onClick={()=>setOpenNew(true)}>+ Neuer Eintrag</button>
         </div>
 
+        {/* Grid: linke Stundenleiste + Timeline */}
         <div className="day-grid">
           <div className="hours">
             {Array.from({length:24}, (_,h)=>(
               <div key={h} className="hour">{String(h).padStart(2,"0")}:00</div>
             ))}
           </div>
+
           <div className="timeline">
-            {times().map((t,i)=>(
-              <div key={t} className={`slot ${t.endsWith(":00") ? "major" : "minor"}`}>
-                <div className="slot-content">
-                  {(grouped[t]||[]).map(ev=>(
-                    <div key={ev.id} className={`chip ${ev.kind==='order'?'chip-accent':'chip-info'}`} title={ev.title}>
-                      <div className="chip-row">
-                        <div className="chip-main">
-                          <b>{ev.kind==='order'?'Auftrag':'Termin'}</b>
-                          <span>{ev.title}</span>
-                          {ev.customerName && <span>· {ev.customerName}</span>}
-                          <span className="chip-time">· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
-                        </div>
-                        <div className="chip-actions">
-                          <button
-                            className="btn btn-xxs"
-                            title="Bearbeiten"
-                            onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}
-                          >⚙️ Bearbeiten</button>
-                          <button
-                            className="btn btn-xxs btn-danger"
-                            title="Löschen"
-                            onClick={()=>handleDelete(ev.id, ev.title)}
-                          >❌ Löschen</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            {/* Stunden-/Halbstunden-Linien */}
+            {Array.from({length:(DAY_MINUTES/SLOT_MINUTES)}, (_,i)=>(
+              <div
+                key={i}
+                className={`line ${i%2===0?"major":"minor"}`}
+                style={{ top: i*SLOT_HEIGHT }}
+              />
+            ))}
+
+            {/* Termin-Balken */}
+            {blocks.map(ev=>(
+              <div
+                key={ev.id}
+                className={`block ${ev.kind==='order'?'accent':'info'}`}
+                style={{ top: ev.top, height: ev.height }}
+                title={`${ev.title} (${ev.startAt?.slice(0,5)}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""})`}
+              >
+                <div className="block-inner">
+                  <div className="block-left">
+                    <b>{ev.kind==='order'?'Auftrag':'Termin'}</b>
+                    <span>{ev.title}</span>
+                    {ev.customerName && <span>· {ev.customerName}</span>}
+                    <span className="block-time">· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
+                  </div>
+                  <div className="block-actions">
+                    <Link href={`/termine/eintrag/${ev.id}`} className="btn btn-xxs">Details</Link>
+                    <button className="btn btn-xxs" onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}>⚙️</button>
+                    <button className="btn btn-xxs btn-danger" onClick={()=>handleDelete(ev.id, ev.title)}>❌</button>
+                  </div>
                 </div>
               </div>
             ))}
+
+            {/* Containerhöhe */}
+            <div style={{ height: (DAY_MINUTES/SLOT_MINUTES)*SLOT_HEIGHT }} />
           </div>
         </div>
       </div>
@@ -159,7 +175,7 @@ export default function DayPage({ params }) {
           border-right:1px solid rgba(0,0,0,.08);
         }
         .hour{
-          height: 64px;
+          height: ${SLOT_HEIGHT*2}px; /* 60 Minuten */
           display:flex; align-items:flex-start; justify-content:center;
           padding-top: 6px;
           font-size:12px; opacity:.8;
@@ -169,23 +185,24 @@ export default function DayPage({ params }) {
           position:relative;
           background: #fff;
         }
-        .slot{
-          height: 32px; /* 30-min Raster */
-          border-bottom:1px dashed rgba(0,0,0,.05);
-          padding: 2px 8px;
+        .line{
+          position:absolute; left:0; right:0;
+          border-bottom:1px dashed rgba(0,0,0,.06);
         }
-        .slot.major{
-          border-bottom:1px solid rgba(0,0,0,.08);
-          background: linear-gradient(to bottom, rgba(0,0,0,.015), rgba(0,0,0,0));
+        .line.major{ border-bottom:1px solid rgba(0,0,0,.09); }
+        .block{
+          position:absolute; left:8px; right:8px;
+          border-radius: 12px;
+          background:#e5e7eb;
+          box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06));
+          display:flex; align-items:center;
         }
-        .slot-content{ display:flex; flex-direction:column; gap:6px; }
-        .chip{ padding:8px 10px; border-radius: 12px; background:#e5e7eb; box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06)); }
-        .chip-info{ background: var(--chip-info, #DBEAFE); }
-        .chip-accent{ background: var(--chip-accent, #FDE68A); }
-        .chip-row{ display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-        .chip-main{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        .chip-time{ opacity:.7; }
-        .chip-actions{ display:flex; gap:6px; }
+        .block.info{ background: var(--chip-info, #DBEAFE); }
+        .block.accent{ background: var(--chip-accent, #FDE68A); }
+        .block-inner{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; }
+        .block-left{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .block-time{ opacity:.7; }
+        .block-actions{ display:flex; gap:6px; }
         .btn-xxs{
           font-size: 12px;
           padding: 4px 8px;
@@ -208,7 +225,7 @@ function NewEntryForm({ date, customers, onDone }) {
   const [customerId,setCustomerId]=useState("");
   const [customerName,setCustomerName]=useState("");
   const [note,setNote]=useState("");
-  const [status] = useState("open"); // neu angelegte Einträge starten als "open"
+  const [status] = useState("open");
 
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
@@ -226,8 +243,7 @@ function NewEntryForm({ date, customers, onDone }) {
         endAt: endAt || null,
         customerId: customerId || null,
         customerName: customerName || null,
-        note,
-        status
+        note, status
       })
     });
     if(!res.ok){ alert("Fehler beim Speichern"); return; }
@@ -371,19 +387,19 @@ function EditEntryForm({ initial, customers, onDone }) {
             {hhmm.map(t=><option key={t} value={t}>{t}</option>)}
           </select>
         </label>
-        <label>Kunde (optional)
-          <select value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
-            <option value="">—</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        <label>Status
+          <select value={status} onChange={e=>setStatus(e.target.value)}>
+            <option value="open">offen</option>
+            <option value="cancelled">abgesagt</option>
+            <option value="done">abgeschlossen</option>
           </select>
         </label>
       </div>
 
-      <label>Status
-        <select value={status} onChange={e=>setStatus(e.target.value)}>
-          <option value="open">{STATUS_LABEL.open}</option>
-          <option value="cancelled">{STATUS_LABEL.cancelled}</option>
-          <option value="done">{STATUS_LABEL.done}</option>
+      <label>Kunde (optional)
+        <select value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
+          <option value="">—</option>
+          {customers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </label>
 
