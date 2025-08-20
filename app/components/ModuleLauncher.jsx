@@ -18,6 +18,7 @@ export default function ModuleLauncher({ open, onClose, id }) {
         <ModuleLink href="/produkte">Posten</ModuleLink>
         <ModuleLink href="/rechnungen">Rechnungen</ModuleLink>
         <ModuleLink href="/belege">Belege</ModuleLink>
+        <ModuleLink href="/finanzen">Finanzen</ModuleLink>
         <ModuleLink href="/einstellungen">Einstellungen</ModuleLink>
       </div>
     </div>
