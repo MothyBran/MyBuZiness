@@ -1,6 +1,5 @@
+// app/api/health/route.js
+import { NextResponse } from "next/server";
 export async function GET() {
-  return new Response(
-    JSON.stringify({ ok: true, time: new Date().toISOString() }),
-    { headers: { 'content-type': 'application/json' } }
-  );
+  return NextResponse.json({ ok: true, time: new Date().toISOString() });
 }
