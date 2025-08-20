@@ -5,33 +5,61 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-// ---- Locale-Formatter (de-DE) ohne externe Lib ----
-const fmtMonthYear = (d) =>
-  new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(d);
-const fmtDateDE = (ymd) => {
-  if (!ymd || ymd.length < 10) return ymd || "";
-  const [y,m,d] = ymd.split("-");
-  return `${d}.${m}.${y}`;
-};
-const fmtLong = (d) =>
-  new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(d);
+/* =======================
+   Datum-Utilities (robust)
+   ======================= */
+function toDate(input) {
+  // akzeptiert: "YYYY-MM-DD", ISO, Date
+  if (input instanceof Date) return input;
+  if (typeof input === "string") {
+    // Wenn nur YYYY-MM-DD → als lokales Datum lesen
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+      const [y, m, d] = input.split("-").map(Number);
+      return new Date(y, m - 1, d, 12, 0, 0, 0); // 12:00, um TZ-Shift zu vermeiden
+    }
+    const d = new Date(input);
+    if (!isNaN(d)) return d;
+  }
+  const d = new Date(input || Date.now());
+  return isNaN(d) ? new Date() : d;
+}
+function formatDateDE(input) {
+  const d = toDate(input);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+function fmtMonthYear(d) {
+  const x = toDate(d);
+  return new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(x);
+}
+function fmtLong(d) {
+  const x = toDate(d);
+  return new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(x);
+}
 
-// ---- Datums-Helper ----
-function startOfMonth(d){ const x=new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
-function addMonths(d, m){ const x=new Date(d); x.setMonth(x.getMonth()+m); return x; }
-function toYMD(d){ const z=new Date(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
-function ym(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
-const TODAY = toYMD(new Date());
+/* =======================
+   Kalender-Helfer
+   ======================= */
+function startOfMonth(d) { const x = toDate(d); x.setDate(1); x.setHours(12,0,0,0); return x; }
+function addMonths(d, m) { const x = toDate(d); x.setMonth(x.getMonth()+m); return x; }
+function toYMD(d)       { const z = toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
+function ym(d)          { const x = toDate(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`; }
 
-// ---- Status-Logik (Anzeige) ----
+const TODAY_YMD = toYMD(new Date());
+
+/* =======================
+   Status-Logik (Anzeige)
+   ======================= */
 function computeDisplayStatus(e){
   const now = new Date();
-  const start = new Date(`${e.date}T${(e.startAt||"00:00")}:00`);
-  const end = new Date(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
+  const start = toDate(`${e.date}T${(e.startAt||"00:00")}:00`);
+  const end = toDate(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
   const isPast = (end < now);
   if (e.status === "cancelled") return "abgesagt";
   if (e.status === "done") return "abgeschlossen";
-  if (e.status === "open" && isPast) return "abgeschlossen";
+  if (e.status === "open" && isPast) return "abgeschlossen"; // auto Anzeige
   return "offen";
 }
 function nextStatus(currentDisplay){
@@ -74,7 +102,7 @@ export default function TerminePage(){
 
   const byDate = useMemo(()=>{
     const map = {};
-    for(const e of events){ (map[e.date] ||= []).push(e); }
+    for(const e of events){ const key = toYMD(e.date); (map[key] ||= []).push(e); }
     Object.values(map).forEach(list => list.sort((a,b)=> (a.startAt??"").localeCompare(b.startAt??"")));
     return map;
   },[events]);
@@ -112,7 +140,7 @@ export default function TerminePage(){
             const inMonth = d.getMonth()===cursor.getMonth();
             const key = toYMD(d);
             const list = byDate[key]||[];
-            const isToday = key === TODAY;
+            const isToday = key === TODAY_YMD;
             return (
               <Link
                 href={`/termine/${key}`}
@@ -123,13 +151,17 @@ export default function TerminePage(){
                 <div className="daynum-wrap">
                   <span className="daynum">{d.getDate()}</span>
                 </div>
-                <div className="calendar-cell-events">
-                  {list.slice(0,3).map(ev=>(
-                    <div key={ev.id} className={`pill ${ev.kind==='order'?'pill-accent':'pill-info'}`}>
-                      {ev.startAt?.slice(0,5)} {ev.title}
-                    </div>
+
+                {/* Markierung: hat Termine → Punkte */}
+                <div className="markers">
+                  {list.slice(0,4).map(x=>(
+                    <span
+                      key={x.id}
+                      className={`dot ${x.kind==='order'?'dot-accent':'dot-info'}`}
+                      title={`${x.startAt?.slice(0,5)||""} ${x.title}`}
+                    />
                   ))}
-                  {list.length>3 && <div className="pill">{`+${list.length-3} weitere`}</div>}
+                  {list.length>4 && <span className="dot more" title={`+${list.length-4} weitere`} />}
                 </div>
               </Link>
             );
@@ -150,7 +182,7 @@ export default function TerminePage(){
           </div>
 
           {events.map(ev=>{
-            const href = `/termine/eintrag/${ev.id}`; // <-- Detailansicht pro Termin
+            const href = `/termine/eintrag/${ev.id}`; // Detailansicht pro Termin
             const displayStatus = computeDisplayStatus(ev);
             return (
               <Link
@@ -165,7 +197,7 @@ export default function TerminePage(){
                   textDecoration:"none", color:"inherit"
                 }}
               >
-                <div>{fmtDateDE(ev.date)}</div>
+                <div>{formatDateDE(ev.date)}</div>
                 <div>{ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</div>
                 <div>{ev.kind==="order"?"Auftrag":"Termin"}</div>
                 <div>{ev.title}</div>
@@ -190,6 +222,7 @@ export default function TerminePage(){
       </div>
 
       <style jsx>{`
+        /* Kalender */
         .calendar-grid{
           display:grid;
           grid-template-columns: repeat(7,1fr);
@@ -204,15 +237,16 @@ export default function TerminePage(){
         .calendar-cell{
           display:flex;
           flex-direction:column;
+          align-items:center;
           gap:8px;
-          padding:8px;
-          border-radius: var(--radius, 12px);
+          padding:10px 8px;
+          border-radius: 12px;
           background: var(--surface, #fff);
           box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06));
           text-decoration:none;
           color: inherit;
           min-height: 110px;
-          border:1px solid rgba(0,0,0,.12);   /* sichtbarer Rahmen */
+          border:1px solid rgba(0,0,0,.12);   /* sichtbarer Rahmen pro Tag */
         }
         .calendar-cell:hover{ outline:2px solid rgba(0,0,0,.06); }
         .muted{ opacity:.55; }
@@ -222,21 +256,20 @@ export default function TerminePage(){
           border-radius: 999px;
         }
         .today .daynum{ outline: 3px solid var(--color-primary, #0ea5e9); } /* HEUTE markiert */
-        .calendar-cell-events{ display:flex; flex-direction:column; gap:6px; }
-        .pill{
-          border-radius: 999px;
-          padding:2px 8px;
-          font-size:12px;
-          background: #e5e7eb;
-          white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
-        }
-        .pill-info{ background: var(--chip-info, #DBEAFE); }
-        .pill-accent{ background: var(--chip-accent, #FDE68A); }
 
+        /* kleine Termin-Indikatoren */
+        .markers{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+        .dot{ width:8px; height:8px; border-radius:999px; background:#e5e7eb; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+        .dot-info{ background: var(--chip-info, #DBEAFE); }
+        .dot-accent{ background: var(--chip-accent, #FDE68A); }
+        .more{ background:#ddd; }
+
+        /* Tabelle */
         .table{ display:grid; }
         .table-row{ display:grid; grid-template-columns: 120px 88px 100px 1fr 1fr 120px; gap:8px; padding:10px; align-items:center; }
         .table-row.head{ font-weight:800; border-bottom:1px solid rgba(0,0,0,.1); }
         .click-row:hover{ background: rgba(0,0,0,.02); }
+
         .card-header{ padding:8px; display:flex; align-items:center; justify-content:space-between; }
         .info-row{ padding:8px 0 0 0; opacity:.8; font-size:14px; }
 
