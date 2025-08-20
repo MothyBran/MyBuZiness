@@ -9,6 +9,9 @@ import { useRouter } from "next/navigation";
 // 30-Minuten Raster 00:00..23:30
 function times(){ const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);} return out; }
 
+// Status-Helfer
+const STATUS_LABEL = { open: "offen", cancelled: "abgesagt", done: "abgeschlossen" };
+
 export default function DayPage({ params }) {
   const router = useRouter();
   const date = params.date; // YYYY-MM-DD
@@ -28,11 +31,18 @@ export default function DayPage({ params }) {
       .catch(()=>setItems([]));
   },[date]);
 
-  // Load customers for dropdown
+  // Load customers for dropdown (robust mapping)
   useEffect(()=>{ 
     fetch(`/api/customers`)
       .then(r=>r.json())
-      .then(rows=> setCustomers(rows?.map(c=>({ id: String(c.id??""), name: c.name || "" }))||[]) )
+      .then(rows=>{
+        const mapped = (rows||[]).map(c=>{
+          const id = c.id ?? c.customerId ?? c.uuid ?? c._id ?? "";
+          const name = c.name ?? c.fullName ?? c.company ?? c.title ?? "";
+          return { id: String(id), name: String(name) };
+        }).filter(x=>x.id && x.name);
+        setCustomers(mapped);
+      })
       .catch(()=>setCustomers([])); 
   },[]);
 
@@ -68,36 +78,43 @@ export default function DayPage({ params }) {
         </div>
 
         <div className="day-grid">
-          {times().map(t=>(
-            <div key={t} className="slot">
-              <div className="slot-time">{t}</div>
-              <div className="slot-content">
-                {(grouped[t]||[]).map(ev=>(
-                  <div key={ev.id} className={`chip ${ev.kind==='order'?'chip-accent':'chip-info'}`} title={ev.title}>
-                    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                      <b>{ev.kind==='order'?'Auftrag':'Termin'}</b>
-                      <span>{ev.title}</span>
-                      {ev.customerName && <span>· {ev.customerName}</span>}
-                      <span style={{opacity:.7}}>· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
-
-                      <div className="chip-actions">
-                        <button
-                          className="btn btn-xxs"
-                          title="Bearbeiten"
-                          onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}
-                        >⚙️ Bearbeiten</button>
-                        <button
-                          className="btn btn-xxs btn-danger"
-                          title="Löschen"
-                          onClick={()=>handleDelete(ev.id, ev.title)}
-                        >❌ Löschen</button>
+          <div className="hours">
+            {Array.from({length:24}, (_,h)=>(
+              <div key={h} className="hour">{String(h).padStart(2,"0")}:00</div>
+            ))}
+          </div>
+          <div className="timeline">
+            {times().map((t,i)=>(
+              <div key={t} className={`slot ${t.endsWith(":00") ? "major" : "minor"}`}>
+                <div className="slot-content">
+                  {(grouped[t]||[]).map(ev=>(
+                    <div key={ev.id} className={`chip ${ev.kind==='order'?'chip-accent':'chip-info'}`} title={ev.title}>
+                      <div className="chip-row">
+                        <div className="chip-main">
+                          <b>{ev.kind==='order'?'Auftrag':'Termin'}</b>
+                          <span>{ev.title}</span>
+                          {ev.customerName && <span>· {ev.customerName}</span>}
+                          <span className="chip-time">· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
+                        </div>
+                        <div className="chip-actions">
+                          <button
+                            className="btn btn-xxs"
+                            title="Bearbeiten"
+                            onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}
+                          >⚙️ Bearbeiten</button>
+                          <button
+                            className="btn btn-xxs btn-danger"
+                            title="Löschen"
+                            onClick={()=>handleDelete(ev.id, ev.title)}
+                          >❌ Löschen</button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -129,14 +146,46 @@ export default function DayPage({ params }) {
       </Modal>
 
       <style jsx>{`
-        .day-grid{ display:grid; grid-template-columns: 1fr; gap:4px; }
-        .slot{ display:grid; grid-template-columns: 80px 1fr; gap:8px; align-items:flex-start; }
-        .slot-time{ opacity:.6; font-size:12px; padding-top:6px; }
+        .day-grid{
+          display:grid;
+          grid-template-columns: 80px 1fr;
+          gap:0;
+          border:1px solid rgba(0,0,0,.08);
+          border-radius: var(--radius,12px);
+          overflow:hidden;
+        }
+        .hours{
+          background: #fafafa;
+          border-right:1px solid rgba(0,0,0,.08);
+        }
+        .hour{
+          height: 64px;
+          display:flex; align-items:flex-start; justify-content:center;
+          padding-top: 6px;
+          font-size:12px; opacity:.8;
+          border-bottom:1px solid rgba(0,0,0,.06);
+        }
+        .timeline{
+          position:relative;
+          background: #fff;
+        }
+        .slot{
+          height: 32px; /* 30-min Raster */
+          border-bottom:1px dashed rgba(0,0,0,.05);
+          padding: 2px 8px;
+        }
+        .slot.major{
+          border-bottom:1px solid rgba(0,0,0,.08);
+          background: linear-gradient(to bottom, rgba(0,0,0,.015), rgba(0,0,0,0));
+        }
         .slot-content{ display:flex; flex-direction:column; gap:6px; }
-        .chip{ padding:8px 10px; border-radius: 12px; background:#e5e7eb; }
+        .chip{ padding:8px 10px; border-radius: 12px; background:#e5e7eb; box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06)); }
         .chip-info{ background: var(--chip-info, #DBEAFE); }
         .chip-accent{ background: var(--chip-accent, #FDE68A); }
-        .chip-actions{ display:flex; gap:6px; margin-left:auto; }
+        .chip-row{ display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .chip-main{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .chip-time{ opacity:.7; }
+        .chip-actions{ display:flex; gap:6px; }
         .btn-xxs{
           font-size: 12px;
           padding: 4px 8px;
@@ -159,6 +208,7 @@ function NewEntryForm({ date, customers, onDone }) {
   const [customerId,setCustomerId]=useState("");
   const [customerName,setCustomerName]=useState("");
   const [note,setNote]=useState("");
+  const [status] = useState("open"); // neu angelegte Einträge starten als "open"
 
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
@@ -171,8 +221,13 @@ function NewEntryForm({ date, customers, onDone }) {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
-        kind, title, date, startAt: startAt || "00:00", endAt: endAt || null,
-        customerId: customerId || null, customerName: customerName || null, note
+        kind, title, date,
+        startAt: startAt || "00:00",
+        endAt: endAt || null,
+        customerId: customerId || null,
+        customerName: customerName || null,
+        note,
+        status
       })
     });
     if(!res.ok){ alert("Fehler beim Speichern"); return; }
@@ -232,7 +287,7 @@ function NewEntryForm({ date, customers, onDone }) {
       </div>
 
       <style jsx>{`
-        .form{ display:grid; gap:12px; min-width: 320px; }
+        .form{ display:grid; gap:12px; min-width: 340px; }
         .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
         .grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
         label{ display:grid; gap:6px; font-size:14px; }
@@ -248,12 +303,13 @@ function NewEntryForm({ date, customers, onDone }) {
 function EditEntryForm({ initial, customers, onDone }) {
   const [kind,setKind]=useState(initial.kind || "appointment");
   const [title,setTitle]=useState(initial.title || "");
-  const [date,setDate]=useState(initial.date); // darf geändert werden
+  const [date,setDate]=useState(initial.date);
   const [startAt,setStartAt]=useState(initial.startAt?.slice(0,5) || "09:00");
   const [endAt,setEndAt]=useState(initial.endAt?.slice(0,5) || "");
   const [customerId,setCustomerId]=useState(initial.customerId || "");
   const [customerName,setCustomerName]=useState(initial.customerName || "");
   const [note,setNote]=useState(initial.note || "");
+  const [status,setStatus]=useState(initial.status || "open");
   const id = initial.id;
 
   useEffect(()=>{
@@ -272,7 +328,8 @@ function EditEntryForm({ initial, customers, onDone }) {
         endAt: endAt || null,
         customerId: customerId || null,
         customerName: customerName || null,
-        note
+        note,
+        status
       })
     });
     if(!res.ok){ alert("Speichern fehlgeschlagen."); return; }
@@ -322,6 +379,14 @@ function EditEntryForm({ initial, customers, onDone }) {
         </label>
       </div>
 
+      <label>Status
+        <select value={status} onChange={e=>setStatus(e.target.value)}>
+          <option value="open">{STATUS_LABEL.open}</option>
+          <option value="cancelled">{STATUS_LABEL.cancelled}</option>
+          <option value="done">{STATUS_LABEL.done}</option>
+        </select>
+      </label>
+
       <label>Notiz (optional)
         <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} />
       </label>
@@ -332,7 +397,7 @@ function EditEntryForm({ initial, customers, onDone }) {
       </div>
 
       <style jsx>{`
-        .form{ display:grid; gap:12px; min-width: 320px; }
+        .form{ display:grid; gap:12px; min-width: 340px; }
         .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
         .grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
         label{ display:grid; gap:6px; font-size:14px; }
