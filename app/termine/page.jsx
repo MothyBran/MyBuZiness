@@ -9,27 +9,36 @@ import { de } from "date-fns/locale";
 function startOfMonth(d){ const x=new Date(d); x.setDate(1); x.setHours(0,0,0,0); return x; }
 function endOfMonth(d){ const x=new Date(d); x.setMonth(x.getMonth()+1,0); x.setHours(23,59,59,999); return x; }
 function addMonths(d, m){ const x=new Date(d); x.setMonth(x.getMonth()+m); return x; }
-function toYMD(d){ return d.toISOString().slice(0,10); }
+function toYMD(d){ const z=new Date(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); } // stabiler gegen TZ-Shift
 function ym(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 
 export default function TerminePage(){
   const [cursor,setCursor]=useState(()=>startOfMonth(new Date()));
   const [events,setEvents]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
   const monthString = useMemo(()=>ym(cursor),[cursor]);
 
   useEffect(()=>{
+    let alive = true;
+    setLoading(true);
+    setError("");
     fetch(`/api/appointments?month=${monthString}`)
-      .then(r=>r.json())
-      .then(setEvents)
-      .catch(()=>setEvents([]));
+      .then(async r => {
+        if(!r.ok) throw new Error(await r.text());
+        return r.json();
+      })
+      .then(data => { if(alive) setEvents(Array.isArray(data)?data:[]); })
+      .catch(err => { if(alive){ setEvents([]); setError("Konnte Termine nicht laden."); console.error(err); } })
+      .finally(()=> alive && setLoading(false));
+    return ()=>{ alive=false; };
   },[monthString]);
 
   const days = useMemo(()=>{
-    // Build calendar grid (Mon-Sun, 6 weeks)
+    // Kalender-Raster: Montag–Sonntag, 6 Reihen
     const first = startOfMonth(cursor);
-    const last = endOfMonth(cursor);
-    const start = new Date(first);
     const weekday = (first.getDay()+6)%7; // Mo=0..So=6
+    const start = new Date(first);
     start.setDate(first.getDate() - weekday);
     const out = [];
     for (let i=0;i<42;i++){
@@ -45,6 +54,8 @@ export default function TerminePage(){
       map[e.date] ||= [];
       map[e.date].push(e);
     }
+    // sortiere innerhalb des Tages nach Startzeit
+    Object.keys(map).forEach(k => map[k].sort((a,b)=> (a.startAt??"").localeCompare(b.startAt??"")));
     return map;
   },[events]);
 
@@ -55,9 +66,9 @@ export default function TerminePage(){
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <h2>Kalender – {format(cursor, "LLLL yyyy", { locale: de })}</h2>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn" onClick={()=>setCursor(addMonths(cursor,-1))}>◀︎</button>
+            <button className="btn" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vorheriger Monat">◀︎</button>
             <button className="btn" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
-            <button className="btn" onClick={()=>setCursor(addMonths(cursor,1))}>▶︎</button>
+            <button className="btn" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Nächster Monat">▶︎</button>
           </div>
         </div>
 
@@ -89,6 +100,9 @@ export default function TerminePage(){
             );
           })}
         </div>
+
+        {loading && <div className="info-row">Lade Termine…</div>}
+        {error && !loading && <div className="info-row" style={{color:"var(--danger, #b91c1c)"}}>{error}</div>}
       </div>
 
       {/* Card 2: Monatsübersicht */}
@@ -110,7 +124,11 @@ export default function TerminePage(){
               <div>{ev.status || "open"}</div>
             </div>
           ))}
-          {events.length===0 && <div className="table-row"><div style={{gridColumn:"1/-1"}}>Keine Einträge im ausgewählten Monat.</div></div>}
+          {(!loading && !error && events.length===0) && (
+            <div className="table-row">
+              <div style={{gridColumn:"1/-1"}}>Keine Einträge im ausgewählten Monat.</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -135,6 +153,7 @@ export default function TerminePage(){
           box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06));
           text-decoration:none;
           color: inherit;
+          min-height: 92px;
         }
         .calendar-cell:hover{ outline:2px solid rgba(0,0,0,.06); }
         .muted{ opacity:.5; }
@@ -153,6 +172,7 @@ export default function TerminePage(){
         .table-row{ display:grid; grid-template-columns: 110px 74px 90px 1fr 1fr 90px; gap:8px; padding:8px; align-items:center; }
         .table-row.head{ font-weight:700; border-bottom:1px solid rgba(0,0,0,.1); }
         .card-header{ padding:8px; display:flex; align-items:center; justify-content:space-between; }
+        .info-row{ padding:8px 0 0 0; opacity:.8; font-size:14px; }
       `}</style>
     </div>
   );
