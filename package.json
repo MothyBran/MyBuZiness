@@ -8,6 +8,7 @@
     "start": "node -e \"console.log('DB init…')\" && next start -p ${PORT:-3000}",
     "lint": "next lint"
   },
+  "engines": { "'node" : ">=18.17" },
   "dependencies": {
     "next": "14.2.5",
     "react": "18.3.1",
