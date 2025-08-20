@@ -2,31 +2,49 @@
 import { NextResponse } from "next/server";
 import { pool, ensureSchemaOnce } from "@/lib/db";
 
+function todayYMD() {
+  const z = new Date();
+  z.setHours(12, 0, 0, 0);
+  return z.toISOString().slice(0, 10);
+}
+
 export async function GET(req) {
   await ensureSchemaOnce();
 
   const { searchParams } = new URL(req.url);
-  const month = searchParams.get("month"); // YYYY-MM
-  const date  = searchParams.get("date");  // YYYY-MM-DD
-  const kind  = searchParams.get("kind");  // optional: appointment|order
+  const month   = searchParams.get("month");   // YYYY-MM
+  const date    = searchParams.get("date");    // YYYY-MM-DD
+  const kind    = searchParams.get("kind");    // appointment|order (optional)
+  const upcoming= searchParams.get("upcoming"); // "true" => kommende Termine
+  const limit   = Number(searchParams.get("limit") || 0);
 
   let sql = `SELECT * FROM "Appointment"`;
   const where = [];
   const args = [];
 
-  if (date) {
+  if (upcoming === "true") {
+    where.push(`"date" >= $${args.length + 1}`);
+    args.push(todayYMD());
+  } else if (date) {
     where.push(`"date" = $${args.length + 1}`);
     args.push(date);
   } else if (month) {
     where.push(`date_trunc('month', "date") = date_trunc('month', $${args.length + 1}::date)`);
     args.push(`${month}-01`);
   }
+
   if (kind && (kind === "appointment" || kind === "order")) {
     where.push(`"kind" = $${args.length + 1}`);
     args.push(kind);
   }
   if (where.length) sql += " WHERE " + where.join(" AND ");
+
+  // Sortierung: bald zuerst
   sql += ` ORDER BY "date" ASC, "startAt" ASC NULLS FIRST`;
+
+  if (limit > 0) {
+    sql += ` LIMIT ${Math.max(1, Math.min(limit, 50))}`;
+  }
 
   const client = await pool.connect();
   try {
