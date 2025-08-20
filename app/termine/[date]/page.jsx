@@ -5,10 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Modal from "@/app/components/Modal";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { de } from "date-fns/locale";
 
-function times(){ // 00:00..23:30 in 30-Minuten Schritten
+function times(){
   const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`); }
   return out;
 }
@@ -20,24 +18,11 @@ export default function DayPage({ params }) {
   const [customers,setCustomers]=useState([]);
   const [open,setOpen]=useState(false);
 
-  useEffect(()=>{
-    fetch(`/api/appointments?date=${date}`).then(r=>r.json()).then(setItems).catch(()=>setItems([]));
-  },[date]);
-
-  useEffect(()=>{
-    // Für Dropdown (nur was wir brauchen)
-    fetch(`/api/customers`).then(r=>r.json()).then(rows=>{
-      setCustomers(rows?.map(c=>({ id: String(c.id??""), name: c.name || "" }))||[]);
-    }).catch(()=>setCustomers([]));
-  },[]);
+  useEffect(()=>{ fetch(`/api/appointments?date=${date}`).then(r=>r.json()).then(setItems).catch(()=>setItems([])); },[date]);
+  useEffect(()=>{ fetch(`/api/customers`).then(r=>r.json()).then(rows=> setCustomers(rows?.map(c=>({ id: String(c.id??""), name: c.name || "" }))||[]) ).catch(()=>setCustomers([])); },[]);
 
   const grouped = useMemo(()=>{
-    const map = {};
-    for(const t of items){
-      const key = (t.startAt||"00:00").slice(0,5);
-      map[key] ||= [];
-      map[key].push(t);
-    }
+    const map = {}; for(const t of items){ const key = (t.startAt||"00:00").slice(0,5); (map[key] ||= []).push(t); }
     return map;
   },[items]);
 
@@ -46,7 +31,7 @@ export default function DayPage({ params }) {
       <div className="surface card">
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <h2>Tagesansicht – {format(new Date(date), "PPP", { locale: de })}</h2>
+            <h2>Tagesansicht – {date}</h2>
             <Link href="/termine" className="btn" style={{marginTop:8}}>← Zurück zum Kalender</Link>
           </div>
           <button className="btn btn-primary" onClick={()=>setOpen(true)}>+ Neuer Eintrag</button>
@@ -116,14 +101,11 @@ function NewEntryForm({ date, customers, onDone }) {
         customerId: customerId || null, customerName: customerName || null, note
       })
     });
-    if(!res.ok){
-      alert("Fehler beim Speichern");
-      return;
-    }
+    if(!res.ok){ alert("Fehler beim Speichern"); return; }
     onDone?.();
   }
 
-  const hhmm = Array.from({length:24*2}, (_,i)=>{
+  const hhmm = Array.from({length:48}, (_,i)=>{
     const h = Math.floor(i/2), m = (i%2)*30;
     return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
   });
