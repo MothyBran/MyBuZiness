@@ -9,7 +9,6 @@ import { useEffect, useMemo, useState } from "react";
 const fmtMonthYear = (d) =>
   new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(d);
 const fmtDateDE = (ymd) => {
-  // ymd: "YYYY-MM-DD" -> "tt.mm.jjjj"
   if (!ymd || ymd.length < 10) return ymd || "";
   const [y,m,d] = ymd.split("-");
   return `${d}.${m}.${y}`;
@@ -26,18 +25,16 @@ const TODAY = toYMD(new Date());
 
 // ---- Status-Logik (Anzeige) ----
 function computeDisplayStatus(e){
-  // Wenn manuell gesetzt, zeige es. Falls "open" und Termin liegt in der Vergangenheit (Ende/Start < jetzt) => "abgeschlossen" (Anzeige)
   const now = new Date();
   const start = new Date(`${e.date}T${(e.startAt||"00:00")}:00`);
   const end = new Date(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
   const isPast = (end < now);
   if (e.status === "cancelled") return "abgesagt";
   if (e.status === "done") return "abgeschlossen";
-  if (e.status === "open" && isPast) return "abgeschlossen"; // nur Anzeige
+  if (e.status === "open" && isPast) return "abgeschlossen";
   return "offen";
 }
 function nextStatus(currentDisplay){
-  // Wechsel-Reihenfolge bei Klick
   if (currentDisplay === "offen") return "abgesagt";
   if (currentDisplay === "abgesagt") return "abgeschlossen";
   return "offen";
@@ -63,7 +60,6 @@ export default function TerminePage(){
   },[monthString]);
 
   const days = useMemo(()=>{
-    // Raster: Montag–Sonntag, 6 Reihen
     const first = startOfMonth(cursor);
     const weekday = (first.getDay()+6)%7; // Mo=0..So=6
     const start = new Date(first);
@@ -84,7 +80,6 @@ export default function TerminePage(){
   },[events]);
 
   async function cycleStatus(ev){
-    // Nur serverseitig setzen, wenn von "offen" => "abgesagt"/"abgeschlossen" oder zurück
     const display = computeDisplayStatus(ev);
     const to = nextStatus(display);
     const map = { "offen":"open", "abgesagt":"cancelled", "abgeschlossen":"done" };
@@ -148,16 +143,28 @@ export default function TerminePage(){
       {/* Card 2: Monatsübersicht */}
       <div className="surface card">
         <div className="card-header"><h2>Termine / Aufträge – Übersicht ({fmtMonthYear(cursor)})</h2></div>
+
         <div className="table">
           <div className="table-row head">
             <div>Datum</div><div>Start</div><div>Art</div><div>Bezeichnung</div><div>Kunde</div><div>Status</div>
           </div>
 
           {events.map(ev=>{
-            const href = `/termine/${ev.date}`;
+            const href = `/termine/eintrag/${ev.id}`; // <-- Detailansicht pro Termin
             const displayStatus = computeDisplayStatus(ev);
             return (
-              <Link href={href} key={ev.id} className="table-row click-row">
+              <Link
+                href={href}
+                key={ev.id}
+                className="table-row click-row"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "120px 88px 100px 1fr 1fr 120px",
+                  gap: 8, padding: 10, alignItems: "center",
+                  borderBottom: "1px solid rgba(0,0,0,.06)",
+                  textDecoration:"none", color:"inherit"
+                }}
+              >
                 <div>{fmtDateDE(ev.date)}</div>
                 <div>{ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</div>
                 <div>{ev.kind==="order"?"Auftrag":"Termin"}</div>
@@ -205,41 +212,30 @@ export default function TerminePage(){
           text-decoration:none;
           color: inherit;
           min-height: 110px;
-          border:1px solid rgba(0,0,0,.08);
+          border:1px solid rgba(0,0,0,.12);   /* sichtbarer Rahmen */
         }
         .calendar-cell:hover{ outline:2px solid rgba(0,0,0,.06); }
         .muted{ opacity:.55; }
-        .daynum-wrap{
-          display:flex; justify-content:center; align-items:center;
-        }
+        .daynum-wrap{ display:flex; justify-content:center; align-items:center; }
         .daynum{
           font-weight:800; width:36px; height:36px; display:flex; align-items:center; justify-content:center;
           border-radius: 999px;
         }
-        .today .daynum{
-          outline: 2px solid var(--color-primary, #0ea5e9);
-        }
+        .today .daynum{ outline: 3px solid var(--color-primary, #0ea5e9); } /* HEUTE markiert */
         .calendar-cell-events{ display:flex; flex-direction:column; gap:6px; }
         .pill{
           border-radius: 999px;
           padding:2px 8px;
           font-size:12px;
           background: #e5e7eb;
-          white-space: nowrap;
-          overflow:hidden; text-overflow: ellipsis;
+          white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
         }
         .pill-info{ background: var(--chip-info, #DBEAFE); }
         .pill-accent{ background: var(--chip-accent, #FDE68A); }
 
         .table{ display:grid; }
-        .table-row{
-          display:grid;
-          grid-template-columns: 120px 88px 100px 1fr 1fr 120px;
-          gap:8px; padding:10px; align-items:center;
-          border-bottom:1px solid rgba(0,0,0,.06);
-        }
-        .table-row.head{ font-weight:800; }
-        .click-row{ text-decoration:none; color:inherit; }
+        .table-row{ display:grid; grid-template-columns: 120px 88px 100px 1fr 1fr 120px; gap:8px; padding:10px; align-items:center; }
+        .table-row.head{ font-weight:800; border-bottom:1px solid rgba(0,0,0,.1); }
         .click-row:hover{ background: rgba(0,0,0,.02); }
         .card-header{ padding:8px; display:flex; align-items:center; justify-content:space-between; }
         .info-row{ padding:8px 0 0 0; opacity:.8; font-size:14px; }
