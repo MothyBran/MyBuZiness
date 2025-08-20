@@ -15,7 +15,7 @@ export default function ModuleLauncher({ open, onClose, id }) {
         <ModuleLink href="/">Dashboard</ModuleLink>
         <ModuleLink href="/termine">Termine</ModuleLink>
         <ModuleLink href="/kunden">Kunden</ModuleLink>
-        <ModuleLink href="/produkte">Produkte & Dienstleistungen</ModuleLink>
+        <ModuleLink href="/produkte">Posten</ModuleLink>
         <ModuleLink href="/rechnungen">Rechnungen</ModuleLink>
         <ModuleLink href="/belege">Belege</ModuleLink>
         <ModuleLink href="/einstellungen">Einstellungen</ModuleLink>
