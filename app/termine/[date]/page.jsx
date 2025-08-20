@@ -6,16 +6,30 @@ import Link from "next/link";
 import Modal from "@/app/components/Modal";
 import { useRouter } from "next/navigation";
 
-const SLOT_MINUTES = 30;         // Rasterbreite
-const SLOT_HEIGHT  = 28;         // px pro 30 Minuten
+/* === Slots/Timeline === */
+const SLOT_MINUTES = 30;
+const SLOT_HEIGHT  = 28;     // muss zur globals.css passen
 const DAY_MINUTES  = 24*60;
 
-const fmtDateDE = (ymd)=> ymd && ymd.length>=10 ? ymd.split("-").reverse().join(".") : (ymd||"");
-const STATUS_LABEL = { open: "offen", cancelled: "abgesagt", done: "abgeschlossen" };
-
-// 30-Minuten-Liste für Dropdowns
-function times(){ const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);} return out; }
+/* === Datum-Utils === */
+function toDate(input){
+  if (input instanceof Date) return input;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [y,m,d] = input.split("-").map(Number);
+    return new Date(y, m-1, d, 12, 0, 0, 0);
+  }
+  const d = new Date(input || Date.now());
+  return isNaN(d) ? new Date() : d;
+}
+function formatDateDE(input){
+  const d = toDate(input);
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
 function hhmmToMinutes(hhmm){ const [h,m]=String(hhmm||"00:00").split(":").map(Number); return (h*60 + (m||0)); }
+function times(){ const out=[]; for(let h=0;h<24;h++){ for(let m of [0,30]) out.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);} return out; }
 
 export default function DayPage({ params }) {
   const router = useRouter();
@@ -28,7 +42,6 @@ export default function DayPage({ params }) {
   const [openEdit,setOpenEdit]=useState(false);
   const [editItem,setEditItem]=useState(null);
 
-  // Load day items
   useEffect(()=>{ 
     fetch(`/api/appointments?date=${date}`)
       .then(r=>r.json())
@@ -36,13 +49,11 @@ export default function DayPage({ params }) {
       .catch(()=>setItems([]));
   },[date]);
 
-  // Load customers robust
   useEffect(()=>{ 
     fetch(`/api/customers`)
       .then(r=>r.json())
       .then(rows=>{
-        const arr = Array.isArray(rows) ? rows
-          : rows?.rows || rows?.data || rows?.items || rows?.customers || [];
+        const arr = Array.isArray(rows) ? rows : (rows?.rows || rows?.data || rows?.items || rows?.customers || []);
         const mapped = (arr||[]).map(c=>{
           const id = c.id ?? c.customerId ?? c.uuid ?? c._id ?? "";
           const name = c.name ?? c.fullName ?? c.company ?? c.title ?? "";
@@ -53,7 +64,6 @@ export default function DayPage({ params }) {
       .catch(()=>setCustomers([])); 
   },[]);
 
-  // Absolut positionierte Balken (top/height in px)
   const blocks = useMemo(()=>{
     return (items||[]).map(ev=>{
       const startMin = hhmmToMinutes(ev.startAt||"00:00");
@@ -65,8 +75,7 @@ export default function DayPage({ params }) {
   },[items]);
 
   async function handleDelete(id, title){
-    const ok = window.confirm(`Diesen Eintrag wirklich löschen?\n\n${title}`);
-    if(!ok) return;
+    if (!window.confirm(`Diesen Eintrag wirklich löschen?\n\n${title}`)) return;
     const res = await fetch(`/api/appointments/${id}`, { method:"DELETE" });
     if(!res.ok){
       alert("Löschen fehlgeschlagen.");
@@ -76,59 +85,54 @@ export default function DayPage({ params }) {
   }
 
   return (
-    <div className="container" style={{display:"grid", gap:16}}>
-      <div className="surface card">
-        <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+    <div className="container grid-gap-16">
+      <div className="surface">
+        <div className="header-row" style={{marginBottom:12}}>
           <div>
-            <h2>Tagesansicht – {fmtDateDE(date)}</h2>
-            <Link href="/termine" className="btn" style={{marginTop:8}}>← Zurück zum Kalender</Link>
+            <h2 className="page-title" style={{margin:0}}>Tagesansicht – {formatDateDE(date)}</h2>
+            <Link href="/termine" className="btn-ghost" style={{marginTop:8}}>← Zurück zum Kalender</Link>
           </div>
-          <button className="btn btn-primary" onClick={()=>setOpenNew(true)}>+ Neuer Eintrag</button>
+          <button className="btn" onClick={()=>setOpenNew(true)}>+ Neuer Eintrag</button>
         </div>
 
-        {/* Grid: linke Stundenleiste + Timeline */}
         <div className="day-grid">
-          <div className="hours">
+          <div className="day-hours">
             {Array.from({length:24}, (_,h)=>(
-              <div key={h} className="hour">{String(h).padStart(2,"0")}:00</div>
+              <div key={h} className="day-hour">{String(h).padStart(2,"0")}:00</div>
             ))}
           </div>
 
-          <div className="timeline">
-            {/* Stunden-/Halbstunden-Linien */}
+          <div className="day-timeline">
+            {/* Rasterlinien */}
             {Array.from({length:(DAY_MINUTES/SLOT_MINUTES)}, (_,i)=>(
-              <div
-                key={i}
-                className={`line ${i%2===0?"major":"minor"}`}
-                style={{ top: i*SLOT_HEIGHT }}
-              />
+              <div key={i} className={`day-line ${i%2===0?"major":""}`} style={{ top: i*SLOT_HEIGHT }} />
             ))}
 
-            {/* Termin-Balken */}
+            {/* Balken */}
             {blocks.map(ev=>(
               <div
                 key={ev.id}
-                className={`block ${ev.kind==='order'?'accent':'info'}`}
+                className={`day-block ${ev.kind==='order'?'accent':'info'}`}
                 style={{ top: ev.top, height: ev.height }}
                 title={`${ev.title} (${ev.startAt?.slice(0,5)}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""})`}
               >
-                <div className="block-inner">
-                  <div className="block-left">
+                <div className="day-block-inner">
+                  <div className="day-block-left">
                     <b>{ev.kind==='order'?'Auftrag':'Termin'}</b>
                     <span>{ev.title}</span>
                     {ev.customerName && <span>· {ev.customerName}</span>}
-                    <span className="block-time">· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
+                    <span className="day-block-time">· {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
                   </div>
-                  <div className="block-actions">
-                    <Link href={`/termine/eintrag/${ev.id}`} className="btn btn-xxs">Details</Link>
-                    <button className="btn btn-xxs" onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}>⚙️</button>
-                    <button className="btn btn-xxs btn-danger" onClick={()=>handleDelete(ev.id, ev.title)}>❌</button>
+                  <div style={{display:"flex",gap:6}}>
+                    <Link href={`/termine/eintrag/${ev.id}`} className="btn-xxs">Details</Link>
+                    <button className="btn-xxs" onClick={()=>{ setEditItem(ev); setOpenEdit(true); }}>⚙️</button>
+                    <button className="btn-xxs btn-danger" onClick={()=>handleDelete(ev.id, ev.title)}>❌</button>
                   </div>
                 </div>
               </div>
             ))}
 
-            {/* Containerhöhe */}
+            {/* Containerhöhe sichern */}
             <div style={{ height: (DAY_MINUTES/SLOT_MINUTES)*SLOT_HEIGHT }} />
           </div>
         </div>
@@ -160,63 +164,11 @@ export default function DayPage({ params }) {
           />
         )}
       </Modal>
-
-      <style jsx>{`
-        .day-grid{
-          display:grid;
-          grid-template-columns: 80px 1fr;
-          gap:0;
-          border:1px solid rgba(0,0,0,.08);
-          border-radius: var(--radius,12px);
-          overflow:hidden;
-        }
-        .hours{
-          background: #fafafa;
-          border-right:1px solid rgba(0,0,0,.08);
-        }
-        .hour{
-          height: ${SLOT_HEIGHT*2}px; /* 60 Minuten */
-          display:flex; align-items:flex-start; justify-content:center;
-          padding-top: 6px;
-          font-size:12px; opacity:.8;
-          border-bottom:1px solid rgba(0,0,0,.06);
-        }
-        .timeline{
-          position:relative;
-          background: #fff;
-        }
-        .line{
-          position:absolute; left:0; right:0;
-          border-bottom:1px dashed rgba(0,0,0,.06);
-        }
-        .line.major{ border-bottom:1px solid rgba(0,0,0,.09); }
-        .block{
-          position:absolute; left:8px; right:8px;
-          border-radius: 12px;
-          background:#e5e7eb;
-          box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06));
-          display:flex; align-items:center;
-        }
-        .block.info{ background: var(--chip-info, #DBEAFE); }
-        .block.accent{ background: var(--chip-accent, #FDE68A); }
-        .block-inner{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 8px; }
-        .block-left{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .block-time{ opacity:.7; }
-        .block-actions{ display:flex; gap:6px; }
-        .btn-xxs{
-          font-size: 12px;
-          padding: 4px 8px;
-          border-radius: 8px;
-          background: var(--surface, #fff);
-          border: 1px solid rgba(0,0,0,.12);
-        }
-        .btn-xxs:hover{ background: #fafafa; }
-        .btn-danger{ border-color: #ef4444; }
-      `}</style>
     </div>
   );
 }
 
+/* --- Formulare (nutzen globale Buttons/Inputs) --- */
 function NewEntryForm({ date, customers, onDone }) {
   const [kind,setKind]=useState("appointment");
   const [title,setTitle]=useState("");
@@ -256,8 +208,8 @@ function NewEntryForm({ date, customers, onDone }) {
   });
 
   return (
-    <form onSubmit={submit} className="form">
-      <div className="grid-2">
+    <form onSubmit={submit} style={{display:"grid", gap:12, minWidth:340}}>
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
         <label>Art
           <select value={kind} onChange={e=>setKind(e.target.value)}>
             <option value="appointment">Termin</option>
@@ -270,10 +222,10 @@ function NewEntryForm({ date, customers, onDone }) {
       </div>
 
       <label>Bezeichnung
-        <input type="text" value={title} onChange={e=>setTitle(e.target.value)} placeholder="z. B. Beratung, Installation..." required />
+        <input type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
       </label>
 
-      <div className="grid-3">
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12}}>
         <label>Uhrzeit (Start)
           <select value={startAt} onChange={e=>setStartAt(e.target.value)}>
             {hhmm.map(t=><option key={t} value={t}>{t}</option>)}
@@ -298,20 +250,9 @@ function NewEntryForm({ date, customers, onDone }) {
       </label>
 
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button type="button" className="btn" onClick={onDone}>Abbrechen</button>
-        <button type="submit" className="btn btn-primary">Speichern</button>
+        <button type="button" className="btn-ghost" onClick={onDone}>Abbrechen</button>
+        <button type="submit" className="btn">Speichern</button>
       </div>
-
-      <style jsx>{`
-        .form{ display:grid; gap:12px; min-width: 340px; }
-        .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-        .grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
-        label{ display:grid; gap:6px; font-size:14px; }
-        input, select, textarea{
-          padding:8px; border-radius: var(--radius,8px); border:1px solid rgba(0,0,0,.15);
-          background:var(--surface,#fff);
-        }
-      `}</style>
     </form>
   );
 }
@@ -319,7 +260,7 @@ function NewEntryForm({ date, customers, onDone }) {
 function EditEntryForm({ initial, customers, onDone }) {
   const [kind,setKind]=useState(initial.kind || "appointment");
   const [title,setTitle]=useState(initial.title || "");
-  const [date,setDate]=useState(initial.date);
+  const [date,setDate]=useState((()=>{ const d=toDate(initial.date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })());
   const [startAt,setStartAt]=useState(initial.startAt?.slice(0,5) || "09:00");
   const [endAt,setEndAt]=useState(initial.endAt?.slice(0,5) || "");
   const [customerId,setCustomerId]=useState(initial.customerId || "");
@@ -344,8 +285,7 @@ function EditEntryForm({ initial, customers, onDone }) {
         endAt: endAt || null,
         customerId: customerId || null,
         customerName: customerName || null,
-        note,
-        status
+        note, status
       })
     });
     if(!res.ok){ alert("Speichern fehlgeschlagen."); return; }
@@ -358,8 +298,8 @@ function EditEntryForm({ initial, customers, onDone }) {
   });
 
   return (
-    <form onSubmit={submit} className="form">
-      <div className="grid-2">
+    <form onSubmit={submit} style={{display:"grid", gap:12, minWidth:340}}>
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
         <label>Art
           <select value={kind} onChange={e=>setKind(e.target.value)}>
             <option value="appointment">Termin</option>
@@ -375,7 +315,7 @@ function EditEntryForm({ initial, customers, onDone }) {
         <input type="text" value={title} onChange={e=>setTitle(e.target.value)} required />
       </label>
 
-      <div className="grid-3">
+      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12}}>
         <label>Uhrzeit (Start)
           <select value={startAt} onChange={e=>setStartAt(e.target.value)}>
             {hhmm.map(t=><option key={t} value={t}>{t}</option>)}
@@ -408,20 +348,9 @@ function EditEntryForm({ initial, customers, onDone }) {
       </label>
 
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button type="button" className="btn" onClick={onDone}>Abbrechen</button>
-        <button type="submit" className="btn btn-primary">Speichern</button>
+        <button type="button" className="btn-ghost" onClick={onDone}>Abbrechen</button>
+        <button type="submit" className="btn">Speichern</button>
       </div>
-
-      <style jsx>{`
-        .form{ display:grid; gap:12px; min-width: 340px; }
-        .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-        .grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
-        label{ display:grid; gap:6px; font-size:14px; }
-        input, select, textarea{
-          padding:8px; border-radius: var(--radius,8px); border:1px solid rgba(0,0,0,.15);
-          background:var(--surface,#fff);
-        }
-      `}</style>
     </form>
   );
 }
