@@ -1,5 +1,16 @@
 "use client";
 
+// app/components/UI.jsx
+import Link from "next/link";
+
+export function ModuleLink({ href, children }) {
+  return (
+    <Link href={href} className="btn module-link">
+      {children}
+    </Link>
+  );
+}
+
 /**
  * Nutzung:
  * <Table head={["Nr.","Kunde","Datum","Brutto"]} hideOnSmall={[2]}>
