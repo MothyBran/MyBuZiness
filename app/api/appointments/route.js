@@ -1,18 +1,14 @@
 // app/api/appointments/route.js
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
-
-function parseDate(v) {
-  if (!v) return null;
-  const d = new Date(v);
-  return isNaN(d) ? null : d;
-}
+import { pool, ensureSchemaOnce } from "@/lib/db";
 
 export async function GET(req) {
+  await ensureSchemaOnce(); // Schema sicherstellen
+
   const { searchParams } = new URL(req.url);
-  const month = searchParams.get("month");     // YYYY-MM
-  const date = searchParams.get("date");       // YYYY-MM-DD
-  const kind = searchParams.get("kind");       // optional: appointment|order
+  const month = searchParams.get("month"); // YYYY-MM
+  const date  = searchParams.get("date");  // YYYY-MM-DD
+  const kind  = searchParams.get("kind");  // optional: appointment|order
 
   let sql = `SELECT * FROM "Appointment"`;
   const where = [];
@@ -42,6 +38,8 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+  await ensureSchemaOnce(); // Schema sicherstellen
+
   const payload = await req.json();
 
   // Minimal-Validierung
@@ -50,7 +48,9 @@ export async function POST(req) {
   if (!payload?.date) errors.push("date");
   if (!payload?.startAt) errors.push("startAt");
   if (!payload?.kind || !["appointment","order"].includes(payload.kind)) errors.push("kind");
-  if (errors.length) return NextResponse.json({ error: "missing:" + errors.join(",") }, { status: 400 });
+  if (errors.length) {
+    return NextResponse.json({ error: "missing:" + errors.join(",") }, { status: 400 });
+  }
 
   const client = await pool.connect();
   try {
@@ -68,7 +68,7 @@ export async function POST(req) {
         payload.customerId || null,
         payload.customerName || null,
         payload.note || null,
-        payload.status || "open"
+        payload.status || "open",
       ]
     );
     return NextResponse.json(rows[0], { status: 201 });
