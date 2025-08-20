@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { pool, ensureSchemaOnce } from "@/lib/db";
 
 export async function GET(req) {
-  await ensureSchemaOnce(); // Schema sicherstellen
+  await ensureSchemaOnce();
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month"); // YYYY-MM
@@ -38,7 +38,7 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  await ensureSchemaOnce(); // Schema sicherstellen
+  await ensureSchemaOnce();
 
   const payload = await req.json();
 
