@@ -5,10 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node -e \"console.log('DB init…')\" && next start -p ${PORT:-3000}",
+    "start": "node .next/standalone/server.js",
     "lint": "next lint"
   },
-  "engines": { "'node" : ">=18.17" },
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "dependencies": {
     "next": "14.2.5",
     "react": "18.3.1",
