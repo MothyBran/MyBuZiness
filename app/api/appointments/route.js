@@ -12,11 +12,12 @@ export async function GET(req) {
   await ensureSchemaOnce();
 
   const { searchParams } = new URL(req.url);
-  const month   = searchParams.get("month");   // YYYY-MM
-  const date    = searchParams.get("date");    // YYYY-MM-DD
-  const kind    = searchParams.get("kind");    // appointment|order (optional)
-  const upcoming= searchParams.get("upcoming"); // "true" => kommende Termine
-  const limit   = Number(searchParams.get("limit") || 0);
+  const month     = searchParams.get("month");      // YYYY-MM
+  const date      = searchParams.get("date");       // YYYY-MM-DD
+  const kind      = searchParams.get("kind");       // appointment|order (optional)
+  const customerId= searchParams.get("customerId"); // optional
+  const upcoming  = searchParams.get("upcoming");   // "true" => kommende Termine
+  const limit     = Number(searchParams.get("limit") || 0);
 
   let sql = `SELECT * FROM "Appointment"`;
   const where = [];
@@ -37,9 +38,13 @@ export async function GET(req) {
     where.push(`"kind" = $${args.length + 1}`);
     args.push(kind);
   }
-  if (where.length) sql += " WHERE " + where.join(" AND ");
 
-  // Sortierung: bald zuerst
+  if (customerId) {
+    where.push(`"customerId" = $${args.length + 1}`);
+    args.push(customerId);
+  }
+
+  if (where.length) sql += " WHERE " + where.join(" AND ");
   sql += ` ORDER BY "date" ASC, "startAt" ASC NULLS FIRST`;
 
   if (limit > 0) {
