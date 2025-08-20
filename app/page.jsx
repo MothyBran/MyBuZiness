@@ -1,7 +1,36 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
+function fmtDateDE(ymd){ if(!ymd) return ""; const [y,m,d]=ymd.split("-"); return `${d}.${m}.${y}`; }
+
+function UpcomingAppointments(){
+  const [items,setItems]=useState([]);
+  useEffect(()=>{
+    fetch(`/api/appointments?upcoming=true&limit=3`)
+      .then(r=>r.json())
+      .then(setItems)
+      .catch(()=>setItems([]));
+  },[]);
+  return (
+    <div className="table">
+      <div className="table-row head">
+        <div>Datum</div><div>Start</div><div>Art</div><div>Bezeichnung</div><div>Kunde</div>
+      </div>
+      {items.map(ev=>(
+        <Link key={ev.id} href={`/termine/${ev.date}`} className="table-row" style={{textDecoration:"none",color:"inherit"}}>
+          <div>{fmtDateDE(ev.date)}</div>
+          <div>{ev.startAt?.slice(0,5)}</div>
+          <div>{ev.kind==="order"?"Auftrag":"Termin"}</div>
+          <div>{ev.title}</div>
+          <div>{ev.customerName || "—"}</div>
+        </Link>
+      ))}
+      {items.length===0 && <div className="table-row"><div style={{gridColumn:"1/-1"}}>Keine anstehenden Termine.</div></div>}
+    </div>
+  );
+}
 export default function DashboardPage() {
   const [totals, setTotals] = useState({ today: 0, last7: 0, last30: 0 });
   const [counts, setCounts] = useState({ customers: 0, products: 0, invoices: 0, receipts: 0 });
@@ -63,6 +92,16 @@ export default function DashboardPage() {
         <Card><div className="card-title">Belege</div><div className="card-value">{counts.receipts}</div></Card>
       </section>
 
+      {/* Card: Nächste 3 Termine */}
+      <Card>
+<div className="surface card">
+  <div className="card-header">
+    <h2>Nächste Termine</h2>
+  </div>
+  <UpcomingAppointments />
+</div>
+      </Card>
+      
       {/* Neueste Belege */}
       <Card>
         <div className="card-title">Neueste Belege</div>
