@@ -13,7 +13,7 @@ function toDate(input){
     const [y,m,d] = input.split("-").map(Number);
     return new Date(y, m-1, d, 12, 0, 0, 0);
   }
-  const d = new Date(input);
+  const d = new Date(input || Date.now());
   return isNaN(d) ? new Date() : d;
 }
 function formatDateDE(input){
@@ -36,8 +36,7 @@ export default function EntryDetail({ params }){
   useEffect(()=>{
     fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>setItem(null));
     fetch(`/api/customers`).then(r=>r.json()).then(rows=>{
-      const arr = Array.isArray(rows) ? rows
-        : rows?.rows || rows?.data || rows?.items || rows?.customers || [];
+      const arr = Array.isArray(rows) ? rows : (rows?.rows || rows?.data || rows?.items || rows?.customers || []);
       const mapped = (arr||[]).map(c=>{
         const id = c.id ?? c.customerId ?? c.uuid ?? c._id ?? "";
         const name = c.name ?? c.fullName ?? c.company ?? c.title ?? "";
@@ -57,52 +56,43 @@ export default function EntryDetail({ params }){
   async function handleDelete(e){
     e?.preventDefault?.();
     if (!item) return;
-    const ok = window.confirm("Diesen Eintrag wirklich löschen?");
-    if(!ok) return;
+    if(!window.confirm("Diesen Eintrag wirklich löschen?")) return;
     setDeleting(true);
     const res = await fetch(`/api/appointments/${item.id}`, { method:"DELETE" });
-    if(!res.ok){
-      setDeleting(false);
-      alert("Löschen fehlgeschlagen.");
-      return;
-    }
+    if(!res.ok){ setDeleting(false); alert("Löschen fehlgeschlagen."); return; }
     router.push("/termine");
   }
 
   if (!item) return (
-    <div className="container surface card" style={{padding:16}}>
-      <h2>Termin</h2>
+    <div className="container surface" style={{padding:16}}>
+      <h2 className="page-title">Termin</h2>
       <p>Eintrag wurde nicht gefunden.</p>
-      <Link href="/termine" className="btn">← Zurück</Link>
+      <Link href="/termine" className="btn-ghost">← Zurück</Link>
     </div>
   );
 
   const cust = customers.find(c=> String(c.id) === String(item.customerId));
 
   return (
-    <div className="container" style={{display:"grid", gap:16}}>
-      <div className="surface card" style={{padding:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <h2>Termin / Auftrag</h2>
+    <div className="container grid-gap-16">
+      <div className="surface">
+        <div className="header-row" style={{marginBottom:12}}>
+          <h2 className="page-title" style={{margin:0}}>Termin / Auftrag</h2>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn" onClick={()=>setOpenEdit(true)}>⚙️ Bearbeiten</button>
-            <button className="btn" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Lösche…" : "❌ Löschen"}
-            </button>
-            <Link href="/termine" className="btn">← Zurück</Link>
+            <button className="btn-ghost" onClick={()=>setOpenEdit(true)}>⚙️ Bearbeiten</button>
+            <button className="btn" onClick={handleDelete} disabled={deleting}>{deleting?"Lösche…":"❌ Löschen"}</button>
+            <Link href="/termine" className="btn-ghost">← Zurück</Link>
           </div>
         </div>
 
+        {/* Reihenfolge: Art, Uhrzeit & Datum, Kunde, Notiz, Status */}
         <div style={{display:"grid", gridTemplateColumns:"220px 1fr", gap:10, alignItems:"start"}}>
-          {/* Art */}
           <div><b>Art</b></div>
           <div>{item.kind==="order" ? "Auftrag" : "Termin"}</div>
 
-          {/* Uhrzeit und Datum */}
           <div><b>Uhrzeit & Datum</b></div>
           <div>{item.startAt?.slice(0,5)}{item.endAt?`–${item.endAt.slice(0,5)}`:""} · {formatDateDE(item.date)}</div>
 
-          {/* Kunde */}
           <div><b>Kunde</b></div>
           <div>
             {item.customerName ? <div><b>{item.customerName}</b></div> : "—"}
@@ -114,11 +104,9 @@ export default function EntryDetail({ params }){
             )}
           </div>
 
-          {/* Notiz */}
           <div><b>Notiz</b></div>
           <div>{item.note || "—"}</div>
 
-          {/* Status */}
           <div><b>Status</b></div>
           <div>{STATUS_LABEL[item.status] || "offen"}</div>
         </div>
@@ -127,7 +115,6 @@ export default function EntryDetail({ params }){
       <Modal open={openEdit} onClose={()=>setOpenEdit(false)} title="⚙️ Eintrag bearbeiten">
         <EditForm initial={item} customers={customers} onDone={()=>{
           setOpenEdit(false);
-          // Neu laden
           fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>{});
         }} />
       </Modal>
@@ -135,21 +122,16 @@ export default function EntryDetail({ params }){
   );
 }
 
-/* --- Edit-Formular (unverändert inhaltlich, aber robust) --- */
 function EditForm({ initial, customers, onDone }){
   const [kind,setKind]=useState(initial.kind||"appointment");
   const [title,setTitle]=useState(initial.title||"");
-  const [date,setDate]=useState((()=> {
-    // auf YYYY-MM-DD normalisieren
-    const d = toDate(initial.date);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })());
+  const [date,setDate]=useState((()=>{ const d=toDate(initial.date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })());
   const [startAt,setStartAt]=useState(initial.startAt?.slice(0,5)||"09:00");
   const [endAt,setEndAt]=useState(initial.endAt?.slice(0,5)||"");
-  const [customerId,setCustomerId]=useState(initial.customerId || "");
-  const [customerName,setCustomerName]=useState(initial.customerName || "");
-  const [status,setStatus]=useState(initial.status || "open");
-  const [note,setNote]=useState(initial.note || "");
+  const [customerId,setCustomerId]=useState(initial.customerId||"");
+  const [customerName,setCustomerName]=useState(initial.customerName||"");
+  const [status,setStatus]=useState(initial.status||"open");
+  const [note,setNote]=useState(initial.note||"");
 
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
@@ -180,7 +162,7 @@ function EditForm({ initial, customers, onDone }){
   });
 
   return (
-    <form onSubmit={submit} className="form" style={{display:"grid", gap:12, minWidth:340}}>
+    <form onSubmit={submit} style={{display:"grid", gap:12, minWidth:340}}>
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
         <label>Art
           <select value={kind} onChange={e=>setKind(e.target.value)}>
@@ -230,8 +212,8 @@ function EditForm({ initial, customers, onDone }){
       </label>
 
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button type="button" className="btn" onClick={onDone}>Abbrechen</button>
-        <button type="submit" className="btn btn-primary">Speichern</button>
+        <button type="button" className="btn-ghost" onClick={onDone}>Abbrechen</button>
+        <button type="submit" className="btn">Speichern</button>
       </div>
     </form>
   );
