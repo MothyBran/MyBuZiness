@@ -4,9 +4,9 @@
   "version": "0.3.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "postbuild": "node -e \"const fs=require('fs');try{fs.mkdirSync('.next/standalone/.next',{recursive:true});fs.cpSync('.next/static','.next/standalone/.next/static',{recursive:true});}catch(e){console.error('copy .next/static skipped:',e?.message)}try{fs.cpSync('public','.next/standalone/public',{recursive:true});}catch(e){if(e?.code!=='ENOENT')console.error('copy public skipped:',e?.message)}\"",
-    "start": "HOST=0.0.0.0 node .next/standalone/server.js",
+    "build": "NEXT_TELEMETRY_DISABLED=1 next build",
+    "postbuild": "node postbuild-copy.js",
+    "start": "HOST=0.0.0.0 node server-standalone.js",
     "lint": "next lint"
   },
   "engines": {
