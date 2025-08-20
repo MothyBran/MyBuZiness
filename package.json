@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "NEXT_TELEMETRY_DISABLED=1 next build",
-    "postbuild": "node postbuild-copy.js",
-    "start": "HOST=0.0.0.0 node server-standalone.js",
+    "start": "HOST=0.0.0.0 next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "next lint"
   },
   "engines": {
