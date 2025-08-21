@@ -41,6 +41,18 @@ export type Invoice = {
   paidAt?: string | null;
 };
 
+export type InvoiceItem = {
+  id: string;
+  invoiceId: string;      // InvoiceItem.invoiceId 
+  productId?: string | null;
+  name: string;           // InvoiceItem.name 
+  description?: string | null;
+  quantity: number;       // InvoiceItem.quantity (numeric) 
+  unitPriceCents: number; // InvoiceItem.unitPriceCents 
+  lineTotalCents: number; // InvoiceItem.lineTotalCents 
+  extraBaseCents?: number | null;
+};
+
 export type Receipt = {
   id: string;
   receiptNo: string;     // Receipt.receiptNo 
@@ -52,6 +64,17 @@ export type Receipt = {
   vatExempt?: boolean | null;
   note?: string | null;
   discountCents?: number | null;
+};
+
+export type ReceiptItem = {
+  id: string;
+  receiptId: string;      // ReceiptItem.receiptId 
+  productId?: string | null;
+  name: string;           // ReceiptItem.name 
+  quantity: number;       // ReceiptItem.quantity 
+  unitPriceCents: number; // ReceiptItem.unitPriceCents 
+  lineTotalCents: number; // ReceiptItem.lineTotalCents 
+  extraBaseCents?: number | null;
 };
 
 export type Quote = {
