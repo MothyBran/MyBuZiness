@@ -9,9 +9,13 @@ import InfoStripe from "./components/InfoStripe";
 import { Page } from "./components/layout/Page";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
+import CustomerDetail from "./pages/details/CustomerDetail";
 import Products from "./pages/Products";
+import ProductDetail from "./pages/details/ProductDetail";
 import Invoices from "./pages/Invoices";
+import InvoiceDetail from "./pages/details/InvoiceDetail";
 import Receipts from "./pages/Receipts";
+import ReceiptDetail from "./pages/details/ReceiptDetail";
 import Quotes from "./pages/Quotes";
 import Orders from "./pages/Orders";
 import Appointments from "./pages/Appointments";
@@ -27,11 +31,15 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/customers/:id" element={<CustomerDetail />} />
             <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
+            <Route path="/invoices" element={<Invoices />} />
+            <Route path="/invoices/:id" element={<InvoiceDetail />} />
+            <Route path="/receipts" element={<Receipts />} />
+            <Route path="/receipts/:id" element={<ReceiptDetail />} />
             <Route path="/quotes" element={<Quotes />} />
             <Route path="/orders" element={<Orders />} />
-            <Route path="/invoices" element={<Invoices />} />
-            <Route path="/receipts" element={<Receipts />} />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
