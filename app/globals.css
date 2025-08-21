@@ -1,28 +1,18 @@
-/* === UI FOUNDATION (Forms/Buttons/Badges/Cards) ========================== */
-
+/* ==========================================================================
+   1) Design-Variablen
+   ========================================================================== */
 :root{
   --radius: 12px;
-  --color-primary: #2563eb;
-  --color-muted: #6b7280;
-  --color-border: rgba(0,0,0,.12);
+  --color-primary: #2563eb;        /* Primärfarbe (Buttons/Highlights) */
+  --color-muted: #6b7280;          /* Sekundärtext */
+  --color-border: rgba(0,0,0,.12); /* Dezente Rahmen */
   --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
   --shadow-md: 0 4px 10px rgba(0,0,0,.08);
 }
 
-/* SURFACES */
-.surface {
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-/* TITLES */
-.page-title{ font-size: 18px; font-weight: 800; letter-spacing: .2px; }
-.section-title{ font-weight: 700; font-size: 14px; color: #111; }
-
-/* GRID UTILS */
+/* ==========================================================================
+   2) Layout / Container / Grid-Utilities
+   ========================================================================== */
 .container{ display: grid; gap: 16px; }
 .grid-gap-16{ display:grid; gap:16px; }
 
@@ -31,7 +21,23 @@
   .grid-3{ grid-template-columns: repeat(3, 1fr); }
 }
 
-/* BUTTONS */
+/* ==========================================================================
+   3) Oberflächen / Typo
+   ========================================================================== */
+.surface {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.page-title{ font-size: 18px; font-weight: 800; letter-spacing: .2px; }
+.section-title{ font-weight: 700; font-size: 14px; color: #111; }
+
+/* ==========================================================================
+   4) Buttons
+   ========================================================================== */
 .btn{
   display:inline-flex; align-items:center; justify-content:center;
   padding: 8px 12px; border-radius: 10px;
@@ -39,29 +45,39 @@
   text-decoration:none; cursor:pointer; font-weight:600;
 }
 .btn:hover{ filter: brightness(0.98); }
+
 .btn-ghost{
   display:inline-flex; align-items:center; justify-content:center;
   padding: 8px 12px; border-radius: 10px;
   background:#fff; color: var(--color-primary); border:1px solid var(--color-primary);
   text-decoration:none; cursor:pointer; font-weight:600;
 }
+
 .btn-xxs{
   font-size: 12px; padding: 4px 8px; border-radius: 8px;
   background: #fff; border: 1px solid var(--color-border);
 }
-.btn-danger{ border-color:#b91c1c; color:#b91c1c; background:#fff; }
 
-/* FORM */
+.btn-danger{
+  border-color:#b91c1c; color:#b91c1c; background:#fff;
+}
+
+/* ==========================================================================
+   5) Formulare (einheitliches Erscheinungsbild)
+   ========================================================================== */
 .form{ display:grid; gap:12px; }
 .field{ display:grid; gap:6px; }
 .label{ font-size:12px; color: var(--color-muted); }
+
 .input, .select, .textarea{
   width:100%; background:#fff; border:1px solid var(--color-border);
   border-radius: 10px; padding: 10px 12px; outline:none;
 }
 .textarea{ min-height: 88px; resize: vertical; }
 
-/* BADGES */
+/* ==========================================================================
+   6) Status-Badges (global, generisch)
+   ========================================================================== */
 .status-badge{
   display:inline-flex; align-items:center; gap:6px;
   padding: 4px 10px; border-radius: 999px; font-size: 12px;
@@ -71,42 +87,59 @@
 .status-badge.abgesagt{ background:#FEF2F2; border-color:#FECACA; }
 .status-badge.abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
 
-/* LIST / CARD ROWS (Übersichten) */
+/* ==========================================================================
+   7) Karten-/Listen-Layout (global, kompakte Zeilen)
+   ========================================================================== */
 .list{ display:grid; gap:10px; }
+
 .list-item{
   display:grid; grid-template-columns: 40px 1fr auto; gap:12px;
   align-items:center; padding:12px; background:#fff; border:1px solid var(--color-border);
   border-radius: var(--radius); box-shadow: var(--shadow-sm);
 }
+
 .item-icon{
-  width:32px; height:32px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+  width:32px; height:32px; border-radius:999px;
+  display:flex; align-items:center; justify-content:center;
   box-shadow: var(--shadow-sm); background:#DBEAFE; font-size:16px;
 }
 .item-icon.accent{ background:#FDE68A; }
-.item-title{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.item-meta{ font-size:13px; color:#374151; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.item-title{
+  font-weight:700; font-size:15px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.item-meta{
+  font-size:13px; color:#374151; opacity:.85;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 .item-actions{ display:flex; align-items:center; gap:8px; }
 .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* DETAIL VIEW */
-.detail{
-  display:grid; gap: 14px;
-}
+/* ==========================================================================
+   8) Detail-Ansichten (Label/Value-Layout)
+   ========================================================================== */
+.detail{ display:grid; gap: 14px; }
+
 @media (min-width: 768px){
   .detail{
     grid-template-columns: 220px 1fr;
     align-items:start;
   }
 }
+
 .detail .row{ display:contents; }
 .detail .label{ font-weight:700; opacity:.85; }
 .detail .value{ min-width:0; }
 
-/* CALENDAR (Monatsansicht) */
+/* ==========================================================================
+   9) Globaler Kalender (wenn außerhalb Termine-Modul genutzt)
+   ========================================================================== */
 .cal-grid{
   display:grid; gap:8px; grid-template-columns: repeat(7, 1fr);
 }
 .cal-head{ font-size:12px; color: var(--color-muted); text-align:center; }
+
 .cal-cell{
   border:1px solid var(--color-border);
   border-radius: 12px;
@@ -123,21 +156,89 @@
 }
 .cal-cell.today .cal-daynum{ outline:2px solid var(--color-primary); }
 .cal-cell.muted{ opacity:.5; }
+
 .cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height: 10px; align-items:center; }
 .cal-dot{ width:8px; height:8px; border-radius:999px; background:#93C5FD; }
 .cal-dot-accent{ background:#FBBF24; }
 .cal-dot-info{ background:#60A5FA; }
-.cal-dot-more{ width:auto; padding:0 6px; height:18px; border-radius:999px; font-size:11px; background:#eee; color:#333; display:flex; align-items:center; }
+.cal-dot-more{
+  width:auto; padding:0 6px; height:18px; border-radius:999px;
+  font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
+}
 
-/* DAY VIEW (nur Glättungen) */
+/* ==========================================================================
+   10) Day-View (globale, sanfte Defaults)
+   ========================================================================== */
 .day-grid{ display:grid; grid-template-columns: 80px 1fr; gap:8px; }
 .day-hour{ font-size:12px; color:var(--color-muted); }
 .day-block{ position:relative; border:1px dashed var(--color-border); border-radius:10px; background:#F8FAFC; }
 .day-block-inner{ padding:8px; }
 
-/* RESPONSIVE TWEAKS */
+/* ==========================================================================
+   11) RESPONSIVE Tweaks (global)
+   ========================================================================== */
 @media (max-width: 639px){
   .list-item{ grid-template-columns: 36px 1fr; }
   .item-actions{ grid-column: 1 / -1; justify-content:flex-start; }
   .cal-cell{ min-height: 84px; padding: 8px 6px; }
+}
+
+/* ==========================================================================
+   12) Termine-Modul (NAMESPACE: .appt …)  -> verhindert Konflikte globaler Styles
+   ========================================================================== */
+/* Kartenliste */
+.appt .appt-list{ display:grid; gap:10px; }
+.appt .appt-item{
+  display:grid; grid-template-columns: 40px 1fr auto; gap:12px;
+  align-items:center; padding:12px; background:#fff; border:1px solid var(--color-border);
+  border-radius: 12px; box-shadow: var(--shadow-sm);
+}
+.appt .appt-icon{
+  width:32px; height:32px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+  background:#DBEAFE; font-size:16px; box-shadow: var(--shadow-sm);
+}
+.appt .appt-icon--order{ background:#FDE68A; }
+.appt .appt-title{
+  font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.appt .appt-meta{
+  font-size:13px; color:#374151; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.appt .appt-actions{ display:flex; align-items:center; gap:8px; }
+
+/* Modul-spezifische Badges (nutzt eigene Klassennamen, kollidiert nicht mit globalen) */
+.appt .appt-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 12px;
+  border: 1px solid var(--color-border); background:#fff; text-transform: lowercase;
+}
+.appt .is-offen{ background:#EFF6FF; border-color:#BFDBFE; }
+.appt .is-abgesagt{ background:#FEF2F2; border-color:#FECACA; }
+.appt .is-abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
+
+/* Monatskalender (nur im Termine-Modul) */
+.appt .appt-cal{ display:grid; gap:8px; grid-template-columns: repeat(7, 1fr); }
+.appt .appt-cal-head{ font-size:12px; color:#6b7280; text-align:center; }
+.appt .appt-cal-cell{
+  border:1px solid var(--color-border); border-radius: 12px; min-height: 100px; padding: 10px 8px;
+  display:flex; flex-direction:column; justify-content:space-between; text-decoration:none; color: inherit; background:#fff;
+}
+.appt .appt-cal-daynum-wrap{ display:flex; }
+.appt .appt-cal-daynum{
+  width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700;
+}
+.appt .is-today .appt-cal-daynum{ outline:2px solid var(--color-primary); }
+.appt .is-muted{ opacity:.5; }
+.appt .appt-cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height:10px; align-items:center; }
+.appt .appt-cal-dot{ width:8px; height:8px; border-radius:999px; background:#93C5FD; }
+.appt .appt-cal-dot--order{ background:#FBBF24; }
+.appt .appt-cal-more{
+  padding:0 6px; height:18px; border-radius:999px; font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
+}
+
+/* Termine-Responsive */
+@media (max-width: 639px){
+  .appt .appt-item{ grid-template-columns: 36px 1fr; }
+  .appt .appt-actions{ grid-column: 1 / -1; justify-content:flex-start; }
+  .appt .appt-cal-cell{ min-height: 84px; padding: 8px 6px; }
 }
