@@ -38,3 +38,4 @@ const InfoStripe: React.FC = () => {
 };
 
 export default InfoStripe;
+
