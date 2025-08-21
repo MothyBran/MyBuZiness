@@ -1,7 +1,7 @@
 // app/layout.tsx
 export const metadata = {
   title: "MyBuZiness",
-  description: "Business Dashboard",
+  description: "Business Dashboard"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
