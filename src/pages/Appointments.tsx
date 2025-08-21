@@ -13,7 +13,11 @@ export default function Appointments() {
   const [cursor, setCursor] = useState(new Date());
   const nav = useNavigate();
 
-  useEffect(() => { getAppointments().then(setRows); }, []);
+  useEffect(() => {
+  const y = cursor.getFullYear();
+  const m = String(cursor.getMonth() + 1).padStart(2, "0");
+  getAppointmentsByMonth(`${y}-${m}`).then(setRows);
+}, [cursor]);
 
   const monthDays = useMemo(() => {
     const start = startOfMonth(cursor);
