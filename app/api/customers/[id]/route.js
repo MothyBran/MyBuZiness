@@ -1,102 +1,71 @@
 // app/api/customers/[id]/route.js
-import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { initDb, q } from "@/lib/db";
 
-async function ensureCustomerSchema(client){
-  await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS "Customer" (
-      "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      "name" TEXT NOT NULL,
-      "street" TEXT,
-      "zip" TEXT,
-      "city" TEXT,
-      "phone" TEXT,
-      "email" TEXT,
-      "note" TEXT,
-      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-}
-
-function cleanCustomerPayload(p){
-  const o = p || {};
-  return {
-    name: (o.name ?? "").toString().trim(),
-    street: (o.street ?? "").toString().trim() || null,
-    zip: (o.zip ?? o.plz ?? "").toString().trim() || null,
-    city: (o.city ?? "").toString().trim() || null,
-    phone: (o.phone ?? o.tel ?? "").toString().trim() || null,
-    email: (o.email ?? "").toString().trim() || null,
-    note: (o.note ?? "").toString().trim() || null,
-  };
-}
-
-// GET /api/customers/:id
-export async function GET(_req, { params }){
-  const id = params.id;
-  const client = await pool.connect();
+export async function GET(_req, { params }) {
   try {
-    await ensureCustomerSchema(client);
-    const { rows } = await client.query(`SELECT * FROM "Customer" WHERE "id"=$1`, [id]);
-    if (!rows[0]) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json(rows[0], { status: 200 });
-  } catch (e){
-    console.error("GET /api/customers/:id failed:", e);
-    return NextResponse.json({ error: "customer_get_failed" }, { status: 500 });
-  } finally {
-    client.release();
+    await initDb();
+    const { id } = params;
+    const row = (await q(`SELECT * FROM "Customer" WHERE "id"=$1`, [id])).rows[0];
+    if (!row) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
+    return Response.json({ ok:true, data: row });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
   }
 }
 
-// PUT /api/customers/:id
-export async function PUT(request, { params }){
-  const id = params.id;
-  const client = await pool.connect();
+export async function PUT(request, { params }) {
   try {
-    await ensureCustomerSchema(client);
+    await initDb();
+    const { id } = params;
+    const body = await request.json().catch(()=> ({}));
 
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
-      return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-    }
+    // Normalisierung (unterstützt alte/new UI-Feldnamen)
+    const name = (body.name || "").trim();
+    if (!name) return new Response(JSON.stringify({ ok:false, error:"Name ist erforderlich." }), { status:400 });
 
-    const data = cleanCustomerPayload(payload);
-    if (!data.name) return NextResponse.json({ error: "missing:name" }, { status: 400 });
+    const email = body.email ?? null;
+    const phone = body.phone ?? body.tel ?? null;
 
-    const { rows } = await client.query(
+    const addressStreet  = body.addressStreet ?? body.street ?? null;
+    const addressZip     = body.addressZip ?? body.zip ?? body.plz ?? null;
+    const addressCity    = body.addressCity ?? body.city ?? null;
+    const addressCountry = body.addressCountry ?? body.country ?? null;
+
+    const note = body.note ?? body.notes ?? null;
+
+    const res = await q(
       `UPDATE "Customer"
-       SET "name"=$1,"street"=$2,"zip"=$3,"city"=$4,"phone"=$5,"email"=$6,"note"=$7,"updatedAt"=NOW()
-       WHERE "id"=$8
+       SET "name"=$1,
+           "email"=$2,
+           "phone"=$3,
+           "addressStreet"=$4,
+           "addressZip"=$5,
+           "addressCity"=$6,
+           "addressCountry"=$7,
+           "note"=$8,
+           "updatedAt"=CURRENT_TIMESTAMP
+       WHERE "id"=$9
        RETURNING *`,
-      [data.name, data.street, data.zip, data.city, data.phone, data.email, data.note, id]
+      [name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note, id]
     );
-    if (!rows[0]) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json(rows[0], { status: 200 });
-  } catch (e){
-    console.error("PUT /api/customers/:id failed:", e);
-    return NextResponse.json({ error: "customer_update_failed" }, { status: 500 });
-  } finally {
-    client.release();
+    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
+    return Response.json({ ok:true, data: res.rows[0] });
+  } catch (e) {
+    if (String(e).includes("duplicate key")) {
+      return new Response(JSON.stringify({ ok:false, error:"E-Mail ist bereits vergeben." }), { status:400 });
+    }
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
   }
 }
 
-// DELETE /api/customers/:id
-export async function DELETE(_request, { params }){
-  const id = params.id;
-  const client = await pool.connect();
+export async function DELETE(_req, { params }) {
   try {
-    await ensureCustomerSchema(client);
-    const { rowCount } = await client.query(`DELETE FROM "Customer" WHERE "id"=$1`, [id]);
-    if (!rowCount) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (e){
-    console.error("DELETE /api/customers/:id failed:", e);
-    return NextResponse.json({ error: "customer_delete_failed" }, { status: 500 });
-  } finally {
-    client.release();
+    await initDb();
+    const { id } = params;
+    const res = await q(`DELETE FROM "Customer" WHERE "id"=$1`, [id]);
+    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
+    return Response.json({ ok:true });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
   }
 }
