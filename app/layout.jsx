@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
         <InfoStripe position="top" showText={true} />
 
         {/* Seiten-Container */}
-        <main className="container" style={{ width: "100%", maxWidth: "100%" }}>
+        <main className="container">
           {children}
         </main>
 
@@ -32,7 +32,7 @@ export default function RootLayout({ children }) {
         {/* Footer */}
         <footer
           className="container"
-          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--muted)", fontSize: 13 }}
+          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--color-muted)", fontSize: 13 }}
         >
           <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 14 }}>
             © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte vorbehalten.
