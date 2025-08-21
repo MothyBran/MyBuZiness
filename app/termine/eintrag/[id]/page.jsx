@@ -6,11 +6,11 @@ import Link from "next/link";
 import Modal from "@/app/components/Modal";
 import { useRouter } from "next/navigation";
 
-/* Datum-Utils */
+/* Utils */
 function toDate(input){
   if (input instanceof Date) return input;
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    const [y,m,d] = input.split("-").map(Number);
+    const [y,m,d]=input.split("-").map(Number);
     return new Date(y, m-1, d, 12, 0, 0, 0);
   }
   const d = new Date(input || Date.now());
@@ -35,20 +35,16 @@ export default function EntryDetail({ params }){
 
   useEffect(()=>{
     fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>setItem(null));
-    fetch(`/api/customers`).then(r=>r.json()).then(rows=>{
-      const arr = Array.isArray(rows) ? rows : (rows?.rows || rows?.data || rows?.items || rows?.customers || []);
-      const mapped = (arr||[]).map(c=>{
-        const id = c.id ?? c.customerId ?? c.uuid ?? c._id ?? "";
-        const name = c.name ?? c.fullName ?? c.company ?? c.title ?? "";
-        return {
-          id: String(id),
-          name: String(name),
-          street: c.street ?? c.address ?? c.addressLine1 ?? "",
-          zip: c.zip ?? c.postcode ?? c.plz ?? "",
-          city: c.city ?? c.town ?? "",
-          phone: c.phone ?? c.tel ?? c.telephone ?? ""
-        };
-      }).filter(x=>x.id && x.name);
+    fetch(`/api/customers`).then(r=>r.json()).then(js=>{
+      const arr = Array.isArray(js) ? js : js?.data || js?.rows || js?.items || js?.customers || [];
+      const mapped = (arr||[]).map(c=>({
+        id: String(c.id ?? c.customerId ?? c.uuid ?? c._id ?? ""),
+        name: String(c.name ?? c.fullName ?? c.company ?? c.title ?? ""),
+        street: c.addressStreet ?? c.street ?? c.address ?? "",
+        zip: c.addressZip ?? c.zip ?? c.plz ?? "",
+        city: c.addressCity ?? c.city ?? c.town ?? "",
+        phone: c.phone ?? c.tel ?? c.telephone ?? ""
+      })).filter(x=>x.id && x.name);
       setCustomers(mapped);
     }).catch(()=>setCustomers([]));
   },[id]);
@@ -76,25 +72,25 @@ export default function EntryDetail({ params }){
   return (
     <div className="container grid-gap-16">
       <div className="surface">
-        <div className="header-row" style={{marginBottom:12}}>
+        <div className="header-row" style={{marginBottom:12, gap:8, flexWrap:"wrap"}}>
           <h2 className="page-title" style={{margin:0}}>Termin / Auftrag</h2>
-          <div style={{display:"flex",gap:8}}>
+          <div style={{display:"flex",gap:8, marginLeft:"auto", flexWrap:"wrap"}}>
             <button className="btn-ghost" onClick={()=>setOpenEdit(true)}>⚙️ Bearbeiten</button>
             <button className="btn" onClick={handleDelete} disabled={deleting}>{deleting?"Lösche…":"❌ Löschen"}</button>
             <Link href="/termine" className="btn-ghost">← Zurück</Link>
           </div>
         </div>
 
-        {/* Reihenfolge: Art, Uhrzeit & Datum, Kunde, Notiz, Status */}
-        <div style={{display:"grid", gridTemplateColumns:"220px 1fr", gap:10, alignItems:"start"}}>
-          <div><b>Art</b></div>
-          <div>{item.kind==="order" ? "Auftrag" : "Termin"}</div>
+        {/* Responsive Info-Grid */}
+        <div className="detail-grid">
+          <div className="detail-label">Art</div>
+          <div className="detail-value">{item.kind==="order" ? "Auftrag" : "Termin"}</div>
 
-          <div><b>Uhrzeit & Datum</b></div>
-          <div>{item.startAt?.slice(0,5)}{item.endAt?`–${item.endAt.slice(0,5)}`:""} · {formatDateDE(item.date)}</div>
+          <div className="detail-label">Uhrzeit & Datum</div>
+          <div className="detail-value">{item.startAt?.slice(0,5)}{item.endAt?`–${item.endAt.slice(0,5)}`:""} · {formatDateDE(item.date)}</div>
 
-          <div><b>Kunde</b></div>
-          <div>
+          <div className="detail-label">Kunde</div>
+          <div className="detail-value">
             {item.customerName ? <div><b>{item.customerName}</b></div> : "—"}
             {cust && (
               <div style={{opacity:.9, marginTop:4}}>
@@ -104,11 +100,11 @@ export default function EntryDetail({ params }){
             )}
           </div>
 
-          <div><b>Notiz</b></div>
-          <div>{item.note || "—"}</div>
+          <div className="detail-label">Notiz</div>
+          <div className="detail-value">{item.note || "—"}</div>
 
-          <div><b>Status</b></div>
-          <div>{STATUS_LABEL[item.status] || "offen"}</div>
+          <div className="detail-label">Status</div>
+          <div className="detail-value">{STATUS_LABEL[item.status] || "offen"}</div>
         </div>
       </div>
 
@@ -118,6 +114,23 @@ export default function EntryDetail({ params }){
           fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>{});
         }} />
       </Modal>
+
+      <style jsx>{`
+        .detail-grid{
+          display:grid;
+          grid-template-columns: 220px 1fr;
+          gap: 10px;
+          align-items: start;
+        }
+        .detail-label{ font-weight: 700; opacity: .85; }
+        .detail-value{ min-width: 0; }
+        @media (max-width: 639px){
+          .detail-grid{ grid-template-columns: 1fr; }
+          .detail-label{ font-size: 12px; opacity: .7; }
+          .detail-value{ padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,.06); margin-bottom: 8px; }
+          .detail-grid > .detail-label + .detail-value:last-child{ border-bottom: 0; margin-bottom: 0; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -156,13 +169,10 @@ function EditForm({ initial, customers, onDone }){
     onDone?.();
   }
 
-  const hhmm = Array.from({length:48}, (_,i)=>{
-    const h = Math.floor(i/2), m = (i%2)*30;
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-  });
+  const hhmm = Array.from({length:48}, (_,i)=>`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2? "30":"00"}`);
 
   return (
-    <form onSubmit={submit} style={{display:"grid", gap:12, minWidth:340}}>
+    <form onSubmit={submit} style={{display:"grid", gap:12, minWidth:320}}>
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
         <label>Art
           <select value={kind} onChange={e=>setKind(e.target.value)}>
@@ -211,7 +221,7 @@ function EditForm({ initial, customers, onDone }){
         <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} />
       </label>
 
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end", flexWrap:"wrap"}}>
         <button type="button" className="btn-ghost" onClick={onDone}>Abbrechen</button>
         <button type="submit" className="btn">Speichern</button>
       </div>
