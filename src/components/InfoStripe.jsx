@@ -1,4 +1,3 @@
-// src/components/InfoStripe.jsx  (ersetzt deine bestehende InfoStripe.jsx – jetzt voll konfigurierbar)
 import React from "react";
 import { useTheme } from "../theme/ThemeProvider";
 
@@ -6,23 +5,23 @@ import { useTheme } from "../theme/ThemeProvider";
  * Anzeigeleiste unter dem Header. Inhalte & Farben kommen aus Settings:
  * - primaryColor, secondaryColor, accentColor, backgroundColor, textColor, borderRadius, fontFamily
  * - headerTitle, companyName, ownerName, city, currency, iban, vatId, taxNumber, taxOffice, phone, email
- * Quelle Feldnamen: Settings-Tabelle. 
  */
-const InfoStripe = () => {
+const InfoStripe: React.FC = () => {
   const { settings } = useTheme();
-
   if (!settings) return null;
 
   return (
-    <div style={{
-      background: `linear-gradient(90deg, var(--color-primary), var(--color-accent))`,
-      color: "#0b1220",
-      borderRadius: "12px",
-      padding: "10px 14px",
-      margin: "12px 0",
-      boxShadow: "var(--shadow-md)"
-    }}>
-      <div className="container" style={{display:"flex", gap:12, flexWrap:"wrap", alignItems:"center"}}>
+    <div
+      style={{
+        background: `linear-gradient(90deg, var(--color-primary), var(--color-accent))`,
+        color: "#0b1220",
+        borderRadius: "12px",
+        padding: "10px 14px",
+        margin: "12px 0",
+        boxShadow: "var(--shadow-md)"
+      }}
+    >
+      <div className="container" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <strong>{settings.companyName || "Unternehmen"}</strong>
         {settings.city ? <span className="badge">📍 {settings.city}</span> : null}
         {settings.currency || settings.currencyDefault ? (
