@@ -4,7 +4,7 @@ WORKDIR /app
 
 # schnellerer Install: nur package.json + lockfile zuerst
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Rest des Projekts
 COPY . .
@@ -19,7 +19,7 @@ WORKDIR /app
 
 # nur Runtime-Dependencies übernehmen
 COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Build-Artefakte + public kopieren
 COPY --from=builder /app/.next ./.next
