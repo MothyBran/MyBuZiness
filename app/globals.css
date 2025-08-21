@@ -1,157 +1,60 @@
-/* === Reset & Base === */
-*,
-*::before,
-*::after { box-sizing: border-box; }
-
-html, body { height: 100%; }
-
-html {
-  -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
+/* === Responsive Utilities ================================================== */
+:root{
+  --sm: 640px;
+  --md: 768px;
+  --lg: 1024px;
 }
 
-body {
-  margin: 0;
-  background: var(--color-bg, #f7f8fa);
-  color: var(--color-text, #111);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  line-height: 1.45;
-  overflow-x: hidden;   /* kein horizontales Scrollen */
-  width: 100%;
-  max-width: 100%;
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+.hide-sm { display: block; }
+.show-sm { display: none; }
+
+@media (max-width: 639px){
+  .hide-sm { display: none !important; }
+  .show-sm { display: block !important; }
 }
 
-/* === Design-Variablen (Default-Werte) === */
-:root {
-  --radius: 14px;
-  --shadow-xs: 0 1px 2px rgba(0,0,0,.06);
-  --shadow-sm: 0 4px 14px rgba(0,0,0,.08);
-  --shadow-md: 0 10px 30px rgba(0,0,0,.10);
-  --shadow-lg: 0 24px 60px rgba(0,0,0,.14);
-  --border: 1px solid rgba(0,0,0,.07);
-  --muted: #6b7280;
-
-  --color-primary: #2563eb;
-  --color-secondary: #0f766e;
-  --color-text: #111111;
-
-  --card-bg: #ffffff;
-  --card-border: #eee;
-  --card-radius: 16px;
-  --card-shadow: 0 8px 28px rgba(0,0,0,.08);
+/* Tabellen → mobile Cards (Termine/Kunden etc.) */
+.table.cardify tbody > tr.row-clickable,
+.table.cardify tbody > tr {
+  transition: background .12s ease;
 }
 
-/* === Layout-Container === */
-.container { max-width: 1100px; margin: 0 auto; padding: 20px; width: 100%; }
-
-.page-title { font-size: clamp(22px, 2.2vw, 28px); letter-spacing: 0.2px; font-weight: 800; margin: 0 0 8px; }
-.subtle { color: var(--muted); margin: 0; }
-
-/* === Cards / Oberflächen === */
-.card,
-.surface {
-  background: var(--card-bg, #fff);
-  border: var(--border);
-  border-radius: var(--card-radius, var(--radius));
-  box-shadow: var(--card-shadow, var(--shadow-sm));
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-  overflow: hidden;
-  padding: 16px;
-}
-.card:hover,
-.surface:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: rgba(0,0,0,.10); }
-
-.card-title {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-.card-value {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #111827;
+@media (max-width: 639px){
+  .table.cardify thead { display: none; }
+  .table.cardify tbody, .table.cardify tr, .table.cardify td { display:block; width: 100%; }
+  .table.cardify tbody > tr {
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .table.cardify tbody > tr + tr { margin-top: 4px; }
+  .table.cardify td { border: 0; padding: 4px 0; }
+  .table.cardify td[data-label]::before{
+    content: attr(data-label) " ";
+    display: inline-block;
+    min-width: 110px;
+    font-size: 12px;
+    opacity: .7;
+  }
+  .table-card-actions{
+    display:flex; gap:8px; justify-content:flex-start; margin-top:8px;
+  }
 }
 
-/* === Buttons (neutral) === */
-.btn, .btn-ghost {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px 12px; border-radius: var(--radius);
-  border: 1px solid var(--color-primary);
-  text-decoration: none; cursor: pointer; box-shadow: var(--shadow-xs);
-  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-}
-.btn { color: #fff; background: var(--color-primary); }
-.btn-ghost { background: #fff; color: var(--color-primary); }
-.btn:hover, .btn-ghost:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); opacity: .95; }
-
-/* === Bilder/Medien === */
-img, svg, video, canvas { max-width: 100%; height: auto; }
-
-/* === Tabellen === */
-.table-wrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.table th, .table td { text-align: left; padding: 10px; border-bottom: 1px solid rgba(0,0,0,.06); word-break: break-word; overflow-wrap: anywhere; }
-
-/* Tabellen-Header nicht Buchstaben-weise umbrechen */
-.table th {
-  white-space: nowrap;
-  word-break: normal;
-  overflow-wrap: normal;
-  text-overflow: ellipsis;
-  overflow: hidden;
+/* Kalender-Grid kleine Optimierungen auf Mobile */
+@media (max-width: 639px){
+  .cal-cell{ min-height: 84px; padding: 8px 6px; }
+  .cal-daynum{ width: 30px; height: 30px; }
 }
 
-/* Ellipsis einzeilig */
-.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Tabellen-Reihe Hover */
-.row-clickable:hover { background: #f9fafb; }
-.row-clickable:active { background: #f3f4f6; }
-
-/* === Grids / Abstände === */
-.grid-gap-16 { display: grid; gap: 16px; }
-.grid-1-3 { grid-template-columns: 1fr; }             /* mobile: 1 Spalte */
-.grid-2-4 { grid-template-columns: 1fr 1fr; }         /* mobile: 2 Spalten */
-
-@media (min-width: 768px) {
-  .grid-1-3 { grid-template-columns: repeat(3, 1fr); }  /* md: 3 Spalten */
-  .grid-2-4 { grid-template-columns: repeat(4, 1fr); }  /* md: 4 Spalten */
-}
-
-/* === Header-Leiste (Menü links, Login rechts) – falls genutzt === */
-.header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-.header-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 120px; height: 44px; font-weight: 600; font-size: 15px;
-  border-radius: var(--radius); border: 1px solid rgba(0,0,0,.15);
-  background: #fff; color: #111; cursor: pointer;
-  transition: background .2s ease, box-shadow .2s ease, transform .1s ease;
-  text-decoration: none;
-}
-.header-btn:hover, .header-btn:focus { background: #f3f4f6; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-.header-btn:active { background: #e5e7eb; transform: scale(0.97); }
-
-.hamburger { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 22px; height: 16px; }
-.hamburger span { display: block; width: 22px; height: 2px; background: #111; border-radius: 2px; transition: background .2s ease; }
-.header-btn:hover .hamburger span { background: #000; }
-
-.header-login { min-width: 120px; text-align: center; }
-
-/* Buttons/Inputs: auf Mobile breite Tap areas */
-@media (max-width: 640px) {
-  .header-row .header-btn { min-width: auto; flex: 1; }
-  .header-row .header-btn:first-child { flex: 0 0 44px; min-width: 44px; }
-  .btn, .btn-ghost { width: 100%; }
-  input, select, textarea { min-height: 44px; }
-}
+/* Tagesansicht (Timeline) – schmaleres Raster auf Mobile */
+@media (max-width: 639px){
+  .day-grid{ grid-template-columns: 58px 1fr; }
+  .day-hour{ font-size: 11px; }
+  .day-block-inner{ padding: 6px; }
+}}
 
 /* ==== Positions-Tabellen im Modal: nie „Produkt“ verschwinden lassen ==== */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
