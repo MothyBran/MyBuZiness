@@ -90,3 +90,43 @@ button { font: inherit; }
 .table th { text-align:left; color: var(--color-muted); font-weight: 600; }
 .row-actions { display:flex; gap:8px; flex-wrap: wrap; }
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Ergänzungen in: src/theme/theme.css */
+.table--compact th, .table--compact td { padding: 12px 14px; vertical-align: middle; }
+.table tr:hover td { border-bottom-color: rgba(255,255,255,.16); }
+.table .cell--num { text-align: right; font-variant-numeric: tabular-nums; }
+.table .cell--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+.form-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+.form-col-12 { grid-column: span 12; } .form-col-6 { grid-column: span 6; } .form-col-4 { grid-column: span 4; } .form-col-3 { grid-column: span 3; }
+@media (max-width: 1024px) { .form-col-6, .form-col-4, .form-col-3 { grid-column: span 12; } }
+
+.calendar {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+}
+.calendar .day {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  min-height: 86px;
+  padding: 8px;
+  position: relative;
+  cursor: pointer;
+  transition: .15s ease;
+}
+.calendar .day:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.calendar .day .date {
+  font-size: 12px; color: var(--color-muted);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.calendar .today .date::after {
+  content: ""; width: 8px; height: 8px; border-radius: 999px; border: 2px solid var(--color-accent);
+  display: inline-block;
+}
+.calendar .has-items::before {
+  content: ""; position: absolute; right: 8px; bottom: 8px; width: 8px; height: 8px; border-radius: 999px; background: var(--color-secondary);
+}
+.badge--soft {
+  background: rgba(255,255,255,.06);
+  border: 1px dashed rgba(255,255,255,.12);
+}
