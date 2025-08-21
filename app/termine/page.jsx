@@ -5,18 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 /* Date Utils */
-function toDate(input) {
-  if (input instanceof Date) return input;
-  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    const [y,m,d]=input.split("-").map(Number);
-    return new Date(y, m-1, d, 12,0,0,0);
-  }
-  const d=new Date(input||Date.now()); return isNaN(d)?new Date():d;
-}
-function formatDateDE(input){
-  const d = toDate(input);
-  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
-}
+function toDate(input){ if (input instanceof Date) return input; if (typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input)){ const [y,m,d]=input.split("-").map(Number); return new Date(y, m-1, d, 12,0,0,0);} const d=new Date(input||Date.now()); return isNaN(d)?new Date():d; }
+function formatDateDE(input){ const d=toDate(input); return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; }
 function startOfMonth(d){ const x=toDate(d); x.setDate(1); x.setHours(12,0,0,0); return x; }
 function addMonths(d,m){ const x=toDate(d); x.setMonth(x.getMonth()+m); return x; }
 function toYMD(d){ const z=toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
@@ -80,10 +70,9 @@ export default function TerminePage(){
     setEvents(prev => prev.map(p => p.id===ev.id ? { ...p, status: map[to] } : p));
   }
 
-  /* Monatskalender */
   function MonthCalendar(){
     return (
-      <div className="surface">
+      <div className="surface appt">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
           <h2 className="page-title" style={{margin:0}}>
             Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
@@ -95,19 +84,19 @@ export default function TerminePage(){
           </div>
         </div>
 
-        <div className="cal-grid">
-          {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=><div key={h} className="cal-head">{h}</div>)}
+        <div className="appt-cal">
+          {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=><div key={h} className="appt-cal-head">{h}</div>)}
           {days.map((d,i)=>{
             const inMonth = d.getMonth()===cursor.getMonth();
             const key = toYMD(d);
             const list = byDate[key]||[];
             const isToday = key===TODAY_YMD;
             return (
-              <Link key={i} href={`/termine/${key}`} className={`cal-cell ${inMonth?"":"muted"} ${isToday?"today":""}`}>
-                <div className="cal-daynum-wrap"><span className="cal-daynum">{d.getDate()}</span></div>
-                <div className="cal-markers">
-                  {list.slice(0,4).map(x=><span key={x.id} className={`cal-dot ${x.kind==='order'?'cal-dot-accent':'cal-dot-info'}`} />)}
-                  {list.length>4 && <span className="cal-dot cal-dot-more" title={`+${list.length-4} weitere`}>+{list.length-4}</span>}
+              <Link key={i} href={`/termine/${key}`} className={`appt-cal-cell ${inMonth?"":"is-muted"} ${isToday?"is-today":""}`}>
+                <div className="appt-cal-daynum-wrap"><span className="appt-cal-daynum">{d.getDate()}</span></div>
+                <div className="appt-cal-markers">
+                  {list.slice(0,4).map(x=><span key={x.id} className={`appt-cal-dot ${x.kind==='order'?'appt-cal-dot--order':''}`} />)}
+                  {list.length>4 && <span className="appt-cal-more" title={`+${list.length-4} weitere`}>+{list.length-4}</span>}
                 </div>
               </Link>
             );
@@ -120,40 +109,38 @@ export default function TerminePage(){
     );
   }
 
-  /* Monatsliste als saubere Karten */
   function MonthList(){
     return (
-      <div className="surface">
+      <div className="surface appt">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
           <h2 className="page-title" style={{margin:0}}>Termine / Aufträge – Übersicht</h2>
-          <Link href="/termine" className="btn-ghost">Aktualisieren</Link>
         </div>
 
         {(!loading && !error && events.length===0) && (
           <div className="surface" style={{borderStyle:"dashed", textAlign:"center"}}>Keine Einträge im ausgewählten Monat.</div>
         )}
 
-        <div className="list">
+        <div className="appt-list">
           {events.map(ev=>{
             const displayStatus = computeDisplayStatus(ev);
             return (
-              <div key={ev.id} className="list-item">
-                <div className={`item-icon ${ev.kind==='order'?'accent':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
+              <div key={ev.id} className="appt-item">
+                <div className={`appt-icon ${ev.kind==='order'?'appt-icon--order':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
                   {ev.kind==='order' ? "🧾" : "📅"}
                 </div>
                 <div style={{minWidth:0}}>
-                  <div className="item-title ellipsis">
+                  <div className="appt-title">
                     <Link href={`/termine/eintrag/${ev.id}`} style={{color:"inherit", textDecoration:"none"}}>{ev.title || "(ohne Titel)"}</Link>
                   </div>
-                  <div className="item-meta ellipsis">
+                  <div className="appt-meta">
                     <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{color:"inherit", textDecoration:"none"}}>
                       {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
                     </Link>
                     {ev.customerName && <> · {ev.customerName}</>}
                   </div>
                 </div>
-                <div className="item-actions">
-                  <button className={`status-badge ${displayStatus}`} onClick={()=>cycleStatus(ev)} title="Status ändern">
+                <div className="appt-actions">
+                  <button className={`appt-badge ${displayStatus==="offen"?"is-offen":displayStatus==="abgesagt"?"is-abgesagt":"is-abgeschlossen"}`} onClick={()=>cycleStatus(ev)} title="Status ändern">
                     {displayStatus}
                   </button>
                 </div>
