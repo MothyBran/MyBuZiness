@@ -1,105 +1,65 @@
 // app/api/customers/route.js
-import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { initDb, q, uuid } from "@/lib/db";
 
-// --- robustes Schema-Safety (nur hier, kein Top-Level beim Import) ---------
-async function ensureCustomerSchema(client){
-  await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS "Customer" (
-      "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      "name" TEXT NOT NULL,
-      "street" TEXT,
-      "zip" TEXT,
-      "city" TEXT,
-      "phone" TEXT,
-      "email" TEXT,
-      "note" TEXT,
-      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS "idx_customer_name" ON "Customer" (lower("name"));
-    CREATE INDEX IF NOT EXISTS "idx_customer_city" ON "Customer" (lower("city"));
-  `);
-}
-
-function cleanCustomerPayload(p){
-  const o = p || {};
-  return {
-    name: (o.name ?? "").toString().trim(),
-    street: (o.street ?? "").toString().trim() || null,
-    zip: (o.zip ?? o.plz ?? "").toString().trim() || null,
-    city: (o.city ?? "").toString().trim() || null,
-    phone: (o.phone ?? o.tel ?? "").toString().trim() || null,
-    email: (o.email ?? "").toString().trim() || null,
-    note: (o.note ?? "").toString().trim() || null,
-  };
-}
-
-// GET /api/customers?search=...&limit=...&offset=...
-export async function GET(request){
-  const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("search") || "").trim();
-  const limit = Math.max(0, Math.min(200, Number(searchParams.get("limit") || 100)));
-  const offset = Math.max(0, Number(searchParams.get("offset") || 0));
-
-  const client = await pool.connect();
+export async function GET(request) {
   try {
-    await ensureCustomerSchema(client);
-    if (q) {
-      const { rows } = await client.query(
+    await initDb();
+    const { searchParams } = new URL(request.url);
+    const qs = (searchParams.get("q") || "").trim().toLowerCase();
+
+    let rows;
+    if (qs) {
+      rows = (await q(
         `SELECT * FROM "Customer"
-         WHERE lower("name") LIKE lower($1) OR lower(coalesce("city",''))
-               LIKE lower($1)
-         ORDER BY "name" ASC
-         LIMIT $2 OFFSET $3`,
-        [`%${q}%`, limit, offset]
-      );
-      return NextResponse.json(rows, { status: 200 });
+         WHERE lower("name") LIKE $1
+            OR lower("email") LIKE $1
+            OR lower(COALESCE("phone", '')) LIKE $1
+            OR lower(COALESCE("addressCity", '')) LIKE $1
+         ORDER BY "createdAt" DESC`,
+        [`%${qs}%`]
+      )).rows;
     } else {
-      const { rows } = await client.query(
-        `SELECT * FROM "Customer" ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2`,
-        [limit, offset]
-      );
-      return NextResponse.json(rows, { status: 200 });
+      rows = (await q(`SELECT * FROM "Customer" ORDER BY "createdAt" DESC`)).rows;
     }
-  } catch (e){
-    console.error("GET /api/customers failed:", e);
-    return NextResponse.json({ error: "customers_list_failed" }, { status: 500 });
-  } finally {
-    client.release();
+    return Response.json({ ok: true, data: rows });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
-// POST /api/customers
-export async function POST(request){
-  const client = await pool.connect();
+export async function POST(request) {
   try {
-    await ensureCustomerSchema(client);
+    await initDb();
+    const body = await request.json().catch(() => ({}));
 
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
-      return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-    }
+    // Eingaben robust normalisieren (unterstützt alte/new UI-Feldnamen)
+    const name = (body.name || "").trim();
+    if (!name) return new Response(JSON.stringify({ ok:false, error:"Name ist erforderlich." }), { status:400 });
 
-    const data = cleanCustomerPayload(payload);
-    if (!data.name) {
-      return NextResponse.json({ error: "missing:name" }, { status: 400 });
-    }
+    const id = uuid();
+    const email = body.email ?? null;
+    const phone = body.phone ?? body.tel ?? null;
 
-    const { rows } = await client.query(
-      `INSERT INTO "Customer" ("name","street","zip","city","phone","email","note","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+    const addressStreet  = body.addressStreet ?? body.street ?? null;
+    const addressZip     = body.addressZip ?? body.zip ?? body.plz ?? null;
+    const addressCity    = body.addressCity ?? body.city ?? null;
+    const addressCountry = body.addressCountry ?? body.country ?? null;
+
+    const note = body.note ?? body.notes ?? null;
+
+    const res = await q(
+      `INSERT INTO "Customer"
+       ("id","name","email","phone","addressStreet","addressZip","addressCity","addressCountry","note","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
        RETURNING *`,
-      [data.name, data.street, data.zip, data.city, data.phone, data.email, data.note]
+      [id, name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note]
     );
-    return NextResponse.json(rows[0], { status: 201 });
-  } catch (e){
-    console.error("POST /api/customers failed:", e);
-    return NextResponse.json({ error: "customer_create_failed" }, { status: 500 });
-  } finally {
-    client.release();
+
+    return Response.json({ ok: true, data: res.rows[0] }, { status: 201 });
+  } catch (e) {
+    if (String(e).includes("duplicate key")) {
+      return new Response(JSON.stringify({ ok:false, error:"E-Mail ist bereits vergeben." }), { status:400 });
+    }
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
   }
 }
