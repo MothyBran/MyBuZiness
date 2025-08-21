@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import AppointmentForm from "@/app/termine/components/AppointmentForm";
+import AppointmentForm from "@/app/components/AppointmentForm";
 
 /* Utils */
 function toDate(input){
