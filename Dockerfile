@@ -1,37 +1,40 @@
-# ---- Build stage ------------------------------------------------------------
-FROM node:18-alpine AS builder
+# ---- Builder ---------------------------------------------------------------
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Nur Manifeste zuerst -> bessere Caches
+# Nur package-Dateien kopieren, um Layer-Caching für deps zu nutzen
 COPY package*.json ./
-# Kein Lockfile? -> npm install ist okay
-RUN npm install
+RUN npm ci
 
-# Projekt kopieren und bauen (Classic, KEIN standalone)
+# Rest des Codes
 COPY . .
+
+# Telemetrie aus
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build
 RUN npm run build
 
-# ---- Runtime stage ----------------------------------------------------------
-FROM node:18-alpine
+# ---- Runtime ---------------------------------------------------------------
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Nur Runtime-Dependencies
-COPY --from=builder /app/package*.json ./
-RUN npm install --omit=dev
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
 
-# Build-Artefakte + Public übernehmen
+# Prod-Dependencies installieren
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Build-Artefakte + statische Assets
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.js ./next.config.js
 
-# Sicherstellen, dass next im PATH ist (zusätzlich zu npm start fallback)
-ENV PATH="/app/node_modules/.bin:${PATH}"
+# (Optional) nur wenn du dynamisch noch etwas brauchst:
+# COPY --from=builder /app/src ./src
+# COPY --from=builder /app/app ./app
 
-# Runtime-ENV
-ENV NODE_ENV=production
-ENV HOST=0.0.0.0
-# Railway setzt $PORT automatisch
 EXPOSE 3000
-
-# Über npm starten -> npm setzt PATH korrekt auf node_modules/.bin
-CMD [ "npm", "run", "start" ]
+CMD ["npm", "start"]
