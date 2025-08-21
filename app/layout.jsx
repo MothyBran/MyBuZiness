@@ -15,18 +15,18 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
-      <body style={{ overflowX: "hidden", width: "100%", maxWidth: "100%" }}>
-        {/* Obere Kopfzeile bleibt unverändert */}
+      <body style={{ overflowX: "hidden" }}>
+        {/* Kopfzeile */}
         <HeaderTop />
-        {/* Farbstreifen darunter (Text ein/aus je nach Position) */}
+        {/* Farbstreifen darunter */}
         <InfoStripe position="top" showText={true} />
 
-        {/* Seiten-Container */}
+        {/* Seiten-Container (max-width via .container) */}
         <main className="container">
           {children}
         </main>
 
-        {/* Unterer Farbstreifen ohne Text */}
+        {/* Unterer Farbstreifen */}
         <InfoStripe position="bottom" showText={false} />
 
         {/* Footer */}
