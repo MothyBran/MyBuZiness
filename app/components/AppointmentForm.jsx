@@ -1,9 +1,8 @@
-// app/termine/components/AppointmentForm.jsx
+// app/components/AppointmentForm.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 
-/** Reusable Appointment Form (Neu & Bearbeiten) */
 export default function AppointmentForm({ initial = null, customers = [], onSaved, onCancel }){
   const isEdit = !!initial?.id;
 
@@ -25,7 +24,6 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
   const [note,setNote]=useState(initial?.note || "");
   const [saving,setSaving]=useState(false);
 
-  // Kundenname automatisch aus Dropdown übernehmen
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
     if (found) setCustomerName(found.name);
@@ -64,65 +62,67 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
   return (
     <form onSubmit={submit} className="form">
-      <div className="grid-gap-16 grid-2">
-        <div className="field">
-          <span className="label">Art</span>
-          <select className="select" value={kind} onChange={e=>setKind(e.target.value)}>
-            <option value="appointment">Termin</option>
-            <option value="order">Auftrag</option>
-          </select>
+      <div className="grid-gap-16" style={{ display:"grid", gridTemplateColumns:"1fr", gap:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <label className="field">
+            <span className="label">Art</span>
+            <select className="select" value={kind} onChange={e=>setKind(e.target.value)}>
+              <option value="appointment">Termin</option>
+              <option value="order">Auftrag</option>
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">Datum</span>
+            <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          </label>
         </div>
-        <div className="field">
-          <span className="label">Datum</span>
-          <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} />
-        </div>
-      </div>
 
-      <div className="field">
-        <span className="label">Bezeichnung *</span>
-        <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
-      </div>
+        <label className="field">
+          <span className="label">Bezeichnung *</span>
+          <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
+        </label>
 
-      <div className="grid-gap-16 grid-3">
-        <div className="field">
-          <span className="label">Start</span>
-          <select className="select" value={startAt} onChange={e=>setStartAt(e.target.value)}>
-            {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
-          </select>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+          <label className="field">
+            <span className="label">Start</span>
+            <select className="select" value={startAt} onChange={e=>setStartAt(e.target.value)}>
+              {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">Ende (optional)</span>
+            <select className="select" value={endAt} onChange={e=>setEndAt(e.target.value)}>
+              <option value="">—</option>
+              {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">Status</span>
+            <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="open">offen</option>
+              <option value="cancelled">abgesagt</option>
+              <option value="done">abgeschlossen</option>
+            </select>
+          </label>
         </div>
-        <div className="field">
-          <span className="label">Ende (optional)</span>
-          <select className="select" value={endAt} onChange={e=>setEndAt(e.target.value)}>
+
+        <label className="field">
+          <span className="label">Kunde (optional)</span>
+          <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
             <option value="">—</option>
-            {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
+            {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+        </label>
+
+        <label className="field">
+          <span className="label">Notiz (optional)</span>
+          <textarea className="textarea" value={note} onChange={e=>setNote(e.target.value)} />
+        </label>
+
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+          <button type="button" className="btn-ghost" onClick={onCancel}>Abbrechen</button>
+          <button type="submit" className="btn" disabled={saving}>{saving?"Speichert…":"Speichern"}</button>
         </div>
-        <div className="field">
-          <span className="label">Status</span>
-          <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
-            <option value="open">offen</option>
-            <option value="cancelled">abgesagt</option>
-            <option value="done">abgeschlossen</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="field">
-        <span className="label">Kunde (optional)</span>
-        <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
-          <option value="">—</option>
-          {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-
-      <div className="field">
-        <span className="label">Notiz (optional)</span>
-        <textarea className="textarea" value={note} onChange={e=>setNote(e.target.value)} />
-      </div>
-
-      <div style="display:flex; gap:8; justify-content:flex-end; flex-wrap:wrap">
-        <button type="button" className="btn-ghost" onClick={onCancel}>Abbrechen</button>
-        <button type="submit" className="btn" disabled={saving}>{saving?"Speichert…":"Speichern"}</button>
       </div>
     </form>
   );
