@@ -23,6 +23,18 @@ export const getQuotes = (): Promise<Quote[]> => fetch(API.quotes).then(j);
 export const getOrders = (): Promise<Order[]> => fetch(API.orders).then(j);
 export const getAppointments = (): Promise<Appointment[]> => fetch(API.appointments).then(j);
 
+export const getAppointmentsByMonth = (yyyyMm: string): Promise<Appointment[]> =>
+  fetch(`${API.appointments}?month=${encodeURIComponent(yyyyMm)}`).then(j);
+
+export const createAppointment = (payload: Partial<Appointment>): Promise<Appointment> =>
+  fetch(API.appointments, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(j);
+
+export const updateAppointment = (id: string, payload: Partial<Appointment>): Promise<Appointment> =>
+  fetch(`${API.appointments}/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(j);
+
+export const deleteAppointment = (id: string): Promise<{ ok: true }> =>
+  fetch(`${API.appointments}/${id}`, { method: "DELETE" }).then(j);
+
 // DETAILS
 export const getCustomer = (id: string): Promise<Customer> => fetch(`${API.customers}/${id}`).then(j);
 export const getProduct = (id: string): Promise<Product> => fetch(`${API.products}/${id}`).then(j);
