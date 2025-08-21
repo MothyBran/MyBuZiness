@@ -1,36 +1,76 @@
 // src/pages/Invoices.tsx
-import React, { useEffect, useState } from "react";
-import { getInvoices } from "../utils/api";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { getCustomers, getInvoices } from "../utils/api";
 import { Invoice } from "../utils/types";
-import { centsToMoney, statusBadgeClass } from "../utils/format";
+import { centsToMoney, displayInvoiceNo, yyyymm } from "../utils/format";
+import { RowActions } from "../components/ui/RowActions";
+import { TableShell, Table, Th, TrClickable } from "../components/ui/Table";
 
 export default function Invoices() {
   const [rows, setRows] = useState<Invoice[]>([]);
-  useEffect(()=>{ getInvoices().then(setRows); }, []);
+  const [cust, setCust] = useState<Record<string, string>>({});
+  const nav = useNavigate();
+
+  useEffect(() => {
+    getInvoices().then(setRows);
+    getCustomers().then(cs => {
+      const map: Record<string, string> = {};
+      cs.forEach(c => { if (c.id) map[c.id] = c.name || ""; });
+      setCust(map);
+    });
+  }, []);
+
+  // Gruppiere pro Monat, damit die angezeigte Sequenz "000" pro Monat hochzählt
+  const rowsWithSeq = useMemo(() => {
+    const buckets = new Map<string, number>();
+    return rows.map((i) => {
+      const key = yyyymm(i.issueDate || i.createdAt);
+      const idx = buckets.get(key) ?? 0;
+      buckets.set(key, idx + 1);
+      return { row: i, seq: idx };
+    });
+  }, [rows]);
+
   return (
-    <div className="card">
-      <div className="card__header"><div className="card__title">Rechnungen</div></div>
-      <div className="card__content" style={{overflowX:"auto"}}>
-        <table className="table">
-          <thead><tr><th>Nr.</th><th>Ausgestellt</th><th>Fällig</th><th>Status</th><th>Betrag</th><th>Aktion</th></tr></thead>
+    <div className="grid" style={{ gap: 16 }}>
+      <div className="card">
+        <div className="card__header" style={{ justifyContent: "space-between" }}>
+          <div className="card__title">Rechnungen</div>
+          <button className="btn btn--primary" onClick={() => nav("/invoices/new")}>+ neue Rechnung</button>
+        </div>
+      </div>
+
+      <TableShell>
+        <Table>
+          <thead>
+            <tr>
+              <Th>Nr.</Th>
+              <Th>Datum</Th>
+              <Th>Kunde</Th>
+              <Th>Gesamt</Th>
+              <Th>Aktionen</Th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.map(i=>(
-              <tr key={i.id}>
-                <td className="truncate">{i.invoiceNo}</td> {/* Invoice.invoiceNo  */}
-                <td>{i.issueDate}</td> {/* Invoice.issueDate  */}
-                <td>{i.dueDate || "—"}</td> {/* Invoice.dueDate  */}
-                <td><span className={statusBadgeClass(i.status)}>{i.status || "—"}</span></td> {/* Invoice.status  */}
-                <td>{centsToMoney(i.grossCents ?? 0, i.currency || "EUR")}</td> {/* Invoice.grossCents,currency  */}
-                <td className="row-actions">
-                  <button className="btn">Details</button>
-                  <button className="btn btn--ghost">PDF</button>
-                  <button className="btn btn--ghost">Mahnung</button>
+            {rowsWithSeq.map(({ row, seq }) => (
+              <TrClickable key={row.id} onClick={() => nav(`/invoices/${row.id}`)}>
+                <td className="truncate cell--mono">{displayInvoiceNo(row, seq)}</td>
+                <td>{row.issueDate}</td> {/* Invoice.issueDate  */}
+                <td className="truncate">{cust[row.customerId] || row.customerId || "—"}</td> {/* Invoice.customerId → Name lookup  */}
+                <td className="cell--num">{centsToMoney(row.grossCents ?? 0, row.currency || "EUR")}</td> {/* Invoice.grossCents,currency  */}
+                <td onClick={(e) => e.stopPropagation()}>
+                  <RowActions
+                    onDetail={() => nav(`/invoices/${row.id}`)}
+                    onEdit={() => nav(`/invoices/${row.id}/edit`)}
+                    onDelete={() => alert("Rechnung löschen (Backend‑Call implementieren)")}
+                  />
                 </td>
-              </tr>
+              </TrClickable>
             ))}
           </tbody>
-        </table>
-      </div>
+        </Table>
+      </TableShell>
     </div>
   );
 }
