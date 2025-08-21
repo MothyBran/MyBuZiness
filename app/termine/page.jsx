@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-/* === Datum-Utils === */
+/* Date Utils */
 function toDate(input) {
   if (input instanceof Date) return input;
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
@@ -23,7 +23,7 @@ function toYMD(d){ const z=toDate(d); z.setHours(12,0,0,0); return z.toISOString
 function ym(d){ const x=toDate(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`; }
 const TODAY_YMD = toYMD(new Date());
 
-/* === Status === */
+/* Status */
 function computeDisplayStatus(e){
   const now = new Date();
   const start = toDate(`${e.date}T${(e.startAt||"00:00")}:00`);
@@ -77,15 +77,17 @@ export default function TerminePage(){
       body: JSON.stringify({ status: map[to] })
     });
     if(!res.ok){ alert("Status konnte nicht geändert werden."); return; }
-    // Soft-Refresh
     setEvents(prev => prev.map(p => p.id===ev.id ? { ...p, status: map[to] } : p));
   }
 
+  /* Monatskalender */
   function MonthCalendar(){
     return (
       <div className="surface">
-        <div className="header-row" style={{marginBottom:12}}>
-          <h2 className="page-title" style={{margin:0}}>Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}</h2>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
+          <h2 className="page-title" style={{margin:0}}>
+            Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
+          </h2>
           <div style={{display:"flex",gap:8}}>
             <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,-1))}>◀︎</button>
             <button className="btn" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
@@ -105,7 +107,7 @@ export default function TerminePage(){
                 <div className="cal-daynum-wrap"><span className="cal-daynum">{d.getDate()}</span></div>
                 <div className="cal-markers">
                   {list.slice(0,4).map(x=><span key={x.id} className={`cal-dot ${x.kind==='order'?'cal-dot-accent':'cal-dot-info'}`} />)}
-                  {list.length>4 && <span className="cal-dot cal-dot-more" title={`+${list.length-4} weitere`} />}
+                  {list.length>4 && <span className="cal-dot cal-dot-more" title={`+${list.length-4} weitere`}>+{list.length-4}</span>}
                 </div>
               </Link>
             );
@@ -118,72 +120,53 @@ export default function TerminePage(){
     );
   }
 
+  /* Monatsliste als saubere Karten */
   function MonthList(){
     return (
       <div className="surface">
-        <div className="header-row" style={{marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
           <h2 className="page-title" style={{margin:0}}>Termine / Aufträge – Übersicht</h2>
+          <Link href="/termine" className="btn-ghost">Aktualisieren</Link>
         </div>
 
-        <div className="table-wrap">
-          <table className="table cardify">
-            <thead>
-              <tr>
-                <th>Datum</th>
-                <th>Start</th>
-                <th>Art</th>
-                <th>Bezeichnung</th>
-                <th className="hide-sm">Kunde</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map(ev=>{
-                const href = `/termine/eintrag/${ev.id}`;
-                const displayStatus = computeDisplayStatus(ev);
-                return (
-                  <tr key={ev.id} className="row-clickable" onClick={()=>location.href = href} style={{cursor:"pointer"}}>
-                    <td data-label="Datum:">{formatDateDE(ev.date)}</td>
-                    <td data-label="Zeit:">{ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</td>
-                    <td data-label="Art:">{ev.kind==="order"?"Auftrag":"Termin"}</td>
-                    <td data-label="Titel:" className="ellipsis">{ev.title}</td>
-                    <td data-label="Kunde:" className="ellipsis hide-sm">{ev.customerName || "—"}</td>
-                    <td data-label="Status:">
-                      <div className="show-sm table-card-actions">
-                        <Link href={href} className="btn-xxs">Details</Link>
-                        <button
-                          onClick={async (e)=>{ e.stopPropagation(); await cycleStatus(ev); }}
-                          className={`status-badge ${displayStatus}`}
-                          title="Status ändern"
-                        >
-                          {displayStatus}
-                        </button>
-                      </div>
-                      <div className="hide-sm">
-                        <button
-                          onClick={async (e)=>{ e.stopPropagation(); await cycleStatus(ev); }}
-                          className={`status-badge ${displayStatus}`}
-                          title="Status ändern"
-                        >
-                          {displayStatus}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {(!loading && !error && events.length===0) && (
-                <tr><td colSpan={6}>Keine Einträge im ausgewählten Monat.</td></tr>
-              )}
-            </tbody>
-          </table>
+        {(!loading && !error && events.length===0) && (
+          <div className="surface" style={{borderStyle:"dashed", textAlign:"center"}}>Keine Einträge im ausgewählten Monat.</div>
+        )}
+
+        <div className="list">
+          {events.map(ev=>{
+            const displayStatus = computeDisplayStatus(ev);
+            return (
+              <div key={ev.id} className="list-item">
+                <div className={`item-icon ${ev.kind==='order'?'accent':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
+                  {ev.kind==='order' ? "🧾" : "📅"}
+                </div>
+                <div style={{minWidth:0}}>
+                  <div className="item-title ellipsis">
+                    <Link href={`/termine/eintrag/${ev.id}`} style={{color:"inherit", textDecoration:"none"}}>{ev.title || "(ohne Titel)"}</Link>
+                  </div>
+                  <div className="item-meta ellipsis">
+                    <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{color:"inherit", textDecoration:"none"}}>
+                      {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                    </Link>
+                    {ev.customerName && <> · {ev.customerName}</>}
+                  </div>
+                </div>
+                <div className="item-actions">
+                  <button className={`status-badge ${displayStatus}`} onClick={()=>cycleStatus(ev)} title="Status ändern">
+                    {displayStatus}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container grid-gap-16">
+    <div className="container">
       <MonthCalendar />
       <MonthList />
     </div>
