@@ -13,12 +13,43 @@
 /* ==========================================================================
    2) Layout / Container / Grid-Utilities
    ========================================================================== */
-.container{ display: grid; gap: 16px; }
+.container{
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px;
+  display: grid;
+  gap: 16px;
+}
 .grid-gap-16{ display:grid; gap:16px; }
-
 @media (min-width: 768px){
   .grid-2{ grid-template-columns: 1fr 1fr; }
   .grid-3{ grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Header-Zeile (links/rechts ausrichten) */
+.header-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+/* Kleine Helfer */
+.subtle{ color: var(--color-muted); }
+
+/* Hamburger-Icon (3 Striche) */
+.hamburger{
+  display:inline-flex;
+  flex-direction:column;
+  gap:4px;
+}
+.hamburger > span{
+  display:block;
+  width:18px;
+  height:2px;
+  background:#fff; /* passt zur btn */
+  border-radius:2px;
 }
 
 /* ==========================================================================
@@ -31,7 +62,6 @@
   padding: 14px;
   box-shadow: var(--shadow-sm);
 }
-
 .page-title{ font-size: 18px; font-weight: 800; letter-spacing: .2px; }
 .section-title{ font-weight: 700; font-size: 14px; color: #111; }
 
@@ -181,64 +211,4 @@
   .list-item{ grid-template-columns: 36px 1fr; }
   .item-actions{ grid-column: 1 / -1; justify-content:flex-start; }
   .cal-cell{ min-height: 84px; padding: 8px 6px; }
-}
-
-/* ==========================================================================
-   12) Termine-Modul (NAMESPACE: .appt …)  -> verhindert Konflikte globaler Styles
-   ========================================================================== */
-/* Kartenliste */
-.appt .appt-list{ display:grid; gap:10px; }
-.appt .appt-item{
-  display:grid; grid-template-columns: 40px 1fr auto; gap:12px;
-  align-items:center; padding:12px; background:#fff; border:1px solid var(--color-border);
-  border-radius: 12px; box-shadow: var(--shadow-sm);
-}
-.appt .appt-icon{
-  width:32px; height:32px; border-radius:999px; display:flex; align-items:center; justify-content:center;
-  background:#DBEAFE; font-size:16px; box-shadow: var(--shadow-sm);
-}
-.appt .appt-icon--order{ background:#FDE68A; }
-.appt .appt-title{
-  font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.appt .appt-meta{
-  font-size:13px; color:#374151; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.appt .appt-actions{ display:flex; align-items:center; gap:8px; }
-
-/* Modul-spezifische Badges (nutzt eigene Klassennamen, kollidiert nicht mit globalen) */
-.appt .appt-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  padding: 4px 10px; border-radius: 999px; font-size: 12px;
-  border: 1px solid var(--color-border); background:#fff; text-transform: lowercase;
-}
-.appt .is-offen{ background:#EFF6FF; border-color:#BFDBFE; }
-.appt .is-abgesagt{ background:#FEF2F2; border-color:#FECACA; }
-.appt .is-abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
-
-/* Monatskalender (nur im Termine-Modul) */
-.appt .appt-cal{ display:grid; gap:8px; grid-template-columns: repeat(7, 1fr); }
-.appt .appt-cal-head{ font-size:12px; color:#6b7280; text-align:center; }
-.appt .appt-cal-cell{
-  border:1px solid var(--color-border); border-radius: 12px; min-height: 100px; padding: 10px 8px;
-  display:flex; flex-direction:column; justify-content:space-between; text-decoration:none; color: inherit; background:#fff;
-}
-.appt .appt-cal-daynum-wrap{ display:flex; }
-.appt .appt-cal-daynum{
-  width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700;
-}
-.appt .is-today .appt-cal-daynum{ outline:2px solid var(--color-primary); }
-.appt .is-muted{ opacity:.5; }
-.appt .appt-cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height:10px; align-items:center; }
-.appt .appt-cal-dot{ width:8px; height:8px; border-radius:999px; background:#93C5FD; }
-.appt .appt-cal-dot--order{ background:#FBBF24; }
-.appt .appt-cal-more{
-  padding:0 6px; height:18px; border-radius:999px; font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
-}
-
-/* Termine-Responsive */
-@media (max-width: 639px){
-  .appt .appt-item{ grid-template-columns: 36px 1fr; }
-  .appt .appt-actions{ grid-column: 1 / -1; justify-content:flex-start; }
-  .appt .appt-cal-cell{ min-height: 84px; padding: 8px 6px; }
 }
