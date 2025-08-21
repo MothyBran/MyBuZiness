@@ -61,7 +61,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="container" style={{ padding: 12 }}>
+    <>
       {/* Header */}
       <div
         className="surface"
@@ -153,7 +153,7 @@ export default function HomePage() {
           />
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
