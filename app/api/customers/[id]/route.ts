@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildUpdateQuery, query } from "@/server/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
+
 const TABLE = "Customer";
 const ID = "id";
 const ALLOWED = [
