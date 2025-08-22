@@ -1,4 +1,3 @@
-// src/pages/Receipts.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getReceipts } from "../utils/api";
@@ -13,10 +12,11 @@ export default function Receipts() {
 
   useEffect(() => { getReceipts().then(setRows); }, []);
 
+  // Gruppiere pro Monat ausschließlich über date (typesicher)
   const rowsWithSeq = useMemo(() => {
     const buckets = new Map<string, number>();
     return rows.map((r) => {
-      const key = yyyymm(r.date || r.createdAt);
+      const key = yyyymm(r.date); // <— nur date verwenden
       const idx = buckets.get(key) ?? 0;
       buckets.set(key, idx + 1);
       return { row: r, seq: idx };
@@ -47,9 +47,9 @@ export default function Receipts() {
             {rowsWithSeq.map(({ row, seq }) => (
               <TrClickable key={row.id} onClick={() => nav(`/receipts/${row.id}`)}>
                 <td className="truncate cell--mono">{displayReceiptNo(row, seq)}</td>
-                <td>{row.date}</td> {/* Receipt.date  */}
-                <td className="cell--num">{centsToMoney(row.grossCents ?? 0, row.currency || "EUR")}</td> {/* Receipt.grossCents,currency  */}
-                <td className="truncate">{row.note || "—"}</td> {/* Receipt.note  */}
+                <td>{row.date}</td>
+                <td className="cell--num">{centsToMoney(row.grossCents ?? 0, row.currency || "EUR")}</td>
+                <td className="truncate">{row.note || "—"}</td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <RowActions
                     onDetail={() => nav(`/receipts/${row.id}`)}
@@ -59,6 +59,9 @@ export default function Receipts() {
                 </td>
               </TrClickable>
             ))}
+            {rowsWithSeq.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: 16 }}>Keine Einträge.</td></tr>
+            ) : null}
           </tbody>
         </Table>
       </TableShell>
