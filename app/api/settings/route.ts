@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildUpdateQuery, query } from "@/server/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
+
 // GET /api/settings  → eine Settings‑Zeile (erste)
 export async function GET() {
   const { rows } = await query(`SELECT * FROM "Settings" ORDER BY "createdAt" DESC LIMIT 1;`); // Settings.* inkl. Farben, Fonts, InfoStripe … 
