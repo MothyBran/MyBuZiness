@@ -2,12 +2,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildUpdateQuery, query } from "@/server/db";
 
+export const dynamic = "force-dynamic";      // verhindert Static Generation
+export const revalidate = 0;                 // kein ISR
+
 const TABLE = "Product";
 const ID = "id";
 const ALLOWED = [
   "name","sku","priceCents","currency","description","kind","categoryCode",
   "travelEnabled","travelRateCents","travelUnit","travelBaseCents","travelPerKmCents","hourlyRateCents"
-]; // Product‑Spalten laut Schema 
+];
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const { rows } = await query(`SELECT * FROM "Product" WHERE "${ID}" = $1 LIMIT 1;`, [params.id]);
