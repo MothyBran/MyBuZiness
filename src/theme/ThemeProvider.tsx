@@ -1,3 +1,4 @@
+// src/theme/ThemeProvider.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 type Settings = {
@@ -13,7 +14,7 @@ const ThemeContext = createContext<Ctx>({ settings: null, loading: true, refresh
 function apply(s: Settings | null) {
   if (typeof document === "undefined") return;
   const root = document.documentElement.style;
-  const set = (k:string, v?:string|number, fb?:string|number) => root.setProperty(k, String(v ?? fb));
+  const set = (k: string, v?: string | number, fb?: string | number) => root.setProperty(k, String(v ?? fb));
   set("--color-primary", s?.primaryColor, "#111827");
   set("--color-secondary", s?.secondaryColor, "#0ea5e9");
   set("--color-accent", s?.accentColor, "#22c55e");
@@ -26,14 +27,28 @@ function apply(s: Settings | null) {
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+
   const load = async () => {
     setLoading(true);
-    try { const r = await fetch("/api/settings"); setSettings(r.ok ? await r.json() : {} as any); }
-    finally { setLoading(false); }
+    try {
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      let payload: any = {};
+      try { payload = await res.json(); } catch {}
+      // Akzeptiere sowohl {data:{...}} als auch {...}:
+      const data = payload?.data ?? payload ?? {};
+      setSettings(data);
+    } catch {
+      setSettings({});
+    } finally {
+      setLoading(false);
+    }
   };
+
   useEffect(() => { load(); }, []);
   useEffect(() => { apply(settings); }, [settings]);
+
   const value = useMemo(() => ({ settings, loading, refresh: load }), [settings, loading]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
+
 export const useTheme = () => useContext(ThemeContext);
