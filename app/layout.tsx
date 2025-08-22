@@ -1,5 +1,5 @@
 // app/layout.tsx
-import "./globals.css"; // ← WICHTIG: genau so, relativ zum app/-Ordner
+import "./globals.css"; // ← exakt so, relativ zum app/-Ordner
 
 export const metadata = {
   title: "MyBuZiness",
