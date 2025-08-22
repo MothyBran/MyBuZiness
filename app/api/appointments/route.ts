@@ -1,10 +1,10 @@
 // app/api/appointments/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/server/db";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
+
+import { NextRequest, NextResponse } from "next/server";
+import { query } from "@/server/db";
 
 /**
  * GET /api/appointments
