@@ -4,15 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "build": "rm -rf .next && next build",
+    "start": "next start -p $PORT",
+    "lint": "next lint",
+    "postinstall": "node -e \"try{require('child_process').execSync('npx next telemetry disable',{stdio:'inherit'})}catch{}\""
   },
   "dependencies": {
     "next": "14.2.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router-dom": "^6.26.1"
+    "react-router-dom": "^6.26.1",
+    "pg": "^8.12.0"
   },
   "devDependencies": {
     "typescript": "^5.6.2",
