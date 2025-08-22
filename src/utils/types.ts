@@ -1,142 +1,179 @@
 // src/utils/types.ts
-export type UUID = string;
 
-export type Customer = {
-  id: string;
-  name: string;        // Customer.name 
-  email?: string | null;
-  phone?: string | null;
-  addressStreet?: string | null;
-  addressZip?: string | null;
-  addressCity?: string | null;
-  addressCountry?: string | null;
-  note?: string | null;
+// ---------- Basics ----------
+export type ISODate = string;   // "YYYY-MM-DD"
+export type ISOTime = string;   // "HH:MM" oder "HH:MM:SS"
+
+// ---------- Settings ----------
+export type Settings = {
+  id?: string;
+  companyName?: string;
+  headerTitle?: string;
+  website?: string;
+  email?: string;
+  phone?: string;
+  iban?: string;
+  vatId?: string;
+  taxNumber?: string;
+  taxOffice?: string;
+
+  currency?: string;
+  currencyDefault?: string;
+
+  // Theme / Layout
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  borderRadius?: number;
+  fontFamily?: string;
+  logoUrl?: string;
+  showLogo?: boolean;
+
   createdAt?: string;
   updatedAt?: string;
 };
 
-export type Product = {
+// ---------- Customer ----------
+export type Customer = {
   id: string;
-  name: string;          // Product.name 
-  sku?: string | null;
-  priceCents: number;    // Product.priceCents 
-  currency?: string | null;
-  description?: string | null;
-  kind?: string | null;
-  categoryCode?: string | null;
-  hourlyRateCents?: number | null;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  note?: string | null;
+
+  addressStreet?: string | null;
+  addressZip?: string | null;
+  addressCity?: string | null;
+  addressCountry?: string | null;
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
+// ---------- Product ----------
+export type Product = {
+  id: string;
+  name: string;
+  sku?: string | null;
+
+  priceCents?: number;
+  currency?: string;
+
+  description?: string | null;
+  kind?: string | null;          // z.B. "service" | "product"
+  categoryCode?: string | null;
+
+  // optionale Reisekosten-Felder, falls genutzt
+  travelEnabled?: boolean;
+  travelRateCents?: number;
+  travelUnit?: string;
+  travelBaseCents?: number;
+  travelPerKmCents?: number;
+  hourlyRateCents?: number;
+
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+// ---------- Invoice & Items ----------
 export type Invoice = {
   id: string;
-  invoiceNo: string;     // Invoice.invoiceNo 
+  invoiceNo: string;
   customerId: string;
-  issueDate: string;
-  dueDate?: string | null;
-  currency?: string | null;
-  netCents: number;
-  taxCents: number;
-  grossCents: number;
-  status?: string | null;
+
+  issueDate: ISODate;      // Ausgestellt
+  dueDate?: ISODate | null;
+
+  currency?: string;
+
+  netCents?: number;
+  taxCents?: number;
+  grossCents?: number;
+  taxRate?: number | string;
+
+  status?: string;         // z.B. "open" | "paid" | ...
   paidAt?: string | null;
+  note?: string | null;    // <— WICHTIG: war vorher nicht im Typ
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type InvoiceItem = {
   id: string;
-  invoiceId: string;      // InvoiceItem.invoiceId 
+  invoiceId: string;
   productId?: string | null;
-  name: string;           // InvoiceItem.name 
+
+  name: string;
   description?: string | null;
-  quantity: number;       // InvoiceItem.quantity (numeric) 
-  unitPriceCents: number; // InvoiceItem.unitPriceCents 
-  lineTotalCents: number; // InvoiceItem.lineTotalCents 
+
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+
   extraBaseCents?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
+// ---------- Receipt & Items ----------
 export type Receipt = {
   id: string;
-  receiptNo: string;     // Receipt.receiptNo 
-  date: string;
-  currency?: string | null;
-  netCents: number;
-  taxCents: number;
-  grossCents: number;
-  vatExempt?: boolean | null;
+  receiptNo: string;
+
+  date: ISODate;
+  vatExempt?: boolean;
+
+  currency?: string;
+
+  netCents?: number;
+  taxCents?: number;
+  grossCents?: number;
+  discountCents?: number;
+
   note?: string | null;
-  discountCents?: number | null;
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ReceiptItem = {
   id: string;
-  receiptId: string;      // ReceiptItem.receiptId 
+  receiptId: string;
   productId?: string | null;
-  name: string;           // ReceiptItem.name 
-  quantity: number;       // ReceiptItem.quantity 
-  unitPriceCents: number; // ReceiptItem.unitPriceCents 
-  lineTotalCents: number; // ReceiptItem.lineTotalCents 
+
+  name: string;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+
   extraBaseCents?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-export type Quote = {
-  id: string;
-  quoteNo: string;       // Quote.quoteNo 
-  customerId: string;
-  issueDate: string;
-  validUntil?: string | null;
-  currency?: string | null;
-  netCents: number;
-  taxCents: number;
-  grossCents: number;
-  status?: string | null;
-};
-
-export type Order = {
-  id: string;
-  orderNo: string;       // Order.orderNo 
-  customerId: string;
-  orderDate: string;
-  currency?: string | null;
-  netCents: number;
-  taxCents: number;
-  grossCents: number;
-  status?: string | null;
-};
-
+// ---------- Appointments ----------
 export type Appointment = {
   id: string;
-  kind?: string | null;
-  title?: string | null;
-  date: string;
-  startAt?: string | null;
-  endAt?: string | null;
+  kind?: "appointment" | "order" | string;
+  title?: string;
+
+  date: ISODate;
+  startAt?: ISOTime;
+  endAt?: ISOTime | null;
+
   customerId?: string | null;
   customerName?: string | null;
+
+  note?: string | null;
   status?: string | null;
+
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-export type Settings = {
-  id: string;
-  companyName?: string | null;
-  headerTitle?: string | null;
-  ownerName?: string | null;
-  primaryColor?: string | null;
-  secondaryColor?: string | null;
-  accentColor?: string | null;
-  backgroundColor?: string | null;
-  textColor?: string | null;
-  borderRadius?: number | null;
-  fontFamily?: string | null;
-  iban?: string | null;
-  vatId?: string | null;
-  taxNumber?: string | null;
-  taxOffice?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  website?: string | null;
-  currency?: string | null;
-  currencyDefault?: string | null;
-  showLogo?: boolean | null;
-  logoUrl?: string | null;
-  fontColor?: string | null;
-  city?: string | null;
-};
+// ---------- Orders / Quotes (optional falls genutzt) ----------
+export type Order = { id: string; [k: string]: any };
+export type Quote = { id: string; [k: string]: any };
