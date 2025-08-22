@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/server/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
+
 export async function GET() {
   const sql = `SELECT * FROM "Product" ORDER BY "updatedAt" DESC;`; // Product.* inkl. categoryCode, kind, priceCents … 
   const { rows } = await query(sql);
