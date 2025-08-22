@@ -1,10 +1,10 @@
 // app/api/customers/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { buildUpdateQuery, query } from "@/server/db";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
+
+import { NextRequest, NextResponse } from "next/server";
+import { buildUpdateQuery, query } from "@/server/db";
 
 const TABLE = "Customer";
 const ID = "id";
