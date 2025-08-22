@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true
-  // App Router ist seit Next 13 Standard – KEIN experimental.appDir hier!
+  reactStrictMode: false,
+  // nichts Ungewöhnliches wie basePath/assetPrefix/experimental.appDir
 };
-
 module.exports = nextConfig;
