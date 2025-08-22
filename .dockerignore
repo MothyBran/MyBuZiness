@@ -1,10 +1,9 @@
 node_modules
-npm-debug.log
-Dockerfile
-.dockerignore
+npm-debug.log*
+.debug.log*
+.DS_Store
+.next/cache
 .git
 .gitignore
-*.md
-.next/cache
-.env
-.env.*
+Dockerfile
+README*
