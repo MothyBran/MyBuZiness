@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/server/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
+
 // GET /api/customers  → alle Kunden
 export async function GET() {
   const sql = `SELECT * FROM "Customer" ORDER BY "createdAt" DESC;`; // Customer.* inkl. addressStreet/City … 
