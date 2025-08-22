@@ -4,7 +4,7 @@ import { ThemeProvider } from "./theme/ThemeProvider";
 
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
-import InfoStripe from "./components/InfoStripe"; // <— .tsx-Datei
+import InfoStripe from "./components/InfoStripe";
 import Page from "./components/layout/Page";
 
 import Customers from "./pages/Customers";
@@ -12,7 +12,7 @@ import Products from "./pages/Products";
 import Invoices from "./pages/Invoices";
 import Receipts from "./pages/Receipts";
 import Appointments from "./pages/Appointments";
-import SettingsPage from "./pages/Settings";      // <— hier muss die Datei existieren
+import SettingsPage from "./pages/Settings";
 import Dashboard from "./pages/Dashboard";
 
 export default function App() {
