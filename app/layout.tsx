@@ -1,5 +1,5 @@
 // app/layout.tsx
-import "../src/theme/theme.css"; // Globale Styles NUR hier importieren
+import "./globals.css"; // <— WICHTIG: globale Styles hier!
 
 export const metadata = {
   title: "MyBuZiness",
