@@ -1,4 +1,3 @@
-// src/pages/Invoices.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCustomers, getInvoices } from "../utils/api";
@@ -21,11 +20,11 @@ export default function Invoices() {
     });
   }, []);
 
-  // Gruppiere pro Monat, damit die angezeigte Sequenz "000" pro Monat hochzählt
+  // Gruppiere pro Monat ausschließlich über issueDate (typesicher)
   const rowsWithSeq = useMemo(() => {
     const buckets = new Map<string, number>();
     return rows.map((i) => {
-      const key = yyyymm(i.issueDate || i.createdAt);
+      const key = yyyymm(i.issueDate); // <— nur issueDate verwenden
       const idx = buckets.get(key) ?? 0;
       buckets.set(key, idx + 1);
       return { row: i, seq: idx };
@@ -56,9 +55,9 @@ export default function Invoices() {
             {rowsWithSeq.map(({ row, seq }) => (
               <TrClickable key={row.id} onClick={() => nav(`/invoices/${row.id}`)}>
                 <td className="truncate cell--mono">{displayInvoiceNo(row, seq)}</td>
-                <td>{row.issueDate}</td> {/* Invoice.issueDate  */}
-                <td className="truncate">{cust[row.customerId] || row.customerId || "—"}</td> {/* Invoice.customerId → Name lookup  */}
-                <td className="cell--num">{centsToMoney(row.grossCents ?? 0, row.currency || "EUR")}</td> {/* Invoice.grossCents,currency  */}
+                <td>{row.issueDate}</td>
+                <td className="truncate">{cust[row.customerId] || row.customerId || "—"}</td>
+                <td className="cell--num">{centsToMoney(row.grossCents ?? 0, row.currency || "EUR")}</td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <RowActions
                     onDetail={() => nav(`/invoices/${row.id}`)}
@@ -68,6 +67,9 @@ export default function Invoices() {
                 </td>
               </TrClickable>
             ))}
+            {rowsWithSeq.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: 16 }}>Keine Einträge.</td></tr>
+            ) : null}
           </tbody>
         </Table>
       </TableShell>
