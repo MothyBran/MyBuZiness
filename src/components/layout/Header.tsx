@@ -1,30 +1,37 @@
-// src/components/layout/Header.tsx
 import React from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../../theme/ThemeProvider";
 
-export const Header: React.FC = () => {
-  const { settings } = useTheme();
-  const title = settings?.headerTitle || settings?.companyName || "Dashboard";
-  const logoShown = settings?.showLogo;
-  const logoUrl = settings?.logoUrl;
+const tabs = [
+  { to: "/", label: "Dashboard" },
+  { to: "/customers", label: "Kunden" },
+  { to: "/products", label: "Produkte" },
+  { to: "/invoices", label: "Rechnungen" },
+  { to: "/receipts", label: "Belege" },
+  { to: "/appointments", label: "Termine" },
+  { to: "/settings", label: "Einstellungen" }
+];
 
+export default function Header() {
+  const { settings } = useTheme();
+  const { pathname } = useLocation();
   return (
-    <header style={{position:"sticky", top:0, zIndex:50, backdropFilter:"saturate(140%) blur(6px)",
-      borderBottom:"1px solid rgba(255,255,255,.08)"}}
-      className="card" >
-      <div className="container" style={{display:"flex", alignItems:"center", gap:12, padding:"10px 14px"}}>
-        {logoShown && logoUrl ? <img src={logoUrl} alt="Logo" style={{height:32, borderRadius:8}}/> : (
-          <div style={{width:32, height:32, borderRadius:8, background:"var(--color-primary)"}} />
-        )}
-        <div style={{display:"flex", alignItems:"baseline", gap:10}}>
-          <h1 style={{margin:0, fontSize:18}}>{title}</h1>
-          {settings?.ownerName ? <span className="badge">{settings.ownerName}</span> : null}
+    <header className="header">
+      <div className="header__inner">
+        <div className="header__brand">
+          {settings?.headerTitle || "MyBuZiness"}
         </div>
-        <div style={{marginLeft:"auto", display:"flex", gap:8}}>
-          <button className="btn btn--ghost">🔔</button>
-          <button className="btn btn--ghost">⚙️</button>
-        </div>
+        <nav className="nav">
+          {tabs.map(t => {
+            const active = pathname === t.to;
+            return (
+              <Link key={t.to} to={t.to} style={active ? { borderColor: "rgba(255,255,255,.22)", background: "rgba(255,255,255,.06)" } : undefined}>
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );
-};
+}
