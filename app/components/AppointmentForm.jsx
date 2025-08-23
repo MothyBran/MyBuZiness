@@ -29,7 +29,27 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
     if (found) setCustomerName(found.name);
   },[customerId, customers]);
 
-  const hhmm = useMemo(()=>Array.from({length:48},(_,i)=>`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2? "30":"00"}`),[]);
+  const hhmm = useMemo(()=>{
+    return Array.from({length:48},(_,i)=>`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2? "30":"00"}`);
+  },[]);
+
+  // "Ende" darf erst ab Start + 30 Min gewählt werden
+  const endOptions = useMemo(()=>{
+    const idx = hhmm.findIndex(t => t === startAt);
+    const minIdx = Math.max(0, idx + 1); // mind. 30 Min nach Start
+    return hhmm.slice(minIdx);
+  },[hhmm, startAt]);
+
+  // Wenn Start verändert wird und Endzeit davor liegt: automatisch auf Start+30 setzen
+  useEffect(()=>{
+    if (!endAt) return;
+    const si = hhmm.indexOf(startAt);
+    const ei = hhmm.indexOf(endAt);
+    if (ei !== -1 && si !== -1 && ei <= si) {
+      const next = hhmm[si + 1] || "";
+      setEndAt(next || "");
+    }
+  },[startAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(e){
     e.preventDefault();
@@ -39,7 +59,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
       const payload = {
         kind, title, date,
         startAt: startAt || "00:00",
-        endAt: endAt?.trim() ? endAt : null,
+        endAt: endAt || null,
         customerId: customerId || null,
         customerName: customerName || null,
         status, note
@@ -47,20 +67,14 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
       const url = isEdit ? `/api/appointments/${initial.id}` : `/api/appointments`;
       const method = isEdit ? "PUT" : "POST";
       const r = await fetch(url, {
-        method,
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(payload)
+        method, headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
       });
-      if(!r.ok){
-        // Server-Detail ausgeben (hilft bei 500ern)
-        const txt = await r.text().catch(()=> "");
-        throw new Error(txt || `HTTP ${r.status}`);
-      }
+      if(!r.ok) throw new Error(await r.text().catch(()=> "save_failed"));
       await r.json().catch(()=> ({}));
       onSaved?.();
     }catch(err){
       console.error(err);
-      alert("Speichern fehlgeschlagen.\n\n" + (err?.message || err));
+      alert("Speichern fehlgeschlagen.");
     }finally{
       setSaving(false);
     }
@@ -97,9 +111,13 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           </label>
           <label className="field">
             <span className="label">Ende (optional)</span>
-            <select className="select" value={endAt} onChange={e=>setEndAt(e.target.value)}>
+            <select
+              className="select"
+              value={endAt}
+              onChange={e=>setEndAt(e.target.value)}
+            >
               <option value="">—</option>
-              {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
+              {endOptions.map(t=> <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
           <label className="field">
