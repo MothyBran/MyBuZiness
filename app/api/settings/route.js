@@ -95,3 +95,93 @@ export async function GET(request) {
         `INSERT INTO "Settings"
           ("id","companyName","currencyDefault","taxRateDefault","createdAt","updatedAt")
          VALUES ('singleton','Mein Unternehmen','EUR',19,NOW(),NOW())
+         RETURNING *;`
+      );
+      const data = mapRow(ins.rows[0], withLogo);
+      const out = withLogo && data.logoData
+        ? { ...data, logoDataBase64: Buffer.from(data.logoData).toString("base64") }
+        : data;
+
+      return NextResponse.json({ ok: true, data: out });
+    }
+
+    const data = mapRow(rows[0], withLogo);
+    const out = withLogo && data.logoData
+      ? { ...data, logoDataBase64: Buffer.from(data.logoData).toString("base64") }
+      : data;
+
+    return NextResponse.json({ ok: true, data: out });
+  } catch (err) {
+    console.error("GET /api/settings error:", err);
+    return NextResponse.json(
+      { ok: false, error: "Failed to load settings", detail: String(err?.message ?? err) },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT /api/settings  (Body: Teilausschnitt der Settings; optional logoDataBase64)
+export async function PUT(request) {
+  try {
+    await initDb();
+    await ensureSchemaOnce();
+
+    const bodyRaw = await request.text();
+    const body = bodyRaw ? JSON.parse(bodyRaw) : {};
+    const id = "singleton";
+
+    // nur änderbare Felder (id/createdAt/updatedAt sind ausgeschlossen)
+    const allowed = new Set(
+      SELECT_COLS.filter((c) => !["id", "createdAt", "updatedAt"].includes(c))
+    );
+
+    const fields = [];
+    const values = [];
+    let i = 1;
+
+    for (const [k, v] of Object.entries(body)) {
+      if (allowed.has(k)) {
+        fields.push(`"${k}" = $${i++}`);
+        values.push(v);
+      }
+    }
+
+    // Logo optional als Base64
+    if (typeof body.logoDataBase64 === "string" && body.logoDataBase64.length > 0) {
+      fields.push(`"logoData" = $${i++}`);
+      values.push(Buffer.from(body.logoDataBase64, "base64"));
+      if (typeof body.logoMime === "string" && !("logoMime" in body)) {
+        fields.push(`"logoMime" = $${i++}`);
+        values.push(body.logoMime);
+      }
+    }
+
+    // updatedAt immer setzen
+    fields.push(`"updatedAt" = NOW()`);
+
+    // Upsert zusammenbauen
+    const insertCols = ['"id"','"createdAt"','"updatedAt"'].concat(
+      fields.map((f) => f.split(" = ")[0])
+    );
+    const insertVals = [`$${i}`, "NOW()", "NOW()"].concat(
+      fields.map((_, idx) => `$${i + idx + 1}`)
+    );
+
+    values.unshift(id); // $i wird id
+
+    const sql = `
+      INSERT INTO "Settings" (${insertCols.join(", ")})
+      VALUES (${insertVals.join(", ")})
+      ON CONFLICT ("id") DO UPDATE SET ${fields.join(", ")};
+    `;
+
+    await pool.query(sql, values);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("PUT /api/settings error:", err);
+    return NextResponse.json(
+      { ok: false, error: "Failed to save settings", detail: String(err?.message ?? err) },
+      { status: 500 }
+    );
+  }
+}
