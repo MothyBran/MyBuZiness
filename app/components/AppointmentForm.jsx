@@ -39,7 +39,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
       const payload = {
         kind, title, date,
         startAt: startAt || "00:00",
-        endAt: endAt || null,
+        endAt: endAt?.trim() ? endAt : null,
         customerId: customerId || null,
         customerName: customerName || null,
         status, note
@@ -47,14 +47,20 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
       const url = isEdit ? `/api/appointments/${initial.id}` : `/api/appointments`;
       const method = isEdit ? "PUT" : "POST";
       const r = await fetch(url, {
-        method, headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+        method,
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
       });
-      if(!r.ok) throw new Error(await r.text().catch(()=> "save_failed"));
+      if(!r.ok){
+        // Server-Detail ausgeben (hilft bei 500ern)
+        const txt = await r.text().catch(()=> "");
+        throw new Error(txt || `HTTP ${r.status}`);
+      }
       await r.json().catch(()=> ({}));
       onSaved?.();
     }catch(err){
       console.error(err);
-      alert("Speichern fehlgeschlagen.");
+      alert("Speichern fehlgeschlagen.\n\n" + (err?.message || err));
     }finally{
       setSaving(false);
     }
