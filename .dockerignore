@@ -4,7 +4,7 @@ npm-debug.log
 yarn.lock
 pnpm-lock.yaml
 
-# Next build outputs (niemals aus dem lokalen Rechner ins Image kopieren!)
+# Next Build-Outputs (nie vom lokalen Rechner ins Image kopieren!)
 .next
 out
 
