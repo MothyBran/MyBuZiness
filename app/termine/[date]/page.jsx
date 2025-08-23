@@ -6,270 +6,251 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "@/app/components/Modal";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
-/* ===================== Datum-Utils ===================== */
-function toDate(input){
-  if (input instanceof Date) return input;
-  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    const [y,m,d] = input.split("-").map(Number);
-    return new Date(y, m-1, d, 12, 0, 0, 0);
-  }
-  const d = new Date(input || Date.now());
-  return isNaN(d) ? new Date() : d;
-}
-function toYMD(d){
-  const z = toDate(d);
-  z.setHours(12,0,0,0);
-  return z.toISOString().slice(0,10);
-}
-function formatDateDE(input){
-  const d = toDate(input);
-  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
-}
-function addDays(d, n){
-  const x = toDate(d);
-  x.setDate(x.getDate()+n);
-  return x;
-}
-const TODAY_YMD = toYMD(new Date());
-
-/* ===================== Anzeige-/Status-Logik ===================== */
-function computeDisplayStatus(e){
-  const now = new Date();
-  const start = toDate(`${e.date}T${(e.startAt||"00:00")}:00`);
-  const end   = toDate(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
-  const isPast = end < now;
-  if (e.status === "cancelled") return "abgesagt";
-  if (e.status === "done") return "abgeschlossen";
-  if (e.status === "open" && isPast) return "abgeschlossen";
-  return "offen";
-}
-function hhmmToMinutes(hhmm){
+/* ===== Helpers ===== */
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function toMinutes(hhmm) {
   if (!hhmm) return 0;
-  const [h,m] = hhmm.split(":").map(Number);
-  return (h*60)+(m||0);
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+function fmtDateDE(ymd) {
+  const [y,m,d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  return new Intl.DateTimeFormat("de-DE", { weekday:"long", day:"2-digit", month:"2-digit", year:"numeric" }).format(dt);
+}
+function labelTime(h){ return `${String(h).padStart(2,"0")}:00`; }
+function safeYMD(input){
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const d = new Date();
+  return d.toISOString().slice(0,10);
 }
 
-/* ===================== Seite ===================== */
-export default function DayPage({ params }){
-  const paramDate = (params?.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) ? params.date : TODAY_YMD;
-  const [date, setDate] = useState(paramDate);
+const H_START = 6;   // Beginn der Darstellung (06:00)
+const H_END   = 22;  // Ende der Darstellung   (22:00)
+const DAY_MIN = (H_END - H_START) * 60;
 
-  const [items, setItems]   = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+export default function DayPage({ params }) {
+  const day = safeYMD(params?.date);
 
-  const [openNew, setOpenNew] = useState(false);
+  const [items, setItems] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
+
+  // Modal „Neuer Eintrag“
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createDefaults, setCreateDefaults] = useState({ date: day, startAt: "09:00" });
+
+  // Kunden (optional für Formular – wenn API fehlt, bleibt es einfach leer)
   const [customers, setCustomers] = useState([]);
 
-  // Kunden (optional – wenn /api/customers vorhanden; sonst leer)
+  // Load appointments for the day
+  async function load() {
+    setLoading(true); setError("");
+    try{
+      const r = await fetch(`/api/appointments?date=${day}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(await r.text());
+      const js = await r.json();
+      setItems(Array.isArray(js) ? js : []);
+    }catch(e){
+      console.error(e);
+      setError("Konnte Einträge nicht laden.");
+      setItems([]);
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  useEffect(()=>{ load(); }, [day]);
+
   useEffect(()=>{
-    let alive = true;
     (async ()=>{
       try{
-        const r = await fetch("/api/customers", { cache:"no-store" });
-        if (!r.ok) return; // still ok – wir arbeiten ohne Kundenliste
-        const js = await r.json().catch(()=>({ data: [] }));
-        if (alive) setCustomers(js?.data || []);
-      }catch{ /* ignore */ }
+        const r = await fetch("/api/customers", { cache:"no-store" }).catch(()=>null);
+        const js = r && r.ok ? await r.json() : { data: [] };
+        setCustomers(js?.data || []);
+      }catch{ setCustomers([]); }
     })();
-    return ()=>{ alive = false; };
   },[]);
 
-  // Tages-Daten laden
-  useEffect(()=>{
-    let alive = true;
-    setLoading(true); setError("");
-    fetch(`/api/appointments?date=${date}`, { cache:"no-store" })
-      .then(async r => { if(!r.ok) throw new Error(await r.text()); return r.json(); })
-      .then(data => { if(alive) setItems(Array.isArray(data) ? data : []); })
-      .catch(err => { if(alive){ console.error(err); setError("Konnte Tages-Einträge nicht laden."); setItems([]);} })
-      .finally(()=> alive && setLoading(false));
-    return ()=>{ alive = false; };
-  },[date]);
-
-  // Navigation (vor/zurück/heute)
-  const prevDate = toYMD(addDays(date, -1));
-  const nextDate = toYMD(addDays(date, +1));
-  const isToday  = date === TODAY_YMD;
-
-  // Events nach Startzeit sortieren + nach Stunde gruppieren
-  const eventsSorted = useMemo(()=>{
-    const arr = [...items];
-    arr.sort((a,b)=> (a.startAt||"").localeCompare(b.startAt||""));
-    return arr.map(x => ({ ...x, _displayStatus: computeDisplayStatus(x) }));
-  },[items]);
-
-  const byHour = useMemo(()=>{
-    const map = {};
-    for (const e of eventsSorted){
-      const min = hhmmToMinutes(e.startAt || "00:00");
-      const hr = Math.floor(min/60);
-      (map[hr] ||= []).push(e);
-    }
-    return map;
-  },[eventsSorted]);
-
-  async function refresh(){ // nach Speichern neu laden
-    try{
-      const js = await fetch(`/api/appointments?date=${date}`, { cache:"no-store" }).then(r=>r.json());
-      setItems(Array.isArray(js)?js:[]);
-    }catch{/* noop */}
-  }
-
-  async function cycleStatus(ev){
-    // offen -> abgesagt -> abgeschlossen -> offen
-    const display = computeDisplayStatus(ev);
-    const next = display==="offen" ? "abgesagt" : display==="abgesagt" ? "abgeschlossen" : "offen";
-    const map = { "offen":"open", "abgesagt":"cancelled", "abgeschlossen":"done" };
-    const res = await fetch(`/api/appointments/${ev.id}`,{
-      method:"PUT", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ status: map[next] })
+  /** Für die Timeline: Position und Höhe der Event-Blöcke berechnen */
+  const placed = useMemo(()=>{
+    // Basierend auf Minuten ab Tagesbeginn (H_START)
+    return items.map((e, idx) => {
+      const startMin = toMinutes(e.startAt ?? "00:00");
+      const endMin   = toMinutes(e.endAt   ?? e.startAt ?? "00:00");
+      const s = clamp(startMin - H_START*60, 0, DAY_MIN);
+      const minDur = 30; // mindestens 30 Minuten sichtbar
+      const duration = Math.max(endMin - startMin, minDur);
+      const d = clamp(duration, 15, DAY_MIN - s);
+      const top = (s / DAY_MIN) * 100;
+      const height = (d / DAY_MIN) * 100;
+      return { ...e, _top: top, _height: height, _key:`blk-${idx}` };
     });
-    if(!res.ok){ alert("Status konnte nicht geändert werden."); return; }
-    setItems(prev => prev.map(p => p.id===ev.id ? { ...p, status: map[next] } : p));
+  }, [items]);
+
+  /** Klick auf Stundenraster => neues Modal mit vorbelegter Startzeit */
+  function clickHour(h) {
+    const hh = String(h).padStart(2,"0");
+    setCreateDefaults({ date: day, startAt: `${hh}:00` });
+    setCreateOpen(true);
   }
 
-  /* ===================== Render ===================== */
+  /** Neueintrag gespeichert -> Modal zu, neu laden */
+  function onSavedNew(){
+    setCreateOpen(false);
+    load();
+  }
+
   return (
-    <div className="container" style={{ width:"100%" }}>
+    <div className="container">
       {/* Kopfzeile */}
-      <div className="surface" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <Link className="btn-ghost" href={`/termine/${prevDate}`} aria-label="Voriger Tag">◀︎</Link>
-          <h2 className="page-title" style={{ margin: 0 }}>
-            {isToday ? "Heute" : "Tagesansicht"} · {formatDateDE(date)}
+      <div className="surface" style={{display:"grid", gap:12}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap"}}>
+          <h2 className="page-title" style={{margin:0}}>
+            {fmtDateDE(day)}
           </h2>
-          <Link className="btn-ghost" href={`/termine/${nextDate}`} aria-label="Nächster Tag">▶︎</Link>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          {!isToday && <Link className="btn-ghost" href={`/termine/${TODAY_YMD}`}>Heute</Link>}
-          <button className="btn" onClick={()=>setOpenNew(true)}>+ Neuer Eintrag</button>
-        </div>
-      </div>
-
-      {/* Tages-Grid */}
-      <div className="surface" style={{ display:"grid", gap:12 }}>
-        <div className="day-grid">
-          {/* linke Stunden-Spalte */}
-          <div style={{ display:"grid", gap:8 }}>
-            {Array.from({length:24},(_,h)=>(
-              <div key={h} className="day-hour">{String(h).padStart(2,"0")}:00</div>
-            ))}
+          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+            <Link href="/termine" className="btn-ghost">← Zur Kalenderansicht</Link>
+            <button
+              className="btn"
+              onClick={() => { setCreateDefaults({ date: day, startAt: "09:00" }); setCreateOpen(true); }}
+            >
+              + Neuer Eintrag
+            </button>
           </div>
+        </div>
 
-          {/* rechte Blocks-Spalte */}
-          <div style={{ display:"grid", gap:8 }}>
-            {Array.from({length:24},(_,h)=>{
-              const list = byHour[h] || [];
-              return (
-                <div key={h} className="day-block">
-                  <div className="day-block-inner" style={{ display:"grid", gap:8 }}>
-                    {list.length === 0 && (
-                      <div className="subtle" style={{ fontSize:12 }}>—</div>
-                    )}
-                    {list.map(ev => (
-                      <div
-                        key={ev.id}
-                        style={{
-                          display:"grid", gap:4, padding:8,
-                          border:"1px solid var(--color-border)", borderRadius:10, background:"#fff"
-                        }}
-                      >
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
-                            <span
-                              title={ev.kind==='order'?'Auftrag':'Termin'}
-                              style={{
-                                width:24, height:24, borderRadius:999,
-                                display:"inline-flex", alignItems:"center", justifyContent:"center",
-                                background: ev.kind==='order' ? "#FDE68A" : "#DBEAFE"
-                              }}
-                            >
-                              {ev.kind==='order' ? "🧾" : "📅"}
-                            </span>
-                            <div className="ellipsis" style={{ fontWeight:700 }}>
-                              <Link href={`/termine/eintrag/${ev.id}`} style={{ color:"inherit", textDecoration:"none" }}>
-                                {ev.title || "(ohne Titel)"}
-                              </Link>
-                            </div>
-                          </div>
-                          <button
-                            className={`status-badge ${ev._displayStatus}`}
-                            onClick={()=>cycleStatus(ev)}
-                            title="Status ändern"
-                          >
-                            {ev._displayStatus}
-                          </button>
-                        </div>
-                        <div className="subtle" style={{ fontSize:13 }}>
-                          {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}{ev.customerName?` · ${ev.customerName}`:""}
-                        </div>
-                        {ev.note && <div style={{ fontSize:13 }}>{ev.note}</div>}
+        {/* Tagesraster + Timeline */}
+        <div className="surface" style={{position:"relative", overflow:"hidden"}}>
+          <div className="day-grid">
+            {/* linke Spalte: Stunde-Labels */}
+            <div style={{display:"grid", gridTemplateRows:`repeat(${H_END-H_START}, minmax(40px, 1fr))`, gap:8}}>
+              {Array.from({length:(H_END - H_START)}, (_,i)=>H_START+i).map(h=>(
+                <div key={h} className="day-hour" style={{display:"flex", alignItems:"flex-start", paddingTop:2}}>
+                  {labelTime(h)}
+                </div>
+              ))}
+            </div>
+
+            {/* rechte Spalte: klickbare Blöcke je Stunde + absolute Event-Layer */}
+            <div style={{position:"relative"}}>
+              {/* Stunden-Klick-Zonen */}
+              <div style={{display:"grid", gridTemplateRows:`repeat(${H_END-H_START}, minmax(40px, 1fr))`, gap:8}}>
+                {Array.from({length:(H_END - H_START)}, (_,i)=>H_START+i).map(h=>(
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={()=>clickHour(h)}
+                    title={`${labelTime(h)} – neuen Eintrag anlegen`}
+                    className="day-block"
+                    style={{width:"100%", textAlign:"left", cursor:"pointer"}}
+                  >
+                    <div className="day-block-inner" style={{opacity:.5}}>
+                      + Eintrag ab {labelTime(h)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Event-Layer */}
+              <div
+                aria-hidden
+                style={{
+                  position:"absolute",
+                  left:0, right:0, top:0, bottom:0,
+                  pointerEvents:"none" // Blöcke selbst klicken wir trotzdem (s. Link innen)
+                }}
+              >
+                {placed.map(ev=>(
+                  <div
+                    key={ev._key}
+                    style={{
+                      position:"absolute",
+                      top: `${ev._top}%`,
+                      height: `${ev._height}%`,
+                      left: 6, right: 6,
+                      borderRadius: 10,
+                      border: "1px solid var(--color-border)",
+                      boxShadow: "var(--shadow-sm)",
+                      background: ev.kind === "order" ? "#FDE68A" : "#DBEAFE",
+                      overflow:"hidden",
+                      display:"flex",
+                      alignItems:"center"
+                    }}
+                  >
+                    <Link
+                      href={`/termine/eintrag/${ev.id}`}
+                      title="Details öffnen"
+                      style={{
+                        display:"block", width:"100%",
+                        padding:"6px 10px",
+                        color:"inherit", textDecoration:"none",
+                        pointerEvents:"auto" // Link wieder klickbar
+                      }}
+                    >
+                      <div style={{fontWeight:700, fontSize:14, lineHeight:1.2}} className="ellipsis">
+                        {ev.title || "(ohne Titel)"}
                       </div>
-                    ))}
+                      <div style={{fontSize:12, opacity:.82}}>
+                        {ev.startAt?.slice(0,5)}{ev.endAt ? ` – ${ev.endAt.slice(0,5)}` : ""}{ev.customerName ? ` · ${ev.customerName}` : ""}
+                      </div>
+                    </Link>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {loading && <p className="subtle">Lade Einträge…</p>}
-        {error && !loading && <p style={{ color:"#b91c1c" }}>{error}</p>}
-      </div>
-
-      {/* Liste (kompakt) */}
-      <div className="surface">
-        <h3 className="section-title" style={{ marginTop:0, marginBottom:10 }}>Alle Einträge am {formatDateDE(date)}</h3>
-        {(!loading && !error && eventsSorted.length===0) && (
-          <div className="surface" style={{ borderStyle:"dashed", textAlign:"center" }}>Kein Eintrag vorhanden.</div>
-        )}
-        <div className="list">
-          {eventsSorted.map(ev=>(
-            <div key={ev.id} className="list-item">
-              <div className={`item-icon ${ev.kind==='order'?'accent':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
-                {ev.kind==='order' ? "🧾" : "📅"}
-              </div>
-              <div style={{ minWidth:0 }}>
-                <div className="item-title">
-                  <Link href={`/termine/eintrag/${ev.id}`} style={{ color:"inherit", textDecoration:"none" }}>
-                    {ev.title || "(ohne Titel)"}
-                  </Link>
-                </div>
-                <div className="item-meta">
-                  {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}{ev.customerName?` · ${ev.customerName}`:""}
-                </div>
-              </div>
-              <div className="item-actions">
-                <button
-                  className={`status-badge ${ev._displayStatus}`}
-                  onClick={()=>cycleStatus(ev)}
-                  title="Status ändern"
-                >
-                  {ev._displayStatus}
-                </button>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* Statuszeile */}
+        {loading && <div className="subtle">Lade…</div>}
+        {!loading && error && <div style={{color:"#b91c1c"}}>{error}</div>}
+
+        {/* Alle Einträge des Tages als Liste/Tabelle */}
+        <div className="surface" style={{display:"grid", gap:10}}>
+          <div className="section-title">Alle Einträge am {fmtDateDE(day)}</div>
+          {(!loading && items.length === 0) && (
+            <div className="surface" style={{borderStyle:"dashed", textAlign:"center"}}>Keine Einträge.</div>
+          )}
+          <div className="list">
+            {items.map(ev=>(
+              <div key={ev.id} className="list-item">
+                <div className={`item-icon ${ev.kind==='order'?'accent':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
+                  {ev.kind==='order' ? "🧾" : "📅"}
+                </div>
+                <div style={{minWidth:0}}>
+                  <div className="item-title">
+                    <Link href={`/termine/eintrag/${ev.id}`} style={{textDecoration:"none", color:"inherit"}}>
+                      {ev.title || "(ohne Titel)"}
+                    </Link>
+                  </div>
+                  <div className="item-meta ellipsis">
+                    {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}{ev.customerName?` · ${ev.customerName}`:""}
+                  </div>
+                </div>
+                <div className="item-actions">
+                  <Link href={`/termine/eintrag/${ev.id}`} className="btn-ghost">Details →</Link>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Modal: Neuer Eintrag */}
-      <Modal open={openNew} onClose={()=>setOpenNew(false)} title="+ Neuer Eintrag" maxWidth={720}>
+      <Modal
+        open={createOpen}
+        onClose={()=>setCreateOpen(false)}
+        title="+ Neuer Eintrag"
+        maxWidth={640}
+      >
         <AppointmentForm
-          initial={{ date, startAt: "09:00", endAt: "" }}
+          initial={{ date: createDefaults.date, startAt: createDefaults.startAt }}
           customers={customers}
-          onSaved={async ()=>{ setOpenNew(false); await refresh(); }}
-          onCancel={()=>setOpenNew(false)}
+          onSaved={onSavedNew}
+          onCancel={()=>setCreateOpen(false)}
         />
       </Modal>
-
-      {/* Lokale Styles nur für diese Seite (kleine Verfeinerungen) */}
-      <style jsx>{`
-        .status-badge.offen{ background:#EFF6FF; border-color:#BFDBFE; }
-        .status-badge.abgesagt{ background:#FEF2F2; border-color:#FECACA; }
-        .status-badge.abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
-      `}</style>
     </div>
   );
 }
