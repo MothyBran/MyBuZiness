@@ -1,177 +1,63 @@
-/* Wrapper */
+/* ⚠️ DEBUG-VERSION: maximal auffällig */
 .wrap {
   max-width: 1200px;
   margin: 0 auto;
   padding: 16px;
-  color: #e5e7eb;
+  color: #0b1220;              /* dunkel für Kontrast */
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+  background: #22c55e;         /* KNALLGRÜN: wenn du das siehst, ist das CSS-Module aktiv */
+  border: 6px dashed #111827;  /* fette Umrandung als Marker */
 }
 
-/* Card */
 .card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.1);
+  background: #ffffff;
+  border: 3px solid #111827;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.25);
   margin-bottom: 16px;
 }
+
 .cardHeader {
-  padding: 14px 16px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
+  border-bottom: 3px solid #111827;
   justify-content: space-between;
 }
-.cardTitle { font-weight: 700; }
-.cardContent { padding: 16px; }
+.cardTitle { font-weight: 900; font-size: 22px; color: #111827; }
+.cardContent { padding: 20px; }
 
-/* Actions in Header */
 .headerActions { display: flex; gap: 8px; align-items: center; }
 
-/* Buttons */
 .btnGhost, .btnPrimary {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid #111827;
+  background: #fde68a;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 700;
+}
+.btnPrimary { background: #60a5fa; }
+
+.banner {
+  margin: 12px 0 0;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(255,255,255,0.06);
-  color: #e5e7eb;
-  cursor: pointer;
-}
-.btnGhost:hover, .btnPrimary:hover { filter: brightness(1.1); }
-.btnPrimary {
-  background: linear-gradient(90deg, #0ea5e9, #22c55e);
-  border-color: transparent;
-  color: #0b1220;
+  border: 2px dashed #111827;
+  background: #fef08a;
+  font-weight: 800;
 }
 
-/* Subhead */
-.subhead {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-.badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  font-size: .9rem;
-}
-.legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: #94a3b8;
-  font-size: .9rem;
-}
-.dotToday, .dotHasItems {
-  width: 10px; height: 10px; border-radius: 999px; display: inline-block;
-}
-.dotToday { border: 2px solid #22c55e; }
-.dotHasItems { background: #0ea5e9; }
-
-/* Kalender */
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-.weekday {
-  text-align: center;
-  color: #94a3b8;
-  font-weight: 600;
-  padding: 6px 0;
-}
-.day {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
+/* unten erstmal nur ein Platzhalter – reicht für den Test */
+.placeholder {
+  margin-top: 12px;
+  padding: 20px;
+  background: #e2e8f0;
+  border: 2px solid #111827;
   border-radius: 12px;
-  min-height: 92px;
-  padding: 8px;
-  position: relative;
-  cursor: pointer;
-  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-.day:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.18);
-  border-color: rgba(255,255,255,0.18);
-}
-.outMonth { opacity: .45; }
-
-.date {
-  font-size: 12px;
-  color: #94a3b8;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  line-height: 1;
-}
-.today .date::after {
-  content: "";
-  width: 8px; height: 8px; border-radius: 999px;
-  border: 2px solid #22c55e;
-  display: inline-block;
-}
-
-/* Marker für Tage mit Terminen */
-.hasItems::before {
-  content: "";
-  position: absolute;
-  right: 8px; bottom: 8px;
-  width: 8px; height: 8px; border-radius: 999px;
-  background: #0ea5e9;
-}
-
-/* Termine im Tag */
-.itemsBox { margin-top: 6px; display: grid; gap: 4px; }
-.itemBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  font-size: .85rem;
-  width: 100%;
-  text-align: left;
-}
-.itemTime {
-  font-variant-numeric: tabular-nums;
-  opacity: .9;
-  min-width: 42px;
-}
-.itemText {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.moreBadge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  border: 1px dashed rgba(255,255,255,0.18);
-  font-size: .8rem;
-  color: #cbd5e1;
-}
-
-/* Responsiv */
-@media (max-width: 920px) {
-  .itemsBox { gap: 3px; }
-  .itemTime { min-width: 36px; font-size: .8rem; }
-  .itemText { font-size: .8rem; }
-}
-@media (max-width: 640px) {
-  .calendar { gap: 6px; }
-  .day { min-height: 86px; padding: 6px; }
+  color: #111827;
+  font-weight: 600;
+  text-align: center;
 }
