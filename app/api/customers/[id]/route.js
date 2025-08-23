@@ -1,71 +1,79 @@
 // app/api/customers/[id]/route.js
-import { initDb, q } from "@/lib/db";
+import { q, ensureSchemaOnce } from "@/lib/db";
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 
 export async function GET(_req, { params }) {
+  await ensureSchemaOnce();
   try {
-    await initDb();
     const { id } = params;
-    const row = (await q(`SELECT * FROM "Customer" WHERE "id"=$1`, [id])).rows[0];
-    if (!row) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
-    return Response.json({ ok:true, data: row });
+    const res = await q(
+      `SELECT id, name, email, note, phone,
+              "addressStreet", "addressZip", "addressCity", "addressCountry",
+              "createdAt", "updatedAt"
+       FROM "Customer"
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+    if (res.rowCount === 0) return json({ ok: false, error: "Not found" }, 404);
+    return json({ ok: true, item: res.rows[0] });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(req, { params }) {
+  await ensureSchemaOnce();
   try {
-    await initDb();
     const { id } = params;
-    const body = await request.json().catch(()=> ({}));
-
-    // Normalisierung (unterstützt alte/new UI-Feldnamen)
-    const name = (body.name || "").trim();
-    if (!name) return new Response(JSON.stringify({ ok:false, error:"Name ist erforderlich." }), { status:400 });
-
-    const email = body.email ?? null;
-    const phone = body.phone ?? body.tel ?? null;
-
-    const addressStreet  = body.addressStreet ?? body.street ?? null;
-    const addressZip     = body.addressZip ?? body.zip ?? body.plz ?? null;
-    const addressCity    = body.addressCity ?? body.city ?? null;
-    const addressCountry = body.addressCountry ?? body.country ?? null;
-
-    const note = body.note ?? body.notes ?? null;
+    const body = await req.json();
 
     const res = await q(
       `UPDATE "Customer"
-       SET "name"=$1,
-           "email"=$2,
-           "phone"=$3,
-           "addressStreet"=$4,
-           "addressZip"=$5,
-           "addressCity"=$6,
-           "addressCountry"=$7,
-           "note"=$8,
-           "updatedAt"=CURRENT_TIMESTAMP
-       WHERE "id"=$9
-       RETURNING *`,
-      [name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note, id]
+         SET name = $2,
+             email = $3,
+             note = $4,
+             phone = $5,
+             "addressStreet" = $6,
+             "addressZip" = $7,
+             "addressCity" = $8,
+             "addressCountry" = $9,
+             "updatedAt" = NOW()
+       WHERE id = $1
+       RETURNING id`,
+      [
+        id,
+        body?.name ?? null,
+        body?.email ?? null,
+        body?.note ?? null,
+        body?.phone ?? null,
+        body?.addressStreet ?? null,
+        body?.addressZip ?? null,
+        body?.addressCity ?? null,
+        body?.addressCountry ?? null,
+      ]
     );
-    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
-    return Response.json({ ok:true, data: res.rows[0] });
+
+    if (res.rowCount === 0) return json({ ok: false, error: "Not found" }, 404);
+    return json({ ok: true, id: res.rows[0].id });
   } catch (e) {
-    if (String(e).includes("duplicate key")) {
-      return new Response(JSON.stringify({ ok:false, error:"E-Mail ist bereits vergeben." }), { status:400 });
-    }
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
 
 export async function DELETE(_req, { params }) {
+  await ensureSchemaOnce();
   try {
-    await initDb();
     const { id } = params;
-    const res = await q(`DELETE FROM "Customer" WHERE "id"=$1`, [id]);
-    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
-    return Response.json({ ok:true });
+    const res = await q('DELETE FROM "Customer" WHERE id = $1', [id]);
+    if (res.rowCount === 0) return json({ ok: false, error: "Not found" }, 404);
+    return json({ ok: true, deleted: id });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
