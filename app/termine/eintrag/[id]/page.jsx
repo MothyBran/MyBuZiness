@@ -1,118 +1,170 @@
 // app/termine/eintrag/[id]/page.jsx
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Modal from "@/app/components/Modal";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
-/* Utils */
-function toDate(input){ if (input instanceof Date) return input; if (typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input)){ const [y,m,d]=input.split("-").map(Number); return new Date(y, m-1, d, 12, 0, 0, 0);} const d = new Date(input || Date.now()); return isNaN(d) ? new Date() : d; }
-function formatDateDE(input){ const d = toDate(input); const dd=String(d.getDate()).padStart(2,"0"); const mm=String(d.getMonth()+1).padStart(2,"0"); const yyyy=d.getFullYear(); return `${dd}.${mm}.${yyyy}`; }
-const STATUS_LABEL = { open: "offen", cancelled: "abgesagt", done: "abgeschlossen" };
-
-export default function EntryDetail({ params }){
-  const id = params.id;
-  const [item, setItem] = useState(null);
-  const [customers, setCustomers] = useState([]);
-  const [openEdit, setOpenEdit] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(()=>{
-    fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>setItem(null));
-    fetch(`/api/customers`).then(r=>r.json()).then(js=>{
-      const arr = Array.isArray(js) ? js : js?.data || js?.rows || js?.items || js?.customers || [];
-      const mapped = (arr||[]).map(c=>({
-        id: String(c.id ?? c.customerId ?? c.uuid ?? c._id ?? ""),
-        name: String(c.name ?? c.fullName ?? c.company ?? c.title ?? ""),
-        street: c.addressStreet ?? c.street ?? c.address ?? "",
-        zip: c.addressZip ?? c.zip ?? c.plz ?? "",
-        city: c.addressCity ?? c.city ?? c.town ?? "",
-        phone: c.phone ?? c.tel ?? c.telephone ?? ""
-      })).filter(x=>x.id && x.name);
-      setCustomers(mapped);
-    }).catch(()=>setCustomers([]));
-  },[id]);
-
-  async function handleDelete(e){
-    e?.preventDefault?.();
-    if (!item) return;
-    if(!window.confirm("Diesen Eintrag wirklich löschen?")) return;
-    setDeleting(true);
-    const res = await fetch(`/api/appointments/${item.id}`, { method:"DELETE" });
-    if(!res.ok){ setDeleting(false); alert("Löschen fehlgeschlagen."); return; }
-    location.href = "/termine";
+function fmtDateDE(input){
+  try{
+    const d = new Date(input);
+    if (!isNaN(d)) {
+      return new Intl.DateTimeFormat("de-DE", { day:"2-digit", month:"2-digit", year:"numeric", weekday:"long" }).format(d);
+    }
+  }catch{}
+  // Fallback für YYYY-MM-DD
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}/.test(input)) {
+    const [y,m,d] = input.slice(0,10).split("-").map(Number);
+    return new Intl.DateTimeFormat("de-DE", { day:"2-digit", month:"2-digit", year:"numeric", weekday:"long" }).format(new Date(y, m-1, d));
   }
-
-  if (!item) return (
-    <div className="container surface">
-      <h2 className="page-title">Termin</h2>
-      <p>Eintrag wurde nicht gefunden.</p>
-      <Link href="/termine" className="btn-ghost">← Zurück</Link>
-    </div>
-  );
-
-  const cust = customers.find(c=> String(c.id) === String(item.customerId));
-
-  return (
-    <div className="container appt">
-      <div className="surface">
-        <div style={{display:"flex", gap:8, alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", marginBottom:10}}>
-          <h2 className="page-title" style={{margin:0}}>Termin / Auftrag</h2>
-          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-            <button className="btn-ghost" onClick={()=>setOpenEdit(true)}>⚙️ Bearbeiten</button>
-            <button className="btn btn-ghost" style={{ borderColor:"#b91c1c", color:"#b91c1c", background:"#fff" }} onClick={handleDelete} disabled={deleting}>{deleting?"Lösche…":"❌ Löschen"}</button>
-            <Link href="/termine" className="btn-ghost">← Zurück</Link>
-          </div>
-        </div>
-
-        {/* Detailraster – nutzt nur generische Klassen, keine globalen Overrides */}
-        <div style={{ display:"grid", gap:14 }}>
-          <Row label="Art" value={item.kind==="order" ? "Auftrag" : "Termin"} />
-          <Row label="Uhrzeit & Datum" value={`${item.startAt?.slice(0,5)}${item.endAt?`–${item.endAt.slice(0,5)}`:""} · ${formatDateDE(item.date)}`} />
-          <Row label="Kunde" value={
-            item.customerName
-              ? <>
-                  <div><b>{item.customerName}</b></div>
-                  {cust && (
-                    <div style={{opacity:.9, marginTop:4}}>
-                      <div>{[cust.street, `${cust.zip||""} ${cust.city||""}`.trim()].filter(Boolean).join(", ")}</div>
-                      {cust.phone && <div>☎ {cust.phone}</div>}
-                    </div>
-                  )}
-                </>
-              : "—"
-          } />
-          <Row label="Notiz" value={item.note || "—"} />
-          <Row label="Status" value={<span className={`appt-badge ${STATUS_LABEL[item.status]==="offen"?"is-offen":STATUS_LABEL[item.status]==="abgesagt"?"is-abgesagt":"is-abgeschlossen"}`}>{STATUS_LABEL[item.status] || "offen"}</span>} />
-        </div>
-      </div>
-
-      {/* Modal (leichtgewichtig) */}
-      {openEdit && (
-        <div className="surface" style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.35)", display:"grid", placeItems:"center", zIndex:1000, padding: 16 }} onClick={()=>setOpenEdit(false)}>
-          <div className="surface" style={{ width:"min(740px, 94vw)" }} onClick={(e)=>e.stopPropagation()}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
-              <div className="section-title">Eintrag bearbeiten</div>
-              <button className="btn-ghost" onClick={()=>setOpenEdit(false)}>✕</button>
-            </div>
-            <AppointmentForm
-              initial={item}
-              customers={customers}
-              onSaved={()=>{ setOpenEdit(false); fetch(`/api/appointments/${id}`).then(r=>r.json()).then(setItem).catch(()=>{}); }}
-              onCancel={()=>setOpenEdit(false)}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return String(input || "");
 }
 
-function Row({ label, value }){
+export default function EntryDetailPage({ params }){
+  const id = params?.id;
+  const router = useRouter();
+
+  const [data,setData] = useState(null);
+  const [loading,setLoading] = useState(true);
+  const [error,setError] = useState("");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [customers, setCustomers] = useState([]);
+
+  async function load(){
+    setLoading(true); setError("");
+    try{
+      const r = await fetch(`/api/appointments/${id}`, { cache:"no-store" });
+      if (!r.ok) throw new Error(await r.text());
+      const js = await r.json();
+      setData(js);
+    }catch(e){
+      console.error(e);
+      setError("Eintrag konnte nicht geladen werden.");
+      setData(null);
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  useEffect(()=>{ load(); }, [id]);
+
+  useEffect(()=>{
+    (async ()=>{
+      try{
+        const r = await fetch("/api/customers", { cache:"no-store" }).catch(()=>null);
+        const js = r && r.ok ? await r.json() : { data: [] };
+        setCustomers(js?.data || []);
+      }catch{ setCustomers([]); }
+    })();
+  },[]);
+
+  async function onDelete(){
+    if (!data) return;
+    if (!confirm("Diesen Eintrag wirklich löschen?")) return;
+    const r = await fetch(`/api/appointments/${data.id}`, { method:"DELETE" });
+    if (!r.ok) {
+      alert("Löschen fehlgeschlagen.");
+      return;
+    }
+    // Nach dem Löschen zurück zur Tagesansicht (falls Datum bekannt), sonst Monatsübersicht
+    const target = data?.date ? `/termine/${(typeof data.date === "string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}` : "/termine";
+    router.push(target);
+  }
+
+  function onSavedEdit(){
+    setEditOpen(false);
+    load();
+  }
+
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"220px 1fr", gap:10, alignItems:"start" }}>
-      <div style={{ fontWeight:700, opacity:.85 }}>{label}</div>
-      <div style={{ minWidth:0 }}>{value}</div>
+    <div className="container">
+      <div className="surface" style={{display:"grid", gap:12}}>
+        {/* Header */}
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap"}}>
+          <h2 className="page-title" style={{margin:0}}>Eintrag · Details</h2>
+          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+            {data?.date ? (
+              <Link href={`/termine/${(typeof data.date==="string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}`} className="btn-ghost">
+                ← Zur Tagesansicht
+              </Link>
+            ) : (
+              <Link href="/termine" className="btn-ghost">← Zur Kalenderansicht</Link>
+            )}
+            <button className="btn" onClick={()=>setEditOpen(true)}>Bearbeiten</button>
+            <button className="btn btn-danger" onClick={onDelete}>Löschen</button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {loading && <div className="subtle">Lade…</div>}
+        {!loading && error && <div style={{color:"#b91c1c"}}>{error}</div>}
+
+        {!loading && !error && data && (
+          <div className="surface" style={{display:"grid", gap:12}}>
+            <div className="section-title">Zusammenfassung</div>
+            <div className="detail">
+              <div className="row">
+                <div className="label">Art</div>
+                <div className="value">{data.kind === "order" ? "Auftrag" : "Termin"}</div>
+              </div>
+              <div className="row">
+                <div className="label">Bezeichnung</div>
+                <div className="value">{data.title || "—"}</div>
+              </div>
+              <div className="row">
+                <div className="label">Datum</div>
+                <div className="value">{fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}</div>
+              </div>
+              <div className="row">
+                <div className="label">Zeit</div>
+                <div className="value">
+                  {data.startAt?.slice(0,5)}{data.endAt ? ` – ${data.endAt.slice(0,5)}` : ""}
+                </div>
+              </div>
+              <div className="row">
+                <div className="label">Kunde</div>
+                <div className="value">{data.customerName || "—"}</div>
+              </div>
+              <div className="row">
+                <div className="label">Status</div>
+                <div className="value">
+                  {data.status === "cancelled" ? "abgesagt" : data.status === "done" ? "abgeschlossen" : "offen"}
+                </div>
+              </div>
+              <div className="row">
+                <div className="label">Notiz</div>
+                <div className="value" style={{whiteSpace:"pre-wrap"}}>{data.note || "—"}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal: Bearbeiten */}
+      <Modal open={editOpen} onClose={()=>setEditOpen(false)} title="Eintrag bearbeiten" maxWidth={640}>
+        {data && (
+          <AppointmentForm
+            initial={{
+              id: data.id,
+              kind: data.kind,
+              title: data.title,
+              date: typeof data.date === "string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10),
+              startAt: data.startAt?.slice(0,5) || "09:00",
+              endAt: data.endAt?.slice(0,5) || "",
+              customerId: data.customerId || "",
+              customerName: data.customerName || "",
+              status: data.status || "open",
+              note: data.note || "",
+            }}
+            customers={customers}
+            onSaved={onSavedEdit}
+            onCancel={()=>setEditOpen(false)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
