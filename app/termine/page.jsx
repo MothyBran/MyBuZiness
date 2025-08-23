@@ -60,14 +60,13 @@ export default function TerminePage(){
   function MonthCalendar(){
     return (
       <div className="surface appt">
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
+        <div className="header-row" style={{marginBottom:10}}>
           <h2 className="page-title" style={{margin:0}}>
             Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
           </h2>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,-1))}>◀︎</button>
-            <button className="btn" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
-            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,1))}>▶︎</button>
+            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</button>
+            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</button>
           </div>
         </div>
 
@@ -99,9 +98,7 @@ export default function TerminePage(){
   function MonthList(){
     return (
       <div className="surface appt">
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginBottom: 10, gap:8, flexWrap:"wrap"}}>
-          <h2 className="page-title" style={{margin:0}}>Termine / Aufträge – Übersicht</h2>
-        </div>
+        <h2 className="page-title" style={{margin:0, marginBottom:10}}>Termine / Aufträge – Übersicht</h2>
 
         {(!loading && !error && events.length===0) && (
           <div className="surface" style={{borderStyle:"dashed", textAlign:"center"}}>Keine Einträge im ausgewählten Monat.</div>
@@ -110,23 +107,30 @@ export default function TerminePage(){
         <div className="appt-list">
           {events.map(ev=>{
             const displayStatus = computeDisplayStatus(ev);
-            const detailHref = `/termine/eintrag/${ev.id}`;
             return (
-              <Link key={ev.id} href={detailHref} className="appt-item" style={{ textDecoration:"none", color:"inherit", display:"grid", gridTemplateColumns:"40px 1fr auto", gap:12, alignItems:"center" }}>
+              <div key={ev.id} className="appt-item">
                 <div className={`appt-icon ${ev.kind==='order'?'appt-icon--order':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
                   {ev.kind==='order' ? "🧾" : "📅"}
                 </div>
                 <div style={{minWidth:0}}>
-                  <div className="appt-title">{ev.title || "(ohne Titel)"}</div>
+                  <div className="appt-title">
+                    <Link href={`/termine/eintrag/${ev.id}`} style={{color:"inherit", textDecoration:"none"}}>{ev.title || "(ohne Titel)"}</Link>
+                  </div>
                   <div className="appt-meta">
-                    <span>{formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}</span>
+                    <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{color:"inherit", textDecoration:"none"}}>
+                      {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                    </Link>
                     {ev.customerName && <> · {ev.customerName}</>}
                   </div>
                 </div>
                 <div className="appt-actions">
-                  <span className={`status-badge ${displayStatus}`}>{displayStatus}</span>
+                  {/* Status nur als Label, nicht klickbar */}
+                  <span className={`appt-badge ${
+                    displayStatus==="offen" ? "is-offen" :
+                    displayStatus==="abgesagt" ? "is-abgesagt" : "is-abgeschlossen"
+                  }`}>{displayStatus}</span>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>
