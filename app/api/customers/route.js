@@ -1,65 +1,58 @@
 // app/api/customers/route.js
-import { initDb, q, uuid } from "@/lib/db";
+import { q, ensureSchemaOnce } from "@/lib/db";
 
-export async function GET(request) {
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+export async function GET() {
+  await ensureSchemaOnce();
   try {
-    await initDb();
-    const { searchParams } = new URL(request.url);
-    const qs = (searchParams.get("q") || "").trim().toLowerCase();
-
-    let rows;
-    if (qs) {
-      rows = (await q(
-        `SELECT * FROM "Customer"
-         WHERE lower("name") LIKE $1
-            OR lower("email") LIKE $1
-            OR lower(COALESCE("phone", '')) LIKE $1
-            OR lower(COALESCE("addressCity", '')) LIKE $1
-         ORDER BY "createdAt" DESC`,
-        [`%${qs}%`]
-      )).rows;
-    } else {
-      rows = (await q(`SELECT * FROM "Customer" ORDER BY "createdAt" DESC`)).rows;
-    }
-    return Response.json({ ok: true, data: rows });
+    const res = await q(
+      `SELECT id, name, email, note, phone,
+              "addressStreet", "addressZip", "addressCity", "addressCountry",
+              "createdAt", "updatedAt"
+       FROM "Customer"
+       ORDER BY "createdAt" DESC NULLS LAST, name ASC`
+    );
+    return json({ ok: true, items: res.rows });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
 
-export async function POST(request) {
+export async function POST(req) {
+  await ensureSchemaOnce();
   try {
-    await initDb();
-    const body = await request.json().catch(() => ({}));
-
-    // Eingaben robust normalisieren (unterstützt alte/new UI-Feldnamen)
-    const name = (body.name || "").trim();
-    if (!name) return new Response(JSON.stringify({ ok:false, error:"Name ist erforderlich." }), { status:400 });
-
-    const id = uuid();
-    const email = body.email ?? null;
-    const phone = body.phone ?? body.tel ?? null;
-
-    const addressStreet  = body.addressStreet ?? body.street ?? null;
-    const addressZip     = body.addressZip ?? body.zip ?? body.plz ?? null;
-    const addressCity    = body.addressCity ?? body.city ?? null;
-    const addressCountry = body.addressCountry ?? body.country ?? null;
-
-    const note = body.note ?? body.notes ?? null;
+    const body = await req.json();
+    // In deiner DB ist Customer.id = text → wir können UUID-String verwenden
+    const id = body?.id || crypto.randomUUID();
 
     const res = await q(
       `INSERT INTO "Customer"
-       ("id","name","email","phone","addressStreet","addressZip","addressCity","addressCountry","note","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [id, name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note]
+        (id, name, email, note, phone,
+         "addressStreet", "addressZip", "addressCity", "addressCountry",
+         "createdAt", "updatedAt")
+       VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+       RETURNING id`,
+      [
+        id,
+        body?.name ?? null,
+        body?.email ?? null,
+        body?.note ?? null,
+        body?.phone ?? null,
+        body?.addressStreet ?? null,
+        body?.addressZip ?? null,
+        body?.addressCity ?? null,
+        body?.addressCountry ?? null,
+      ]
     );
 
-    return Response.json({ ok: true, data: res.rows[0] }, { status: 201 });
+    return json({ ok: true, id: res.rows[0].id }, 201);
   } catch (e) {
-    if (String(e).includes("duplicate key")) {
-      return new Response(JSON.stringify({ ok:false, error:"E-Mail ist bereits vergeben." }), { status:400 });
-    }
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
