@@ -1,3 +1,5 @@
+# force rebuild 2025-08-23
+
 # ---------- build stage ----------
 FROM node:18-alpine AS builder
 WORKDIR /app
