@@ -2,10 +2,23 @@
 import { NextResponse } from "next/server";
 import { pool, initDb, ensureSchemaOnce } from "@/lib/db";
 
-// App Router: Caching aus / in PROD immer dynamisch
+// App Router: niemals cachen, Node runtime
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Alle Spalten aus deiner "Settings"-Tabelle (Case-sensitiv!)
+const SELECT_COLS = [
+  "id","companyName","addressLine1","addressLine2","email","phone","iban","vatId",
+  "currencyDefault","taxRateDefault","logoUrl","createdAt","updatedAt",
+  "kleinunternehmer","showLogo","logoMime","primaryColor","accentColor","backgroundColor",
+  "textColor","borderRadius","fontFamily","headerTitle","ownerName","address1","address2",
+  "postalCode","city","website","bankAccount","currency","secondaryColor","proprietor",
+  "bank","fontColor","reverseChargeDefault","ossEnabled","countryDefault",
+  "shippingTaxFollowsMain","paymentTermsDays","invoiceNumberFormat","receiptNumberFormat",
+  "accountsProfile","taxNumber","taxOffice",
+];
+
+// DB‑Row → API‑Objekt
 function mapRow(row, includeLogoData = false) {
   const base = {
     id: row.id ?? null,
@@ -55,17 +68,30 @@ function mapRow(row, includeLogoData = false) {
     taxOffice: row.taxoffice ?? null,
   };
 
-  if (includeLogoData) {
-    // row.logodata kann Buffer oder Uint8Array sein
-    base.logoData = row.logodata ?? null;
-  }
-
+  if (includeLogoData) base.logoData = row.logodata ?? null;
   return base;
 }
 
-const SELECT_COLS = [
-  "id","companyName","addressLine1","addressLine2","email","phone","iban","vatId",
-  "currencyDefault","taxRateDefault","logoUrl","createdAt","updatedAt",
-  "kleinunternehmer","showLogo","logoMime","primaryColor","accentColor","backgroundColor",
-  "textColor","borderRadius","fontFamily","headerTitle","ownerName","address1","address2",
-  "postalCode","city","website","bankAccount","
+// GET /api/settings  (optional: ?withLogo=1 → logoDataBase64)
+export async function GET(request) {
+  try {
+    await initDb();           // erzeugt Tabellen inkl. "Settings" (id='singleton')
+    await ensureSchemaOnce(); // weitere Schema-Teile (z. B. Appointment)
+
+    const { searchParams } = new URL(request.url);
+    const withLogo = searchParams.get("withLogo") === "1";
+
+    const logoPart = withLogo ? `, "logoData"` : "";
+    const sql = `SELECT ${SELECT_COLS.map(c => `"${c}"`).join(", ")}${logoPart}
+                 FROM "Settings"
+                 WHERE "id" = 'singleton'
+                 LIMIT 1;`;
+
+    const { rows } = await pool.query(sql);
+
+    // Fallback: Standard-Datensatz anlegen
+    if (rows.length === 0) {
+      const ins = await pool.query(
+        `INSERT INTO "Settings"
+          ("id","companyName","currencyDefault","taxRateDefault","createdAt","updatedAt")
+         VALUES ('singleton','Mein Unternehmen','EUR',19,NOW(),NOW())
