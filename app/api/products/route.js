@@ -1,60 +1,64 @@
 // app/api/products/route.js
-import { initDb, q, uuid } from "@/lib/db";
+import { q, ensureSchemaOnce, uuid, now } from "@/lib/db";
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 
 export async function GET() {
+  await ensureSchemaOnce();
   try {
-    await initDb();
-    const rows = (await q(
-      `SELECT
-         "id","name","sku","description","categoryCode","kind",
-         COALESCE("priceCents",0)          AS "priceCents",
-         COALESCE("hourlyRateCents",0)     AS "hourlyRateCents",
-         COALESCE("travelBaseCents",0)     AS "travelBaseCents",
-         COALESCE("travelPerKmCents",0)    AS "travelPerKmCents",
-         "createdAt","updatedAt"
+    const res = await q(
+      `SELECT id, name, sku, "priceCents", currency, description,
+              "createdAt", "updatedAt", kind, "categoryCode",
+              "travelEnabled", "travelRateCents", "travelUnit", "travelBaseCents",
+              "travelPerKmCents", "hourlyRateCents"
        FROM "Product"
-       ORDER BY "createdAt" DESC`
-    )).rows;
-    return Response.json({ ok: true, data: rows });
+       ORDER BY "createdAt" DESC NULLS LAST, name ASC`
+    );
+    return json({ ok: true, items: res.rows });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 500 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
 
-export async function POST(request) {
+export async function POST(req) {
+  await ensureSchemaOnce();
   try {
-    await initDb();
-    const body = await request.json().catch(()=> ({}));
+    const body = await req.json();
+    const id = body?.id || uuid();
 
-    const id = uuid();
-    const name = (body.name || "").trim();
-    if (!name) return new Response(JSON.stringify({ ok:false, error:"Name/Bezeichnung ist erforderlich." }), { status: 400 });
-
-    const kind = (body.kind || "product"); // "product" | "service" | "travel"
-    const priceCents        = Number(body.priceCents || 0);        // Produktpreis ODER Grundpreis (service fallback)
-    const hourlyRateCents   = Number(body.hourlyRateCents || 0);   // Dienstleistung €/Std. (optional)
-    const travelBaseCents   = Number(body.travelBaseCents || 0);   // Grundpreis Fahrtkosten
-    const travelPerKmCents  = Number(body.travelPerKmCents || 0);  // €/km
-
-    await q(
-      `INSERT INTO "Product"(
-         "id","name","sku","description","categoryCode","kind",
-         "priceCents","hourlyRateCents","travelBaseCents","travelPerKmCents",
-         "createdAt","updatedAt"
-       ) VALUES (
-         $1,$2,$3,$4,$5,$6,
-         $7,$8,$9,$10,
-         now(),now()
-       )`,
+    const res = await q(
+      `INSERT INTO "Product"
+       (id, name, sku, "priceCents", currency, description,
+        "createdAt", "updatedAt", kind, "categoryCode",
+        "travelEnabled", "travelRateCents", "travelUnit", "travelBaseCents",
+        "travelPerKmCents", "hourlyRateCents")
+       VALUES
+       ($1,$2,$3,$4,$5,$6,NOW(),NOW(),$7,$8,$9,$10,$11,$12,$13,$14)
+       RETURNING id`,
       [
-        id, name, body.sku || null, body.description || null, body.categoryCode || null, kind,
-        priceCents, hourlyRateCents, travelBaseCents, travelPerKmCents
+        id,
+        body?.name ?? null,
+        body?.sku ?? null,
+        body?.priceCents != null ? Number(body.priceCents) : null,
+        body?.currency ?? "EUR",
+        body?.description ?? null,
+        body?.kind ?? null,
+        body?.categoryCode ?? null,
+        body?.travelEnabled != null ? Boolean(body.travelEnabled) : null,
+        body?.travelRateCents != null ? Number(body.travelRateCents) : null,
+        body?.travelUnit ?? null,
+        body?.travelBaseCents != null ? Number(body.travelBaseCents) : null,
+        body?.travelPerKmCents != null ? Number(body.travelPerKmCents) : null,
+        body?.hourlyRateCents != null ? Number(body.hourlyRateCents) : null,
       ]
     );
 
-    const row = (await q(`SELECT * FROM "Product" WHERE "id"=$1`, [id])).rows[0];
-    return Response.json({ ok:true, data: row }, { status: 201 });
+    return json({ ok: true, id: res.rows[0].id }, 201);
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 400 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
