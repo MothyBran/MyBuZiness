@@ -1,21 +1,30 @@
 // app/api/invoices/nextNo/route.js
-import { initDb, q } from "@/lib/db";
+import { q, ensureSchemaOnce } from "@/lib/db";
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+function pad4(n) {
+  return String(n).padStart(4, "0");
+}
 
 export async function GET() {
+  await ensureSchemaOnce();
   try {
-    await initDb();
-    const row = (await q(
-      `SELECT COALESCE(MAX(
-          NULLIF(regexp_replace("invoiceNo", '\\D', '', 'g'), '')::bigint
-        ), 0)::bigint AS last
-       FROM "Invoice"`
-    )).rows[0];
-    const next = Number(row?.last || 0) + 1;
-    return new Response(JSON.stringify({ ok: true, nextNo: String(next) }), {
-      status: 200,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
+    const year = new Date().getFullYear();
+    const { rows } = await q(
+      `SELECT COUNT(*)::int AS c
+       FROM "Invoice"
+       WHERE EXTRACT(YEAR FROM COALESCE("issueDate","createdAt")) = $1`,
+      [year]
+    );
+    const nextCount = (rows?.[0]?.c || 0) + 1;
+    const nextNo = `INV-${year}-${pad4(nextCount)}`;
+    return json({ ok: true, nextNo });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
+    return json({ ok: false, error: e?.message || "Unknown error" }, 500);
   }
 }
