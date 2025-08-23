@@ -1,12 +1,10 @@
-# force rebuild 2025-08-23
-
 # ---------- build stage ----------
 FROM node:18-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
 
-# 1) Nur package-Dateien kopieren (besseres Caching)
+# 1) Nur package-Dateien kopieren (Caching)
 COPY package*.json ./
 
 ENV NODE_ENV=production
@@ -29,7 +27,7 @@ ENV NEXT_PUBLIC_BUILD_BRANCH=${GIT_BRANCH}
 ENV NEXT_PUBLIC_BUILD_TIME=${BUILD_TIME}
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 4) Next Build (erzeugt .next/standalone)
+# 4) Next Build -> erzeugt .next/standalone
 RUN npx next build
 
 # ---------- runtime stage (standalone) ----------
