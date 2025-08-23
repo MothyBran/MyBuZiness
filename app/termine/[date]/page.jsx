@@ -2,34 +2,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Modal from "@/app/components/Modal";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
-/* --- Date/Time Utils --- */
+/* ====== Datum-Utils ====== */
 function toDate(input){
   if (input instanceof Date) return input;
-  if (typeof input==="string"){
-    if (/^\d{4}-\d{2}-\d{2}$/.test(input)){
-      const [y,m,d]=input.split("-").map(Number);
-      return new Date(y, m-1, d, 12,0,0,0);
-    }
-    // ISO
-    const d=new Date(input);
-    if (!Number.isNaN(d)) return d;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [y,m,d] = input.split("-").map(Number);
+    return new Date(y, m-1, d, 12, 0, 0, 0);
   }
-  const d=new Date();
-  return d;
+  const d = new Date(input || Date.now());
+  return isNaN(d) ? new Date() : d;
 }
-function toYMD(d){
-  const z = toDate(d);
-  z.setHours(12,0,0,0);
-  return z.toISOString().slice(0,10);
+function toYMD(d){ const z = toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
+function formatDateDE(input){
+  const d = toDate(input);
+  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
 }
-function addDays(d, n){ const x=new Date(toDate(d)); x.setDate(x.getDate()+n); return x; }
-function formatDateDE(input){ const d=toDate(input); return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; }
+function addDays(d, n){ const x = toDate(d); x.setDate(x.getDate() + n); return x; }
 
-/* --- Anzeige/Status --- */
+/* ====== Anzeige-Status ====== */
 function computeDisplayStatus(e){
   const now = new Date();
   const start = toDate(`${e.date}T${(e.startAt||"00:00")}:00`);
@@ -41,333 +35,201 @@ function computeDisplayStatus(e){
   return "offen";
 }
 
-/* --- Geometrie: 60px pro Stunde => 1px pro Minute --- */
-const HOUR_PX = 60;
-const MINUTE_PX = HOUR_PX / 60; // = 1
+/* ====== Positions-/Layout-Utils ====== */
+const HOUR_PX = 60; // Höhe einer Stunde (px) – sauber lesbar, ohne internes Scroll-Raster
 
-/* Position und Höhe der Events berechnen (minutengenau) */
-function getTopPx(hhmm){
+function minutesOf(hhmm){
   if (!hhmm) return 0;
-  const [h,m] = hhmm.split(":").map(Number);
-  const total = (h*60 + (m||0));
-  return Math.max(0, Math.min(24*60, total)) * MINUTE_PX;
+  const [h,m] = hhmm.split(":").map(x=>parseInt(x,10));
+  return (h*60 + (m||0)) | 0;
 }
-function getHeightPx(start, end){
-  const s = getTopPx(start);
-  const e = end ? getTopPx(end) : s + (60 * MINUTE_PX); // default 60min, falls kein Ende
-  return Math.max(18, Math.max(0, e - s)); // min. sichtbare Höhe
-}
-
-/* Klick auf Raster: nächste/gleiche Viertelstunde zurückgeben */
-function toQuarter(hhmm){
-  const [h,m]=hhmm.split(":").map(Number);
-  const q = Math.floor((m||0)/15)*15;
-  return `${String(h).padStart(2,"0")}:${String(q).padStart(2,"0")}`;
-}
-/* Von Y‑Offset (px) in Zeit (HH:MM) zurück (für Click im großen Block, optional) */
-function offsetToHHMM(offsetPx){
-  const minutes = Math.max(0, Math.min(24*60, Math.round(offsetPx / MINUTE_PX)));
-  const h = Math.floor(minutes/60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+function eventBoxMetrics(ev){
+  const startMin = minutesOf(ev.startAt || "00:00");
+  const endMin   = Math.max(startMin + 30, minutesOf(ev.endAt || ev.startAt || "00:00")); // mindestens 30 Min
+  const top  = (startMin / 60) * HOUR_PX;
+  const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_PX);
+  return { top, height };
 }
 
+/* ====== Page ====== */
 export default function DayPage({ params }){
-  const dateParam = params?.date; // YYYY-MM-DD
-  const date = toYMD(dateParam || new Date());
-
-  const [items,setItems] = useState([]);
-  const [loading,setLoading] = useState(true);
+  const ymd = decodeURIComponent(params.date);
+  const [date, setDate] = useState(ymd);
+  const [items, setItems] = useState([]);
+  const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
 
-  const [openForm,setOpenForm] = useState(false);
-  const [formInitial,setFormInitial] = useState(null);
-
-  // (Optional) Kundenliste laden – falls deine API existiert, ansonsten leer.
+  const [openForm, setOpenForm] = useState(false);
   const [customers, setCustomers] = useState([]);
+  const [draftInitial, setDraftInitial] = useState(null); // { date, startAt, kind? }
+
+  // Load items for day
   useEffect(()=>{
     let alive = true;
-    (async ()=>{
+    (async()=>{
+      setLoading(true); setError("");
       try{
-        const r = await fetch("/api/customers", { cache:"no-store" });
-        if (!r.ok) throw new Error();
+        const r = await fetch(`/api/appointments?date=${date}`, { cache:"no-store" });
+        if (!r.ok) throw new Error(await r.text());
         const js = await r.json();
-        if (alive) setCustomers(Array.isArray(js?.data)?js.data:[]);
-      }catch(_){
-        if (alive) setCustomers([]);
+        if (alive) setItems(Array.isArray(js)?js:[]);
+      }catch(err){
+        console.error(err);
+        if (alive){ setItems([]); setError("Konnte Einträge nicht laden."); }
+      }finally{
+        if (alive) setLoading(false);
       }
     })();
     return ()=>{ alive = false; };
-  },[]);
-
-  /* Termine für den Tag laden */
-  const reload = useCallback(()=>{
-    let alive = true;
-    setLoading(true); setError("");
-    fetch(`/api/appointments?date=${date}`, { cache:"no-store" })
-      .then(async r => { if(!r.ok) throw new Error(await r.text()); return r.json(); })
-      .then(js => { if(alive) setItems(Array.isArray(js)?js:[]); })
-      .catch(err => { console.error(err); if(alive){ setItems([]); setError("Konnte Einträge nicht laden."); } })
-      .finally(()=> alive && setLoading(false));
-    return ()=>{ alive=false; };
   },[date]);
 
-  useEffect(()=>reload(),[reload]);
+  // Load customers (optional – für Auswahl im Formular)
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const r = await fetch("/api/customers", { cache:"no-store" });
+        const js = await r.json().catch(()=>({ data: [] }));
+        setCustomers(js.data || []);
+      }catch{ setCustomers([]); }
+    })();
+  },[]);
 
+  // Sortierte Darstellung
   const prepared = useMemo(()=>{
-    return (items||[]).map(ev => ({
-      ...ev,
-      _displayStatus: computeDisplayStatus(ev),
-      _top: getTopPx(ev.startAt?.slice(0,5) || "00:00"),
-      _height: getHeightPx(ev.startAt?.slice(0,5) || "00:00", ev.endAt?.slice(0,5) || null),
-    }));
+    return (items||[])
+      .map(e => ({ ...e, _statusLabel: computeDisplayStatus(e) }))
+      .sort((a,b)=> (a.startAt||"").localeCompare(b.startAt||""));
   },[items]);
 
-  /* Neuer Eintrag – vorbefüllen */
-  function openNewAt(startHHMM){
-    const s = toQuarter(startHHMM || "09:00");
-    const [h,m]=s.split(":").map(Number);
-    const endH = Math.min(23, h + 1);
-    const init = {
-      date,
-      startAt: s,
-      endAt: `${String(endH).padStart(2,"0")}:${String(m).padStart(2,"0")}`,
-      kind: "appointment",
-      status: "open",
-      title: "",
-    };
-    setFormInitial(init);
+  // Navigations-Buttons
+  function go(n){
+    setDate(toYMD(addDays(date, n)));
+  }
+
+  // Klick auf Stunden-Container -> "Neuer Eintrag" mit vorgefüllter Startzeit
+  function clickHour(hour){
+    const hh = String(hour).padStart(2,"0");
+    setDraftInitial({ date, startAt: `${hh}:00`, kind: "appointment" });
     setOpenForm(true);
   }
 
-  /* Klick auf Stundenzeile – exakt diese Stunde setzen */
-  function handleHourClick(hour){
-    const start = `${String(hour).padStart(2,"0")}:00`;
-    openNewAt(start);
-  }
-
-  /* Klick in den großen Block (zwischen den Stundenlinien) – errechne Zeit aus Mausposition */
-  const dayBlockRef = useRef(null);
-  function onBlockClick(e){
-    if (!dayBlockRef.current) return;
-    const rect = dayBlockRef.current.getBoundingClientRect();
-    const y = e.clientY - rect.top + dayBlockRef.current.scrollTop; // auch bei Scroll
-    const hhmm = offsetToHHMM(y);
-    openNewAt(hhmm);
-  }
-
-  /* Nach Speichern neu laden und Modal schließen */
-  function handleSaved(){
+  // Nach Speichern: Liste neu laden & Modal schließen
+  async function handleSaved(){
     setOpenForm(false);
-    setFormInitial(null);
-    reload();
+    const r = await fetch(`/api/appointments?date=${date}`, { cache:"no-store" });
+    const js = await r.json().catch(()=>[]);
+    setItems(Array.isArray(js)?js:[]);
   }
-
-  const d = toDate(date);
-  const prev = toYMD(addDays(d,-1));
-  const next = toYMD(addDays(d, 1));
-  const today = toYMD(new Date());
 
   return (
-    <div className="container" style={{ gap: 16 }}>
-      {/* Kopfzeile */}
-      <div className="surface" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+    <div className="container" style={{ gap: 14 }}>
+      {/* Kopf mit Navigation */}
+      <div className="surface" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <Link href="/termine" className="btn-ghost">← Zur Monatsansicht</Link>
+          <Link href="/termine" className="btn-ghost">← Zurück zur Monatsansicht</Link>
           <h2 className="page-title" style={{ margin: 0 }}>
-            {formatDateDE(date)} – Tagesansicht
+            Tagesansicht – {formatDateDE(date)}
           </h2>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <Link href={`/termine/${prev}`} className="btn-ghost">◀︎</Link>
-          <Link href={`/termine/${today}`} className="btn">Heute</Link>
-          <Link href={`/termine/${next}`} className="btn-ghost">▶︎</Link>
-          <button className="btn" onClick={()=>openNewAt("09:00")}>+ Neuer Eintrag</button>
+          <button className="btn-ghost" onClick={()=>go(-1)}>◀︎</button>
+          <button className="btn" onClick={()=>setDate(toYMD(new Date()))}>Heute</button>
+          <button className="btn-ghost" onClick={()=>go(+1)}>▶︎</button>
         </div>
       </div>
 
-      {/* Tagesraster + Events */}
+      {/* Tagesraster (ohne internes Scrollen; Seite selbst kann lang sein) */}
       <div className="surface" style={{ padding: 0 }}>
-        <div
-          style={{
-            display:"grid",
-            gridTemplateColumns:"80px 1fr",
-            alignItems:"stretch",
-            minHeight: 360
-          }}
-        >
-          {/* Stunden-Spalte */}
-          <div style={{ borderRight:"1px solid var(--color-border)", background:"#fff" }}>
-            {Array.from({length:24},(_,h)=>(
-              <div
-                key={h}
-                className="hour-label"
-                style={{
-                  height: HOUR_PX,
-                  borderBottom: "1px solid rgba(0,0,0,.05)",
-                  position:"relative",
-                  display:"flex",
-                  alignItems:"flex-start",
-                  justifyContent:"flex-end",
-                  paddingRight: 8,
-                  fontSize:12,
-                  color:"var(--color-muted)",
-                  cursor:"pointer",
-                  userSelect:"none"
-                }}
-                title={`Neuen Eintrag um ${String(h).padStart(2,"0")}:00 anlegen`}
-                onClick={()=>handleHourClick(h)}
-              >
-                <span style={{ position:"sticky", top:6 }}>{String(h).padStart(2,"0")}:00</span>
+        <div className="day-wrap">
+          {/* Stunden-Spalte (links) */}
+          <div className="day-rail">
+            {Array.from({length:24}, (_,h)=>(
+              <div key={h} className="day-hour">
+                {String(h).padStart(2,"0")}:00
               </div>
             ))}
           </div>
 
-          {/* Block-Spalte mit absolut positionierten Events */}
-          <div
-            ref={dayBlockRef}
-            className="day-col"
-            style={{
-              position:"relative",
-              background:"#fff",
-              overflow: "auto",
-              maxHeight: "70vh",
-              cursor:"crosshair"
-            }}
-            onClick={onBlockClick}
-          >
-            {/* Hintergrund-Raster: Stundenlinien + 15-Minuten Hilfslinien */}
-            <div
-              aria-hidden
-              style={{ position:"absolute", inset:0, pointerEvents:"none" }}
-            >
-              {Array.from({length:24},(_,h)=>(
-                <div key={`h-${h}`} style={{
-                  position:"absolute",
-                  left:0, right:0,
-                  top: h*HOUR_PX,
-                  height: HOUR_PX,
-                  borderBottom:"1px solid rgba(0,0,0,.06)"
-                }}>
-                  {/* Viertelstunden */}
-                  {([15,30,45]).map((m)=>(
-                    <div key={m}
-                      style={{
-                        position:"absolute",
-                        left:0, right:0,
-                        top: Math.round((h*60+m)*MINUTE_PX),
-                        borderTop: "1px dashed rgba(0,0,0,.05)"
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-              {/* ganzer Tag Höhe */}
-              <div style={{ position:"absolute", top:0, left:0, right:0, height: 24*HOUR_PX }} />
-            </div>
+          {/* Timeline (rechts) */}
+          <div className="day-timeline">
+            {/* Grid-Linien pro Stunde + Klickflächen je Stunde */}
+            {Array.from({length:24}, (_,h)=>(
+              <div key={h} className="day-slot" style={{ top: h * HOUR_PX }}>
+                <div className="day-line" />
+                <button
+                  type="button"
+                  className="day-hour-click"
+                  aria-label={`Neuer Eintrag um ${String(h).padStart(2,"0")}:00`}
+                  onClick={()=>clickHour(h)}
+                  title="Klick: + Neuer Eintrag mit voller Stunde"
+                />
+                <div className="day-label">{String(h).padStart(2,"0")}:00</div>
+              </div>
+            ))}
 
-            {/* Events-Layer (klickbar) */}
-            <div style={{ position:"relative", minHeight: 24*HOUR_PX }}>
-              {prepared.map(ev=>{
-                const isOrder = ev.kind === "order";
-                const label = `${ev.startAt?.slice(0,5) || ""}${ev.endAt ? " – " + ev.endAt.slice(0,5) : ""}`;
-                return (
-                  <Link
-                    href={`/termine/eintrag/${ev.id}`}
-                    key={ev.id}
-                    className="day-event"
-                    style={{
-                      position:"absolute",
-                      left: 8,
-                      right: 8,
-                      top: Math.round(ev._top),
-                      height: Math.round(ev._height),
-                      background: isOrder ? "#FEF3C7" : "#DBEAFE",
-                      border: "1px solid var(--color-border)",
-                      borderLeft: `4px solid ${isOrder ? "#F59E0B" : "#3B82F6"}`,
-                      borderRadius: 10,
-                      padding: "6px 10px",
-                      boxShadow: "var(--shadow-sm)",
-                      color: "inherit",
-                      textDecoration:"none",
-                      display:"grid",
-                      gridTemplateColumns: "1fr auto",
-                      alignItems:"start",
-                      gap: 6
-                    }}
-                    title={`${label} • ${ev.title || ""}`}
-                  >
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:14, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                        {ev.title || "(ohne Titel)"}
-                      </div>
-                      <div style={{ fontSize:12, opacity:.85 }}>
-                        {label}{ev.customerName ? ` · ${ev.customerName}` : ""}
-                      </div>
-                    </div>
-                    <span
-                      className={`status-badge ${ev._displayStatus}`}
-                      style={{ pointerEvents:"none", alignSelf:"start", textTransform:"lowercase" }}
-                    >
-                      {ev._displayStatus}
-                    </span>
-                  </Link>
-                );
-              })}
-              {/* Hinweis bei leerem Tag */}
-              {!loading && !error && prepared.length===0 && (
-                <div
-                  style={{
-                    position:"absolute", top: 12, left: 12, right: 12,
-                    padding: 12, border:"1px dashed rgba(0,0,0,.15)", borderRadius: 12, background:"#fafafa"
-                  }}
-                >
-                  Keine Einträge – klicke ins Raster oder nutze „+ Neuer Eintrag“.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabelle: Alle Einträge am ... */}
-      <div className="surface">
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 8 }}>
-          <h3 className="section-title" style={{ margin:0 }}>Alle Einträge am {formatDateDE(date)}</h3>
-        </div>
-
-        {loading && <div className="subtle">Lade…</div>}
-        {!loading && error && <div style={{ color:"#b91c1c" }}>{error}</div>}
-        {!loading && !error && (
-          <div className="list">
+            {/* Einträge (absolut positioniert; exakt auf Minuten-Höhe) */}
             {prepared.map(ev=>{
-              const isOrder = ev.kind==="order";
-              const label = `${ev.startAt?.slice(0,5)||""}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""}`;
+              const { top, height } = eventBoxMetrics(ev);
               return (
                 <Link
                   key={ev.id}
                   href={`/termine/eintrag/${ev.id}`}
-                  className="list-item"
-                  style={{ textDecoration:"none", color:"inherit", cursor:"pointer" }}
+                  className={`event-box ${ev.kind==='order'?'is-order':'is-appointment'}`}
+                  style={{ top, height }}
+                  title={`${ev.title || "(ohne Titel)"} • ${ev.startAt?.slice(0,5)}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""}`}
                 >
-                  <div className={`item-icon ${isOrder ? "accent":"info"}`}>{isOrder ? "🧾":"📅"}</div>
-                  <div style={{ minWidth:0 }}>
-                    <div className="item-title">{ev.title || "(ohne Titel)"}</div>
-                    <div className="item-meta">
-                      {label}{ev.customerName ? ` · ${ev.customerName}` : ""}
-                    </div>
-                  </div>
-                  <div className="item-actions">
-                    <span className={`status-badge ${ev._displayStatus}`}>{ev._displayStatus}</span>
+                  <div className="event-title ellipsis">{ev.title || "(ohne Titel)"}</div>
+                  <div className="event-meta">
+                    {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                    {ev.customerName && <> · {ev.customerName}</>}
+                    {" · "}
+                    <span className={`status-pill ${ev._statusLabel}`}>{ev._statusLabel}</span>
                   </div>
                 </Link>
               );
             })}
-            {prepared.length===0 && !loading && !error && (
-              <div className="surface" style={{ borderStyle:"dashed", textAlign:"center" }}>
-                Keine Einträge.
-              </div>
-            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabelle „Alle Einträge am …“ */}
+      <div className="surface">
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 10 }}>
+          <h3 className="section-title" style={{ margin: 0 }}>Alle Einträge am {formatDateDE(date)}</h3>
+          <button className="btn" onClick={() => { setDraftInitial({ date, startAt: "09:00", kind:"appointment" }); setOpenForm(true); }}>
+            + Neuer Eintrag
+          </button>
+        </div>
+
+        {loading && <div className="subtle">Lade…</div>}
+        {!loading && error && <div style={{ color:"#b91c1c" }}>{error}</div>}
+        {!loading && !error && prepared.length === 0 && (
+          <div className="surface" style={{ borderStyle:"dashed", textAlign:"center" }}>
+            Keine Einträge an diesem Tag.
+          </div>
+        )}
+
+        {!loading && !error && prepared.length > 0 && (
+          <div className="appt-list">
+            {prepared.map(ev=>(
+              <Link key={ev.id} href={`/termine/eintrag/${ev.id}`} className="appt-item" style={{ textDecoration:"none", color:"inherit" }}>
+                <div className={`appt-icon ${ev.kind==='order'?'appt-icon--order':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
+                  {ev.kind==='order' ? "🧾" : "📅"}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="appt-title">{ev.title || "(ohne Titel)"}</div>
+                  <div className="appt-meta">
+                    {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                    {ev.customerName && <> · {ev.customerName}</>}
+                  </div>
+                </div>
+                <div className="appt-actions">
+                  <span className={`appt-badge readonly ${computeDisplayStatus(ev)==="abgesagt"?"is-abgesagt":computeDisplayStatus(ev)==="abgeschlossen"?"is-abgeschlossen":"is-offen"}`}>
+                    {computeDisplayStatus(ev)}
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
@@ -376,11 +238,11 @@ export default function DayPage({ params }){
       <Modal
         open={openForm}
         onClose={()=>setOpenForm(false)}
-        title={formInitial?.id ? "Eintrag bearbeiten" : "Neuer Eintrag"}
+        title={draftInitial?.id ? "Eintrag bearbeiten" : "+ Neuer Eintrag"}
         maxWidth={720}
       >
         <AppointmentForm
-          initial={formInitial}
+          initial={draftInitial}
           customers={customers}
           onSaved={handleSaved}
           onCancel={()=>setOpenForm(false)}
@@ -389,15 +251,97 @@ export default function DayPage({ params }){
 
       {/* Styles (nur für diese Seite) */}
       <style jsx>{`
-        .hour-label:hover{
-          background: #f9fafb;
+        .day-wrap{
+          display: grid;
+          grid-template-columns: 80px 1fr;
+          align-items: start;
+          gap: 0;
+          position: relative;
         }
-        .day-event:hover{
-          filter: brightness(0.98);
+        .day-rail{
+          border-right: 1px solid rgba(0,0,0,.08);
+          background: #fff;
         }
-        @media (max-width: 640px){
-          .day-col{ max-height: 60vh; }
+        .day-hour{
+          height: ${HOUR_PX}px;
+          display:flex; align-items:flex-start; justify-content:flex-end;
+          padding: 4px 8px 0 0;
+          font-size: 12px; color: var(--color-muted);
         }
+
+        .day-timeline{
+          position: relative;
+          height: ${HOUR_PX * 24}px;
+          background: #fff;
+        }
+        .day-slot{
+          position: absolute;
+          left: 0; right: 0;
+          height: ${HOUR_PX}px;
+        }
+        .day-line{
+          position: absolute; left: 0; right: 0; top: 0;
+          border-top: 1px solid rgba(0,0,0,.08);
+        }
+        .day-label{
+          position: absolute; left: 6px; top: -8px;
+          font-size: 11px; color: #94a3b8; background: #fff; padding: 0 4px;
+        }
+        .day-hour-click{
+          position:absolute; inset:0; opacity:0; cursor:pointer;
+        }
+
+        .event-box{
+          position: absolute; left: 10px; right: 10px;
+          background: #DBEAFE;
+          border: 1px solid #BFDBFE;
+          border-left-width: 4px;
+          border-radius: 10px;
+          padding: 8px 10px;
+          box-shadow: 0 1px 2px rgba(0,0,0,.06);
+          text-decoration: none;
+          color: inherit;
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .event-box.is-order{
+          background: #FEF3C7;  /* amber-100 */
+          border-color: #FDE68A; /* amber-300 */
+        }
+        .event-title{ font-weight: 700; font-size: 14px; }
+        .event-meta{ font-size: 12px; opacity: .85; }
+        .status-pill{
+          display:inline-block; border:1px solid rgba(0,0,0,.1); border-radius:999px; padding:1px 8px; margin-left: 4px;
+          text-transform: lowercase;
+        }
+        .status-pill.offen{ background:#EFF6FF; border-color:#BFDBFE; }
+        .status-pill.abgesagt{ background:#FEF2F2; border-color:#FECACA; }
+        .status-pill.abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
+
+        /* Liste unten (kompakt, klickbarer Container) */
+        .appt-list{ display:grid; gap:10px; }
+        .appt-item{
+          display:grid; grid-template-columns: 40px 1fr auto; gap:12px;
+          align-items:center; padding:12px; background:#fff; border:1px solid var(--color-border);
+          border-radius: var(--radius); box-shadow: var(--shadow-sm);
+        }
+        .appt-icon{
+          width:32px; height:32px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+          box-shadow: var(--shadow-sm); background:#DBEAFE; font-size:16px;
+        }
+        .appt-icon.appt-icon--order{ background:#FDE68A; }
+        .appt-title{ font-weight:700; font-size:15px; }
+        .appt-meta{ font-size:13px; color:#374151; opacity:.85; }
+        .appt-actions{ display:flex; align-items:center; gap:8px; }
+        .appt-badge.readonly{
+          display:inline-flex; align-items:center; gap:6px; padding: 4px 10px; border-radius:999px; font-size:12px;
+          border:1px solid var(--color-border); background:#fff; text-transform: lowercase;
+          cursor: default;
+        }
+        .appt-badge.readonly.is-offen{ background:#EFF6FF; border-color:#BFDBFE; }
+        .appt-badge.readonly.is-abgesagt{ background:#FEF2F2; border-color:#FECACA; }
+        .appt-badge.readonly.is-abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
+
+        .ellipsis{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       `}</style>
     </div>
   );
