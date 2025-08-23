@@ -1,8 +1,9 @@
-import { initDb, q, uuid } from "@/lib/db";
-import { renderNumber } from "@/lib/numbering";
+// /app/api/orders/route.js
+import { ensureSchemaOnce, q, uuid } from "@/lib/db";
+import { nextNumber } from "@/lib/numbering";
 
 export async function GET(request) {
-  await initDb();
+  await ensureSchemaOnce();
   const { searchParams } = new URL(request.url);
   const qs = (searchParams.get("q") || "").trim().toLowerCase();
   const no = (searchParams.get("no") || "").trim();
@@ -16,26 +17,31 @@ export async function GET(request) {
     `SELECT q.*, c."name" AS "customerName"
        FROM "Order" q JOIN "Customer" c ON c."id" = q."customerId"
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY q."issueDate" DESC, q."createdAt" DESC`
-    , params
+      ORDER BY q."orderDate" DESC NULLS LAST, q."createdAt" DESC NULLS LAST`,
+    params
   )).rows;
 
   return Response.json({ ok: true, data: rows }, { headers: { "cache-control": "no-store" }});
 }
 
 export async function POST(request) {
-  await initDb();
+  await ensureSchemaOnce();
   const b = await request.json().catch(()=>({}));
   const items = Array.isArray(b.items) ? b.items : [];
   if (!b.customerId) return Response.json({ ok:false, error:"customerId fehlt" }, { status:400 });
   if (!items.length) return Response.json({ ok:false, error:"Mindestens eine Position" }, { status:400 });
 
-  // Settings für Nummernformat & Steuer
+  // Settings
   const s = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
-  const format = s.orderNumberFormat || "{YYYY}-Q{SEQ4}"; // optional: eigene Spalte
-  // einfache Sequenz
-  const seq = (await q(`SELECT COALESCE(MAX(NULLIF(regexp_replace("orderNo",'\\D','','g'), '')::bigint),0)+1 AS seq FROM "Order"`)).rows[0].seq;
-  const orderNo = b.orderNo?.trim() || renderNumber(format, seq);
+  const currency = b.currency || s.currency || s.currencyDefault || "EUR";
+
+  // Nummer
+  let orderNo = (b.orderNo || "").trim();
+  if (!orderNo) {
+    const fmt = s.orderNumberFormat || "ORD-{yyyy}-{0000}";
+    const { no } = await nextNumber("order", fmt, { period: "yyyy" });
+    orderNo = no;
+  }
 
   const id = uuid();
   let net = 0;
@@ -52,10 +58,11 @@ export async function POST(request) {
   const tax = Math.round(net * (taxRate/100));
   const gross = net + tax;
 
-  await q(`INSERT INTO "Order"("id","orderNo","customerId","issueDate","validUntil","currency","netCents","taxCents","grossCents","status","createdAt","updatedAt")
-           VALUES ($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,$7,$8,$9,'open',now(),now())`,
-    [id, orderNo, b.customerId, b.issueDate || null, b.validUntil || null, b.currency || s.currency || "EUR", net, tax, gross]
+  await q(`INSERT INTO "Order"("id","orderNo","customerId","orderDate","currency","netCents","taxCents","grossCents","status","createdAt","updatedAt")
+           VALUES ($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,$7,$8,'open',now(),now())`,
+    [id, orderNo, b.customerId, b.orderDate || null, currency, net, tax, gross]
   );
+
   for (const it of prepared) {
     await q(`INSERT INTO "OrderItem"("id","orderId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
              VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
