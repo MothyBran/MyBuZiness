@@ -84,9 +84,9 @@ export default function ProductsPage() {
           <table className="table">
             <thead>
               <tr>
+                <th>Kategorie</th>
                 <th>Name</th>
                 <th>Art</th>
-                <th>Kategorie</th>
                 <th style={{ whiteSpace:"nowrap" }}>Preis/Regel</th>
               </tr>
             </thead>
