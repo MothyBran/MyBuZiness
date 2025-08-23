@@ -2,53 +2,61 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# 1) System deps (optional, je nach Projekt)
+# System-Deps (optional, stabil auf Alpine)
 RUN apk add --no-cache libc6-compat
 
-# 2) Nur package-Dateien kopieren, damit npm ci gecached werden kann
+# 1) Nur package-Dateien, damit der Install-Step sauber gecached wird
 COPY package*.json ./
 
-# Für reproduzierbare Builds
+# Für reproduzierbare Builds (wenn Lockfile vorhanden)
 ENV NODE_ENV=production
-RUN npm ci
+# Auto-Fallback: npm ci falls package-lock.json existiert, sonst npm install
+RUN if [ -f package-lock.json ]; then \
+      echo "Using npm ci (lockfile found)"; npm ci; \
+    else \
+      echo "Using npm install (no lockfile)"; npm install; \
+    fi
 
-# 3) Restlichen Code kopieren
-# WICHTIG: .dockerignore nutzen, damit keine alten .next/node_modules aus deinem Repo reinkommen
+# 2) Restlichen Code kopieren (durch .dockerignore geschützt)
 COPY . .
 
-# 4) Commit/Build-Infos reinreichen (zur Anzeige im UI)
-# Railway setzt bei Git-Builds i. d. R. diese Vars; falls nicht vorhanden, bleiben sie leer.
+# 3) Build-Metadaten (optional, schön für Health-Check / Footer)
 ARG GIT_SHA
 ARG GIT_BRANCH
 ARG BUILD_TIME
-
-# Diese ENV sind zur Laufzeit im Next-Frontend verfügbar:
 ENV NEXT_PUBLIC_BUILD_SHA=${GIT_SHA}
 ENV NEXT_PUBLIC_BUILD_BRANCH=${GIT_BRANCH}
 ENV NEXT_PUBLIC_BUILD_TIME=${BUILD_TIME}
 
-# 5) Next.js Build
+# 4) Next.js Build
+# Falls du envs fürs Build brauchst, hier als ENV/ARG setzen.
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ---------- runtime stage ----------
 FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
 
-# Nur notwendige Dateien rüberkopieren
+# Nur benötigte Files übernehmen
 COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev
 
+# Prod-Install mit Auto-Fallback (omit dev)
+RUN if [ -f package-lock.json ]; then \
+      echo "Using npm ci --omit=dev"; npm ci --omit=dev; \
+    else \
+      echo "Using npm install --omit=dev"; npm install --omit=dev; \
+    fi
+
+# Next Output + Public Assets
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 
-# (Optional) Falls du serverseitige Routen (app/api) brauchst:
+# (Optional) Wenn du serverseitige Routen in /app (Next App Router) brauchst:
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/next.config.js ./next.config.js
 
-# Port von Railway
-ENV PORT=3000
 EXPOSE 3000
-
-# Start (Next.js standalone wäre noch schlanker, falls aktiviert)
 CMD ["npx", "next", "start", "-p", "3000"]
