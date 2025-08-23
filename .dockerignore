@@ -1,0 +1,21 @@
+# Node
+node_modules
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml
+
+# Next build outputs (niemals aus dem lokalen Rechner ins Image kopieren!)
+.next
+out
+
+# Sonstiges
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+.env
+.env.local
+.env.production
+.env.development
+*.swp
+*.swo
