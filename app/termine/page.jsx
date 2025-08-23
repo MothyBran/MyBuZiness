@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Modal from "@/app/components/Modal";
+import AppointmentForm from "@/app/components/AppointmentForm";
 
 /* Date Utils */
 function toDate(input){
@@ -27,17 +29,14 @@ const TODAY_YMD = toYMD(new Date());
 /* Status */
 function computeDisplayStatus(e){
   const now = new Date();
-  const start = toDate(`${e.date}T${(e.startAt||"00:00")}:00`);
-  const end   = toDate(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
+  const end = toDate(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
   const isPast = end < now;
   if (e.status === "cancelled") return "abgesagt";
   if (e.status === "done") return "abgeschlossen";
   if (e.status === "open" && isPast) return "abgeschlossen";
   return "offen";
 }
-function nextStatus(display){
-  return display==="offen" ? "abgesagt" : display==="abgesagt" ? "abgeschlossen" : "offen";
-}
+function nextStatus(display){ return display==="offen" ? "abgesagt" : display==="abgesagt" ? "abgeschlossen" : "offen"; }
 
 export default function TerminePage(){
   const [cursor,setCursor]=useState(()=>startOfMonth(new Date()));
@@ -45,6 +44,16 @@ export default function TerminePage(){
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const monthString = useMemo(()=>ym(cursor),[cursor]);
+
+  // Neuer Eintrag (Modal)
+  const [openNew,setOpenNew] = useState(false);
+  const [customers,setCustomers] = useState([]);
+
+  const loadCustomers = useCallback(async ()=>{
+    const js = await fetch("/api/customers", { cache:"no-store" })
+      .then(r=>r.json()).catch(()=>({data:[]}));
+    setCustomers(Array.isArray(js?.data)?js.data:[]);
+  },[]);
 
   useEffect(()=>{
     let alive = true;
@@ -91,17 +100,16 @@ export default function TerminePage(){
             Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
           </h2>
           <div style={{display:"flex",gap:8}}>
+            <button className="btn" onClick={async ()=>{ await loadCustomers(); setOpenNew(true); }}>+ Neuer Eintrag</button>
             <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,-1))}>◀︎</button>
-            <button className="btn" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
+            <button className="btn-ghost" onClick={()=>setCursor(startOfMonth(new Date()))}>Heute</button>
             <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,1))}>▶︎</button>
           </div>
         </div>
 
         {/* Kopfzeile (Wochentage) */}
         <div className="cal-grid" style={{marginBottom:6}}>
-          {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=>(
-            <div key={h} className="cal-head">{h}</div>
-          ))}
+          {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=><div key={h} className="cal-head">{h}</div>)}
         </div>
 
         {/* Monatstage */}
@@ -112,21 +120,13 @@ export default function TerminePage(){
             const list = byDate[key]||[];
             const isToday = key===TODAY_YMD;
             return (
-              <Link
-                key={i}
-                href={`/termine/${key}`}
-                className={`cal-cell ${inMonth? "": "muted"} ${isToday? "today": ""}`}
-              >
+              <Link key={i} href={`/termine/${key}`} className={`cal-cell ${inMonth? "": "muted"} ${isToday? "today": ""}`}>
                 <div className="cal-daynum-wrap">
                   <span className="cal-daynum">{d.getDate()}</span>
                 </div>
                 <div className="cal-markers">
                   {list.slice(0,4).map(x=>(
-                    <span
-                      key={x.id}
-                      className={`cal-dot ${x.kind==='order' ? 'cal-dot-accent' : ''}`}
-                      title={x.kind==='order' ? 'Auftrag' : 'Termin'}
-                    />
+                    <span key={x.id} className={`cal-dot ${x.kind==='order' ? 'cal-dot-accent' : 'cal-dot-info'}`} title={x.kind==='order' ? 'Auftrag' : 'Termin'} />
                   ))}
                   {list.length>4 && (
                     <span className="cal-dot-more" title={`+${list.length-4} weitere`}>+{list.length-4}</span>
@@ -140,10 +140,8 @@ export default function TerminePage(){
         {loading && <p className="subtle" style={{marginTop:8}}>Lade Termine…</p>}
         {error && !loading && <p style={{color:"#b91c1c", marginTop:8}}>{error}</p>}
 
-        {/* Heute rot einkreisen (überschreibt Standardfarbe aus globals.css) */}
-        <style jsx>{`
-          .cal-cell.today .cal-daynum { outline: 2px solid #dc2626; }
-        `}</style>
+        {/* Heute rot einkreisen */}
+        <style jsx>{`.cal-cell.today .cal-daynum { outline: 2px solid #dc2626; }`}</style>
       </div>
     );
   }
@@ -180,13 +178,7 @@ export default function TerminePage(){
                 </div>
                 <div className="item-actions">
                   <span className={`status-badge ${displayStatus}`}>{displayStatus}</span>
-                  <button
-                    className="btn-xxs"
-                    onClick={()=>cycleStatus(ev)}
-                    title="Status ändern"
-                  >
-                    Status
-                  </button>
+                  <button className="btn-xxs" onClick={()=>cycleStatus(ev)} title="Status ändern">Status</button>
                 </div>
               </div>
             );
@@ -196,10 +188,32 @@ export default function TerminePage(){
     );
   }
 
+  async function onSavedReload(){
+    // Neu laden und Modal schließen
+    setOpenNew(false);
+    setLoading(true);
+    const data = await fetch(`/api/appointments?month=${monthString}`, { cache:"no-store" })
+      .then(r=>r.json()).catch(()=>[]);
+    setEvents(Array.isArray(data)?data:[]);
+    setLoading(false);
+  }
+
   return (
-    <div className="container">
-      <MonthCalendar />
-      <MonthList />
-    </div>
+    <>
+      <div className="container">
+        <MonthCalendar />
+        <MonthList />
+      </div>
+
+      {/* "+ Neuer Eintrag" Modal */}
+      <Modal open={openNew} onClose={()=>setOpenNew(false)} title="+ Neuer Eintrag">
+        <AppointmentForm
+          initial={null}
+          customers={customers}
+          onSaved={onSavedReload}
+          onCancel={()=>setOpenNew(false)}
+        />
+      </Modal>
+    </>
   );
 }
