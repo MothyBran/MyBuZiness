@@ -1,45 +1,45 @@
+// app/layout.jsx
 import "./globals.css";
-import HeaderTop from "./components/HeaderTop";
-import InfoStripe from "./components/InfoStripe";
+import Nav from "./nav";
 
 export const metadata = {
-  title: "BuZiness",
+  title: "MyBuZiness",
   description: "Schnell erfassen, sicher verwalten.",
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
-  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
-      <body style={{ overflowX: "hidden" }}>
-        {/* Kopfzeile */}
-        <HeaderTop />
-        {/* Farbstreifen darunter */}
-        <InfoStripe position="top" showText={true} />
+      <body
+        style={{
+          margin: 0,
+          fontFamily:
+            "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto",
+          background: "#f7f7fb",
+          color: "#111827",
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", minHeight: "100vh" }}>
+          <aside
+            style={{
+              background: "#0f172a",
+              color: "#e5e7eb",
+              padding: "1rem",
+              position: "sticky",
+              top: 0,
+              height: "100vh",
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: "1.1rem", marginBottom: "1rem" }}>
+              MyBuZiness
+            </div>
+            <Nav />
+          </aside>
 
-        {/* Seiten-Container (max-width via .container) */}
-        <main className="container">
-          {children}
-        </main>
-
-        {/* Unterer Farbstreifen */}
-        <InfoStripe position="bottom" showText={false} />
-
-        {/* Footer */}
-        <footer
-          className="container"
-          style={{ paddingTop: 30, paddingBottom: 30, color: "var(--color-muted)", fontSize: 13 }}
-        >
-          <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 14 }}>
-            © {new Date().getFullYear()} BuZiness – Eine WebApp der XYZ GmbH. Alle Rechte vorbehalten.
-            <br />
-            Kleinunternehmerregelung gem. § 19 UStG: Es erfolgt kein Ausweis der Umsatzsteuer.
-          </div>
-        </footer>
+          <main style={{ padding: "1.25rem 1.5rem" }}>
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );
