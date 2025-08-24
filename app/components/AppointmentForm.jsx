@@ -3,19 +3,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-function pad2(n){ return String(n).padStart(2,"0"); }
-function parseHHMM(hhmm){
-  if(!hhmm) return 0;
-  const [h,m] = String(hhmm).split(":").map(v=>parseInt(v||"0",10));
-  return (h*60 + (m||0))|0;
-}
-function addMinutes(hhmm, minutes){
-  const t = parseHHMM(hhmm) + minutes;
-  const h = Math.max(0, Math.min(23, Math.floor(t/60)));
-  const m = Math.max(0, Math.min(59, t%60));
-  return `${pad2(h)}:${pad2(m)}`;
-}
-
 export default function AppointmentForm({ initial = null, customers = [], onSaved, onCancel }){
   const isEdit = !!initial?.id;
 
@@ -29,10 +16,8 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
     const t = new Date();
     return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
   });
-
-  const [startAt,setStartAt]=useState((initial?.startAt || "09:00").slice(0,5));
-  const [endAt,setEndAt]=useState(initial?.endAt ? initial.endAt.slice(0,5) : "");
-
+  const [startAt,setStartAt]=useState(initial?.startAt?.slice(0,5) || "09:00");
+  const [endAt,setEndAt]=useState(initial?.endAt?.slice(0,5) || "");
   const [customerId,setCustomerId]=useState(initial?.customerId || "");
   const [customerName,setCustomerName]=useState(initial?.customerName || "");
   const [status,setStatus]=useState(initial?.status || "open");
@@ -44,13 +29,13 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
     if (found) setCustomerName(found.name);
   },[customerId, customers]);
 
-  // Ende immer >= Start (Standard: +30 Min)
-  useEffect(()=>{
-    if (!endAt) return;
-    if (parseHHMM(endAt) < parseHHMM(startAt)) {
-      setEndAt(addMinutes(startAt, 30));
-    }
-  },[startAt]);
+  // 30-Minuten Raster (wie zuvor)
+  const hhmm = useMemo(()=>Array.from({length:48},(_,i)=>`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2? "30":"00"}`),[]);
+  // Ende erst ab Start+30min auswählbar, leere Option bleibt erlaubt
+  const endOptions = useMemo(()=>{
+    const s = minutesFromTime(startAt);
+    return ["", ...hhmm.filter(t => minutesFromTime(t) >= s + 30)];
+  },[hhmm, startAt]);
 
   async function submit(e){
     e.preventDefault();
@@ -82,82 +67,142 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
   }
 
   return (
-    <form onSubmit={submit} className="form">
-      <div className="grid-gap-16" style={{ display:"grid", gridTemplateColumns:"1fr", gap:16 }}>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <label className="field">
-            <span className="label">Art</span>
-            <select className="select" value={kind} onChange={e=>setKind(e.target.value)}>
-              <option value="appointment">Termin</option>
-              <option value="order">Auftrag</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">Datum</span>
-            <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} />
-          </label>
-        </div>
-
+    <form onSubmit={submit} className="form af-form">
+      {/* Oberes 2er-Grid: Art | Datum (gleich breit & schmaler) */}
+      <div className="af-grid-2">
         <label className="field">
-          <span className="label">Bezeichnung *</span>
-          <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
-        </label>
-
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-          <label className="field">
-            <span className="label">Start</span>
-            <input
-              className="input time-input"
-              type="time"
-              step={300}                 // 5-Minuten-Schritte
-              value={startAt}
-              onChange={(e)=>setStartAt(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span className="label">Ende (optional)</span>
-            <input
-              className="input time-input"
-              type="time"
-              step={300}
-              min={startAt || undefined} // erst ab Start auswählbar
-              value={endAt}
-              onChange={(e)=>setEndAt(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span className="label">Status</span>
-            <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="open">offen</option>
-              <option value="cancelled">abgesagt</option>
-              <option value="done">abgeschlossen</option>
-            </select>
-          </label>
-        </div>
-
-        <label className="field">
-          <span className="label">Kunde (optional)</span>
-          <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
-            <option value="">—</option>
-            {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+          <span className="label">Art</span>
+          <select className="select" value={kind} onChange={e=>setKind(e.target.value)}>
+            <option value="appointment">Termin</option>
+            <option value="order">Auftrag</option>
           </select>
         </label>
 
         <label className="field">
-          <span className="label">Notiz (optional)</span>
-          <textarea className="textarea" value={note} onChange={e=>setNote(e.target.value)} />
+          <span className="label">Datum</span>
+          <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+        </label>
+      </div>
+
+      {/* Bezeichnung – exakt so breit wie (Art..Datum) zusammen */}
+      <label className="field af-span-2">
+        <span className="label">Bezeichnung *</span>
+        <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
+      </label>
+
+      {/* Start | Ende | Status – drei gleich hohe, schmalere Felder; bündig unter Bezeichnung */}
+      <div className="af-grid-3 af-span-2">
+        <label className="field af-time-wrap">
+          <span className="label">Start</span>
+          <span className="af-time-ico" aria-hidden>🕒</span>
+          <select
+            className="select af-time-input"
+            value={startAt}
+            onChange={e=>{
+              const v = e.target.value;
+              setStartAt(v);
+              // Ende zurücksetzen, falls nun ungültig
+              if (endAt && minutesFromTime(endAt) < minutesFromTime(v)+30) setEndAt("");
+            }}
+          >
+            {hhmm.map(t=> <option key={t} value={t}>{t}</option>)}
+          </select>
         </label>
 
-        <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
-          <button type="button" className="btn-ghost" onClick={onCancel}>Abbrechen</button>
-          <button type="submit" className="btn" disabled={saving}>{saving?"Speichert…":"Speichern"}</button>
-        </div>
+        <label className="field af-time-wrap">
+          <span className="label">Ende (optional)</span>
+          <span className="af-time-ico" aria-hidden>🕒</span>
+          <select
+            className="select af-time-input"
+            value={endAt ?? ""}
+            onChange={e=>setEndAt(e.target.value)}
+          >
+            {endOptions.map(t => (
+              <option key={t || "-"} value={t}>{t || "—"}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span className="label">Status</span>
+          <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
+            <option value="open">offen</option>
+            <option value="cancelled">abgesagt</option>
+            <option value="done">abgeschlossen</option>
+          </select>
+        </label>
       </div>
+
+      {/* Kunde – volle Breite wie Bezeichnung */}
+      <label className="field af-span-2">
+        <span className="label">Kunde (optional)</span>
+        <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
+          <option value="">—</option>
+          {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
+
+      {/* Notizen – volle Breite wie Bezeichnung */}
+      <label className="field af-span-2">
+        <span className="label">Notiz (optional)</span>
+        <textarea className="textarea" value={note} onChange={e=>setNote(e.target.value)} />
+      </label>
+
+      <div className="af-actions">
+        <button type="button" className="btn-ghost" onClick={onCancel}>Abbrechen</button>
+        <button type="submit" className="btn" disabled={saving}>{saving?"Speichert…":"Speichern"}</button>
+      </div>
+
+      {/* Kompaktes, responsives Styling nur für dieses Formular */}
+      <style jsx>{`
+        .af-form{ gap: 14px; }
+
+        /* Oberes Raster: 2 Spalten, mobil & desktop gleichmäßig */
+        .af-grid-2{
+          display:grid;
+          grid-template-columns: 1fr 1fr;
+          gap:12px;
+          align-items: start;
+        }
+
+        /* Bezeichnung/Kunde/Notiz sollen genau die Breite von (Art..Datum) einnehmen */
+        .af-span-2{
+          display: block;
+        }
+
+        /* Drei schmale Felder bündig unter Bezeichnung */
+        .af-grid-3{
+          display:grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap:12px;
+          align-items: start;
+        }
+
+        /* Uhr-Icon in den Zeit-Feldern (größer) */
+        .af-time-wrap{ position: relative; }
+        .af-time-ico{
+          position:absolute; right:10px; top:50%; transform: translateY(-6px);
+          font-size: 18px; opacity: .75; pointer-events: none;
+        }
+        .af-time-input{
+          padding-right: 32px; /* Platz fürs Icon */
+          height: 40px;       /* gleiche Höhe für alle drei Felder */
+        }
+
+        .af-actions{
+          display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top: 4px;
+        }
+
+        /* Mobile Feinschliff: etwas größere Touch-Ziele */
+        @media (max-width: 480px){
+          .af-time-input{ height: 44px; }
+        }
+      `}</style>
     </form>
   );
 }
 
-/* helpers */
+/* helpers (wie in deiner bestehenden Datei belassen) */
 function toDate(input){
   if (input instanceof Date) return input;
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
@@ -166,4 +211,11 @@ function toDate(input){
   }
   const d = new Date(input || Date.now());
   return isNaN(d) ? new Date() : d;
+}
+function minutesFromTime(val){
+  const m = String(val ?? "").match(/^\s*(\d{1,2}):(\d{2})/);
+  if (!m) return 0;
+  const h  = Math.max(0, Math.min(23, parseInt(m[1],10)));
+  const mm = Math.max(0, Math.min(59, parseInt(m[2],10)));
+  return h*60 + mm;
 }
