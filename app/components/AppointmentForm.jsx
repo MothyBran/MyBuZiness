@@ -43,8 +43,14 @@ function TimePickerField({
   const hours = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
   const minutes5 = useMemo(()=>Array.from({length:12},(_,i)=>i*5),[]);
 
+  // Wheel-Option-Höhe (muss zu CSS --opt-h passen)
+  const OPT_H = 36;
+  const hRef = useRef(null);
+  const mRef = useRef(null);
+  const snapTimer = useRef(null);
+
   const [tmpH, setTmpH] = useState(()=> (vMin!=null ? Math.floor(vMin/60) : 9));
-  const [tmpM, setTmpM] = useState(()=> (vMin!=null ? (vMin%60) : 0));
+  const [tmpM, setTmpM] = useState(()=> (vMin!=null ? Math.round((vMin%60)/5)*5 : 0));
 
   useEffect(()=>{
     function onDoc(e){
@@ -61,8 +67,41 @@ function TimePickerField({
   },[open]);
 
   useEffect(()=>{
-    if (vMin!=null){ setTmpH(Math.floor(vMin/60)); setTmpM(vMin%60); }
+    if (vMin!=null){
+      setTmpH(Math.floor(vMin/60));
+      setTmpM(Math.round((vMin%60)/5)*5); // auf 5er-Schritte runden
+    }
   },[vMin]);
+
+  // Beim Öffnen die aktuelle Auswahl mittig anzeigen
+  useEffect(()=>{
+    if(!open) return;
+    const centerTo = (el, index)=>{
+      if(!el) return;
+      const target = index * OPT_H - (el.clientHeight/2 - OPT_H/2);
+      el.scrollTo({ top: Math.max(0, target) });
+    };
+    centerTo(hRef.current, tmpH);
+    centerTo(mRef.current, Math.round(tmpM/5));
+  },[open, tmpH, tmpM]);
+
+  function handleWheelScroll(which){
+    return (e)=>{
+      clearTimeout(snapTimer.current);
+      const el = e.currentTarget;
+      snapTimer.current = setTimeout(()=>{
+        const center = el.scrollTop + el.clientHeight/2;
+        const idx = Math.round((center - OPT_H/2) / OPT_H);
+        const clampedIdx = Math.max(0, Math.min(which==='h' ? 23 : 11, idx));
+        const targetTop = clampedIdx * OPT_H - (el.clientHeight/2 - OPT_H/2);
+        el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+        if (which==='h') setTmpH(clampedIdx);
+        else setTmpM(clampedIdx * 5);
+      }, 80);
+    };
+  }
+
+  useEffect(()=>()=>clearTimeout(snapTimer.current),[]);
 
   function apply(){
     let mm = tmpH*60 + tmpM;
@@ -78,8 +117,6 @@ function TimePickerField({
   }
 
   const display = (value && /^\d{1,2}:\d{2}/.test(value)) ? value.slice(0,5) : "";
-
-  // weiches Min nur zur Markierung
   const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
@@ -99,7 +136,13 @@ function TimePickerField({
       {open && (
         <div className="af-time-pop">
           <div className="af-wheels">
-            <div className="af-wheel" role="listbox" aria-label="Stunden">
+            <div
+              className="af-wheel"
+              ref={hRef}
+              onScroll={handleWheelScroll('h')}
+              role="listbox"
+              aria-label="Stunden"
+            >
               {hours.map(h=>{
                 const mm = h*60 + tmpM;
                 const disabledSoft = softMin>=0 && mm < softMin;
@@ -113,7 +156,13 @@ function TimePickerField({
                 );
               })}
             </div>
-            <div className="af-wheel" role="listbox" aria-label="Minuten">
+            <div
+              className="af-wheel"
+              ref={mRef}
+              onScroll={handleWheelScroll('m')}
+              role="listbox"
+              aria-label="Minuten"
+            >
               {minutes5.map(m=>{
                 const mm = tmpH*60 + m;
                 const disabledSoft = softMin>=0 && mm < softMin;
@@ -159,8 +208,8 @@ function TimePickerField({
       
         /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) ====== */
         .af-wheels{
-          --opt-h: 36px;            /* Höhe eines Eintrags */
-          --wheel-h: calc(var(--opt-h) * 5); /* 5 Einträge sichtbar */
+          --opt-h: 36px;                         /* Höhe eines Eintrags */
+          --wheel-h: calc(var(--opt-h) * 5);     /* 5 Einträge sichtbar */
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
         }
       
@@ -183,7 +232,6 @@ function TimePickerField({
           border-radius:10px;
           padding:6px;
           background-color:#fafafa;
-          /* Scrollbar dezenter / ausblenden */
           scrollbar-width: none;
         }
         .af-wheel::-webkit-scrollbar{ width:0; height:0; }
@@ -220,7 +268,7 @@ function TimePickerField({
         }
       
         @media (max-width: 420px){
-          .af-wheels{ --opt-h: 34px; } /* noch etwas kompakter auf sehr kleinen Screens */
+          .af-wheels{ --opt-h: 34px; } /* noch kompakter auf sehr kleinen Screens */
         }
       `}</style>
     </div>
