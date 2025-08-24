@@ -209,7 +209,7 @@ function TimePickerField({
         /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) ====== */
         .af-wheels{
           --opt-h: 36px;                         /* Höhe eines Eintrags */
-          --wheel-h: calc(var(--opt-h) * 5);     /* 5 Einträge sichtbar */
+          --wheel-h: calc(var(--opt-h) * 4);     /* 4 Einträge sichtbar */
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
         }
       
