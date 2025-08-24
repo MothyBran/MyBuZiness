@@ -11,6 +11,15 @@ const ROW_H = 44;   // Höhe je Stunde (px) – :30 liegt genau in der Mitte
 const LABEL_W = 72; // Breite für das Stundenlabel links im Stunden-Container
 const LANE_GAP = 1; // % Spalt zwischen überlappenden Events
 
+/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+   EVENT-BREITE & AUSRICHTUNG ANPASSEN:
+   - EVENT_WIDTH_FACTOR: 0..1 (z. B. 0.65 = 65% der Lane-Breite)
+   - EVENT_ALIGN: 'left' | 'center' | 'right'
+   Passe diese beiden Werte nach Wunsch an.
+   <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
+const EVENT_WIDTH_FACTOR = 0.3;
+const EVENT_ALIGN: "left" | "center" | "right" = "center";
+
 const pad2 = (n) => String(n).padStart(2, "0");
 function toDate(x){
   if (x instanceof Date) return x;
@@ -137,7 +146,6 @@ export default function DayPage({ params }){
           <Link className="btn-ghost" href={`/termine/${prevYMD}`}>◀︎</Link>
           <Link className="btn" href={`/termine/${todayYMD}`}>Heute</Link>
           <Link className="btn-ghost" href={`/termine/${nextYMD}`}>▶︎</Link>
-          <button className="btn" onClick={()=>openNewAt(9)}>+ Neuer Eintrag</button>
         </div>
       </div>
 
@@ -177,9 +185,7 @@ export default function DayPage({ params }){
             </div>
           ))}
 
-          {/* Events-Layer über dem Hintergrund:
-              - pointer-events: none, damit Klicks auf leere Bereiche zur Timeline durchgehen
-              - die einzelnen Events haben pointer-events: auto (klickbar) */}
+          {/* Events-Layer */}
           <div
             className="events-layer"
             style={{
@@ -193,9 +199,18 @@ export default function DayPage({ params }){
               const e = clamp(Math.max(s + 30, minutesFromTime(ev.endAt || ev.startAt)), 0, 24*60);
               const top    = (s/60) * ROW_H;
               const height = Math.max(12, ((e - s)/60) * ROW_H);
-              const laneW  = 100 / ev._laneCount;
-              const leftPct  = ev._lane * laneW;
-              const widthPct = laneW - LANE_GAP;
+
+              // >>> Breite/Ausrichtung innerhalb der Lane steuern
+              const laneW   = 100 / ev._laneCount;
+              const rawW    = Math.max(0, laneW - LANE_GAP);          // nutzbare Lane-Breite
+              const widthPct = rawW * EVENT_WIDTH_FACTOR;             // schmaler machen
+              let leftPct    = ev._lane * laneW;
+              if (EVENT_ALIGN === "center") {
+                leftPct += (rawW - widthPct) / 2;
+              } else if (EVENT_ALIGN === "right") {
+                leftPct += (rawW - widthPct);
+              } // left = Standard
+
               const isOrder  = ev.kind === "order";
               const timeTxt  = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?` – ${String(ev.endAt).slice(0,5)}`:""}`;
 
@@ -217,10 +232,10 @@ export default function DayPage({ params }){
                     color: "inherit",
                     textDecoration: "none",
                     overflow: "hidden",
-                    pointerEvents:"auto" // wichtig: Event selbst bleibt klickbar
+                    pointerEvents:"auto"
                   }}
                   title={`${ev.title || "(ohne Titel)"} • ${timeTxt}`}
-                  onClick={(e)=>e.stopPropagation()} // verhindert Timeline-Click
+                  onClick={(e)=>e.stopPropagation()}
                 >
                   <div style={{ fontWeight:700, fontSize:14, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                     {ev.title || "(ohne Titel)"}
