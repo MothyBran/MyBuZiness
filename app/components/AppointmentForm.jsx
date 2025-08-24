@@ -144,34 +144,83 @@ function TimePickerField({
         .af-time-display{
           display:flex; align-items:center; justify-content:space-between;
           height: var(--af-field-h);
-          padding: 0 12px; /* wie .input */
+          padding: 0 12px;
           cursor:pointer;
         }
         .af-time-text{ font-variant-numeric: tabular-nums; }
         .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
+      
         .af-time-pop{
           position:absolute; z-index:20; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
         }
+      
+        /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) ====== */
         .af-wheels{
+          --opt-h: 36px;            /* Höhe eines Eintrags */
+          --wheel-h: calc(var(--opt-h) * 5); /* 5 Einträge sichtbar */
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
         }
+      
         .af-wheel{
-          max-height: 180px; overflow:auto; border:1px solid var(--color-border);
-          border-radius:10px; padding:6px; background:#fafafa;
+          position: relative;
+          height: var(--wheel-h);
+          overflow-y: auto;
+          scroll-snap-type: y mandatory;
+          -webkit-overflow-scrolling: touch;
+      
+          /* Fades oben/unten (ohne zusätzliches Markup) */
+          background:
+            linear-gradient(#fafafa, rgba(250,250,250,0)) top,
+            linear-gradient(rgba(250,250,250,0), #fafafa) bottom;
+          background-size: 100% calc(var(--opt-h) * 1.2), 100% calc(var(--opt-h) * 1.2);
+          background-repeat: no-repeat;
+          background-attachment: local, local;
+      
+          border:1px solid var(--color-border);
+          border-radius:10px;
+          padding:6px;
+          background-color:#fafafa;
+          /* Scrollbar dezenter / ausblenden */
+          scrollbar-width: none;
         }
+        .af-wheel::-webkit-scrollbar{ width:0; height:0; }
+      
+        /* Center-Indicator (Slot-Linie) */
+        .af-wheel::after{
+          content:"";
+          position:absolute; left:8px; right:8px;
+          top: calc(50% - var(--opt-h) / 2);
+          height: var(--opt-h);
+          border-top: 1px solid rgba(37,99,235,.35);
+          border-bottom: 1px solid rgba(37,99,235,.35);
+          pointer-events:none;
+        }
+      
         .af-opt{
-          width:100%; text-align:center; padding:8px 6px; border-radius:8px;
-          border:1px solid transparent; background:#fff; margin-bottom:6px;
+          height: var(--opt-h);
+          line-height: var(--opt-h);
+          scroll-snap-align: center;
+          width:100%; text-align:center;
+          border-radius:8px; border:1px solid transparent;
+          background:#fff; margin:4px 0;
           font-variant-numeric: tabular-nums;
+          transition: transform .12s ease, background .12s ease, border-color .12s ease;
         }
-        .af-opt:last-child{ margin-bottom:0; }
-        .af-opt.is-active{ border-color:#2563eb; background:#eff6ff; font-weight:700; }
+        .af-opt.is-active{
+          border-color:#2563eb; background:#eff6ff; font-weight:700;
+          transform: scale(1.03);
+        }
         .af-opt.is-soft-disabled{ opacity:.45; }
+      
         .af-time-actions{
           display:flex; align-items:center; gap:8px; margin-top:10px;
+        }
+      
+        @media (max-width: 420px){
+          .af-wheels{ --opt-h: 34px; } /* noch etwas kompakter auf sehr kleinen Screens */
         }
       `}</style>
     </div>
