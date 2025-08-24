@@ -2,16 +2,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/app/components/Modal";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
 /* ===== Datum/Zeit Utils ===== */
-const ROW_H = 44;   // Höhe je Stunde (px) – passt zur früheren Vorgabe (30 min = 22 px)
-const LABEL_W = 72; // Platz für das Stundenlabel (links im Stunden-Container)
-const LANE_GAP = 1; // % Spalt zwischen überlappenden Segmenten
+const ROW_H = 44;   // Höhe je Stunde (px) – :30 liegt genau in der Mitte
+const LABEL_W = 72; // Breite für das Stundenlabel links im Stunden-Container
+const LANE_GAP = 1; // % Spalt zwischen überlappenden Events
 
-const pad2 = (n) => String(n).padStart(2,"0");
+const pad2 = (n) => String(n).padStart(2, "0");
 function toDate(x){
   if (x instanceof Date) return x;
   if (typeof x === "string" && /^\d{4}-\d{2}-\d{2}/.test(x)){
@@ -21,18 +21,19 @@ function toDate(x){
   const d = new Date(x || Date.now());
   return isNaN(d) ? new Date() : d;
 }
-function toYMD(d){ const z=toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
-function addDays(d, n){ const x=toDate(d); x.setDate(x.getDate()+n); return x; }
-function fmtDE(d){ const x=toDate(d); return `${pad2(x.getDate())}.${pad2(x.getMonth()+1)}.${x.getFullYear()}`; }
+function toYMD(d){ const z = toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
+function addDays(d, n){ const x = toDate(d); x.setDate(x.getDate()+n); return x; }
+function fmtDE(d){ const x = toDate(d); return `${pad2(x.getDate())}.${pad2(x.getMonth()+1)}.${x.getFullYear()}`; }
 
-/** robust: holt HH:MM auch aus "09:00:00+01" */
+/** robust: holt HH:MM auch aus "09:00:00+02" */
 function minutesFromTime(val){
   const m = String(val ?? "").match(/^\s*(\d{1,2}):(\d{2})/);
   if (!m) return 0;
-  const h = Math.max(0, Math.min(23, parseInt(m[1],10)));
+  const h  = Math.max(0, Math.min(23, parseInt(m[1],10)));
   const mm = Math.max(0, Math.min(59, parseInt(m[2],10)));
   return h*60 + mm;
 }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 function addMinutes(hhmm, minutes){
   const t = minutesFromTime(hhmm) + minutes;
   const h = Math.max(0, Math.min(23, Math.floor(t/60)));
@@ -45,7 +46,7 @@ function placeInLanes(list){
   const items = (list||[]).map(e=>{
     const s = minutesFromTime(e.startAt);
     const eMin = Math.max(s + 30, minutesFromTime(e.endAt || e.startAt)); // mind. 30 Min
-    return { ...e, _s: s, _e: eMin };
+    return { ...e, _s:s, _e:eMin };
   }).sort((a,b)=> a._s - b._s || a._e - b._e);
 
   const laneEnds = [];
@@ -60,62 +61,33 @@ function placeInLanes(list){
   return items.map(it => ({ ...it, _laneCount: laneCount }));
 }
 
-/* ===== pro Stunde segmentieren =====
-   Für jede Stunde (0..23) wird der überlappende Teil eines Events als Segment berechnet.
-   Das Segment wird im jeweiligen Stunden-Container relativ positioniert:
-   - Oberkante = :00
-   - Mitte     = :30
-   - Viertel   = :15/:45 (Hilfslinien)
-=================================================================== */
-function splitIntoHourSegments(placed){
-  const byHour = Array.from({length:24}, ()=>[]);
-  for (const ev of placed){
-    const s = Math.max(0, Math.min(24*60, ev._s));
-    const e = Math.max(0, Math.min(24*60, ev._e));
-    const hStart = Math.floor(s/60);
-    const hEnd   = Math.floor(Math.max(s, e-1)/60); // e-1, damit 10:00 nicht mehr in 10:00 fällt
-    for (let h = hStart; h <= hEnd; h++){
-      const hourStart = h*60, hourEnd=(h+1)*60;
-      const segStart  = Math.max(s, hourStart);
-      const segEnd    = Math.min(e, hourEnd);
-      const segTop    = ((segStart - hourStart)/60) * ROW_H;   // :00=0, :30=Row_H/2, :45=Row_H*0.75
-      const segHeight = Math.max(6, ((segEnd - segStart)/60) * ROW_H);
-      byHour[h].push({
-        ...ev,
-        _segTop: segTop,
-        _segHeight: segHeight,
-      });
-    }
-  }
-  return byHour;
-}
-
 /* ===== Seite ===== */
 export default function DayPage({ params }){
   const ymd = toYMD(params?.date || new Date());
   const dateObj = toDate(ymd);
 
-  const [events, setEvents] = useState([]);
+  const [events, setEvents]   = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState("");
+  const [error, setError]     = useState("");
 
-  const [openForm, setOpenForm] = useState(false);
+  const [openForm, setOpenForm]       = useState(false);
   const [formInitial, setFormInitial] = useState(null);
-  const [customers, setCustomers] = useState([]);
+  const [customers, setCustomers]     = useState([]);
 
-  const prevYMD = toYMD(addDays(dateObj,-1));
-  const nextYMD = toYMD(addDays(dateObj,+1));
+  const prevYMD  = toYMD(addDays(dateObj, -1));
+  const nextYMD  = toYMD(addDays(dateObj, +1));
   const todayYMD = toYMD(new Date());
 
   const reload = useCallback(async ()=>{
     setLoading(true); setError("");
     try{
-      const r = await fetch(`/api/appointments?date=${ymd}`, { cache:"no-store" });
-      if (!r.ok) throw new Error(await r.text());
+      const r  = await fetch(`/api/appointments?date=${ymd}`, { cache:"no-store" });
+      if(!r.ok) throw new Error(await r.text());
       const js = await r.json();
       setEvents(Array.isArray(js) ? js : []);
     }catch(err){
-      console.error(err); setEvents([]); setError("Konnte Einträge nicht laden.");
+      console.error(err);
+      setEvents([]); setError("Konnte Einträge nicht laden.");
     }finally{
       setLoading(false);
     }
@@ -134,15 +106,24 @@ export default function DayPage({ params }){
   },[]);
 
   const placed = useMemo(()=>placeInLanes(events), [events]);
-  const segmentsByHour = useMemo(()=>splitIntoHourSegments(placed), [placed]);
 
   function openNewAt(hour){
     const start = `${pad2(hour)}:00`;
-    const end = addMinutes(start, 60);
+    const end   = addMinutes(start, 60); // Standard 60 Min
     setFormInitial({ date: ymd, startAt: start, endAt: end, kind:"appointment", status:"open" });
     setOpenForm(true);
   }
   function onSaved(){ setOpenForm(false); reload(); }
+
+  /* Klick auf Timeline → volle Stunde aus Y-Position ermitteln */
+  const timelineRef = useRef(null);
+  function handleTimelineClick(e){
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const y    = e.clientY - rect.top;
+    const hour = clamp(Math.floor(y / ROW_H), 0, 23);
+    openNewAt(hour);
+  }
 
   return (
     <div className="container">
@@ -160,82 +141,101 @@ export default function DayPage({ params }){
         </div>
       </div>
 
-      {/* Timeline – nutzt DEINE .surface / .day-block / .day-block-inner */}
+      {/* Timeline: eckige Stunden-Container, Label im Container; Events als EIN durchgehender Block */}
       <div className="surface" style={{ padding: 0 }}>
-        <div>
+        <div
+          ref={timelineRef}
+          className="timeline"
+          style={{ position:"relative", height: 24*ROW_H, cursor:"pointer" }}
+          onClick={handleTimelineClick}
+        >
+          {/* Stunden-Container als Hintergrund (nutzt deine .day-block / .day-block-inner) */}
           {Array.from({length:24}, (_,h)=>(
             <div
               key={h}
               className="day-block"
-              style={{ height: ROW_H, borderRadius: 0 /* eckig, berühren sich */ }}
-              onClick={()=>openNewAt(h)}
-              title={`+ Neuer Eintrag ${pad2(h)}:00`}
+              style={{ position:"absolute", left:0, right:0, top: h*ROW_H, height: ROW_H, borderRadius:0 }}
+              title={`${pad2(h)}:00`}
             >
-              <div className="day-block-inner" style={{ position:"relative", height: "100%", paddingLeft: LABEL_W }}>
-                {/* Stunden-Label links im Container */}
+              <div className="day-block-inner" style={{ position:"relative", height:"100%", paddingLeft: LABEL_W }}>
+                {/* Label im Container */}
                 <div
                   style={{
-                    position:"absolute", left: 8, top: 6, width: LABEL_W-16,
-                    fontSize:12, color:"var(--color-muted)", userSelect:"none", pointerEvents:"none"
+                    position:"absolute", left:8, top:6, width: LABEL_W-16,
+                    fontSize:12, color:"var(--color-muted)",
+                    userSelect:"none", pointerEvents:"none"
                   }}
                 >
                   {pad2(h)}:00
                 </div>
 
-                {/* Viertel-Hilfslinien :15 / :30 / :45 */}
+                {/* Hilfslinien für :15 / :30 / :45 */}
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.25, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.50, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.75, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
-
-                {/* Segmente dieser Stunde – absolut innerhalb des Stunden-Containers */}
-                <div style={{ position:"absolute", inset: 0, left: LABEL_W, right: 8 }}>
-                  {segmentsByHour[h].map(ev=>{
-                    const laneW = 100 / ev._laneCount;
-                    const leftPct = ev._lane * laneW;
-                    const widthPct = laneW - LANE_GAP;
-                    const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?` – ${String(ev.endAt).slice(0,5)}`:""}`;
-                    const isOrder = ev.kind === "order";
-                    return (
-                      <Link
-                        key={`${ev.id}-${h}`}
-                        href={`/termine/eintrag/${ev.id}`}
-                        onClick={(e)=>e.stopPropagation()} // verhindert, dass die Stundenklick-Logik greift
-                        className="seg"
-                        style={{
-                          position:"absolute",
-                          top: Math.round(ev._segTop),
-                          height: Math.round(ev._segHeight),
-                          left: `${leftPct}%`,
-                          width: `${widthPct}%`,
-                          background: isOrder ? "#FEF3C7" : "#EFF6FF",
-                          border: "1px solid var(--color-border)",
-                          borderLeft: `4px solid ${isOrder ? "#F59E0B" : "#3B82F6"}`,
-                          borderRadius: 8,
-                          padding: "6px 8px",
-                          boxShadow: "var(--shadow-sm)",
-                          color: "inherit",
-                          textDecoration: "none",
-                          overflow: "hidden"
-                        }}
-                        title={`${ev.title || "(ohne Titel)"} • ${timeTxt}`}
-                      >
-                        <div style={{ fontWeight:700, fontSize:14, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {ev.title || "(ohne Titel)"}
-                        </div>
-                        <div style={{ fontSize:12, opacity:.85, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           ))}
+
+          {/* Events-Layer über dem Hintergrund:
+              - pointer-events: none, damit Klicks auf leere Bereiche zur Timeline durchgehen
+              - die einzelnen Events haben pointer-events: auto (klickbar) */}
+          <div
+            className="events-layer"
+            style={{
+              position:"absolute", inset:0,
+              paddingLeft: LABEL_W, paddingRight: 8,
+              pointerEvents:"none", zIndex:2
+            }}
+          >
+            {placed.map(ev=>{
+              const s = clamp(minutesFromTime(ev.startAt), 0, 24*60);
+              const e = clamp(Math.max(s + 30, minutesFromTime(ev.endAt || ev.startAt)), 0, 24*60);
+              const top    = (s/60) * ROW_H;
+              const height = Math.max(12, ((e - s)/60) * ROW_H);
+              const laneW  = 100 / ev._laneCount;
+              const leftPct  = ev._lane * laneW;
+              const widthPct = laneW - LANE_GAP;
+              const isOrder  = ev.kind === "order";
+              const timeTxt  = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?` – ${String(ev.endAt).slice(0,5)}`:""}`;
+
+              return (
+                <Link
+                  key={ev.id}
+                  href={`/termine/eintrag/${ev.id}`}
+                  className="tl-event"
+                  style={{
+                    position:"absolute",
+                    top, height,
+                    left: `${leftPct}%`, width: `${widthPct}%`,
+                    background: isOrder ? "#FEF3C7" : "#EFF6FF",
+                    border: "1px solid var(--color-border)",
+                    borderLeft: `4px solid ${isOrder ? "#F59E0B" : "#3B82F6"}`,
+                    borderRadius: 8,
+                    padding: "6px 8px",
+                    boxShadow: "var(--shadow-sm)",
+                    color: "inherit",
+                    textDecoration: "none",
+                    overflow: "hidden",
+                    pointerEvents:"auto" // wichtig: Event selbst bleibt klickbar
+                  }}
+                  title={`${ev.title || "(ohne Titel)"} • ${timeTxt}`}
+                  onClick={(e)=>e.stopPropagation()} // verhindert Timeline-Click
+                >
+                  <div style={{ fontWeight:700, fontSize:14, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {ev.title || "(ohne Titel)"}
+                  </div>
+                  <div style={{ fontSize:12, opacity:.85, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Liste darunter (unverändert deine globalen Styles) */}
+      {/* Liste darunter – nutzt deine globalen Styles */}
       <div className="surface">
         <div className="section-title" style={{ marginBottom: 8 }}>Alle Einträge am {fmtDE(ymd)}</div>
         {loading && <div className="subtle">Lade…</div>}
@@ -244,13 +244,17 @@ export default function DayPage({ params }){
         {!loading && !error && placed.length>0 && (
           <div className="list">
             {placed.map(ev=>{
-              const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""}`;
+              const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${ev.endAt).slice(0,5)}`:""}`;
               return (
                 <Link key={ev.id} href={`/termine/eintrag/${ev.id}`} className="list-item" style={{ textDecoration:"none" }}>
                   <div className={`item-icon ${ev.kind==='order'?'accent':''}`}>{ev.kind==='order'?"🧾":"📅"}</div>
                   <div style={{ minWidth:0 }}>
-                    <div className="item-title">{ev.title || "(ohne Titel)"}</div>
-                    <div className="item-meta">{timeTxt}{ev.customerName?` · ${ev.customerName}`:""}</div>
+                    <div className="item-title" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {ev.title || "(ohne Titel)"}
+                    </div>
+                    <div className="item-meta" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
+                    </div>
                   </div>
                   <div className="item-actions">
                     <span className={`status-badge ${
