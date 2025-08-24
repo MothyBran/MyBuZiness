@@ -139,7 +139,6 @@ export default function DayPage({ params }){
           <Link className="btn-ghost" href={`/termine/${prevYMD}`}>◀︎</Link>
           <Link className="btn" href={`/termine/${todayYMD}`}>Heute</Link>
           <Link className="btn-ghost" href={`/termine/${nextYMD}`}>▶︎</Link>
-          <button className="btn" onClick={()=>openNewAt(9)}>+ Neuer Eintrag</button>
         </div>
       </div>
 
