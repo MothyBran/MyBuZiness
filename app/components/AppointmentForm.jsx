@@ -69,7 +69,7 @@ function TimePickerField({
   useEffect(()=>{
     if (vMin!=null){
       setTmpH(Math.floor(vMin/60));
-      setTmpM(Math.round((vMin%60)/5)*5);
+      setTmpM(Math.round((vMin%60)/5)*5); // auf 5er-Schritte runden
     }
   },[vMin]);
 
@@ -120,7 +120,7 @@ function TimePickerField({
   const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
-    <div className={`field af-time-field ${open ? 'is-open' : ''}`} ref={hostRef}>
+    <div className={`field af-time-field ${open ? "is-open" : ""}`} ref={hostRef}>
       <span className="label"> {label} </span>
 
       <button
@@ -190,7 +190,7 @@ function TimePickerField({
 
       <style jsx>{`
         .af-time-field{ position:relative; }
-        /* <<< Rahmen des Eingabefeldes ausblenden, solange das Wheel offen ist */
+        /* <<< nur das: Rahmen/Shadow des Eingabefeldes ausblenden, wenn Wheel offen */
         .af-time-field.is-open .af-time-display{
           border-color: transparent !important;
           box-shadow: none !important;
@@ -204,23 +204,21 @@ function TimePickerField({
         }
         .af-time-text{ font-variant-numeric: tabular-nums; }
         .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
-      
+
         .af-time-pop{
-          position:absolute; z-index:50; top:100%; left:0; right:0;   /* z-index erhöht */
+          position:absolute; z-index:20; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
-          overflow: hidden; /* verhindert Durchscheinen an den Rändern */
         }
-      
-        /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) ====== */
+
+        /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) – unverändert ====== */
         .af-wheels{
-          --opt-h: 36px;                         /* Höhe eines Eintrags */
-          --visible-slots: 4;                    /* Anzahl sichtbarer Slots */
-          --wheel-h: calc(var(--opt-h) * var(--visible-slots));
+          --opt-h: 36px;            /* Höhe eines Eintrags */
+          --wheel-h: calc(var(--opt-h) * 5); /* 5 Einträge sichtbar (stell ggf. auf 4) */
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
         }
-      
+
         .af-wheel{
           position: relative;
           height: var(--wheel-h);
@@ -228,35 +226,34 @@ function TimePickerField({
           scroll-snap-type: y mandatory;
           -webkit-overflow-scrolling: touch;
 
-          /* statt transparenter Fades: solides BG, Fades als Overlays */
-          background: #fafafa;
+          /* Fades oben/unten wie vorher */
+          background:
+            linear-gradient(#fafafa, rgba(250,250,250,0)) top,
+            linear-gradient(rgba(250,250,250,0), #fafafa) bottom;
+          background-size: 100% calc(var(--opt-h) * 1.2), 100% calc(var(--opt-h) * 1.2);
+          background-repeat: no-repeat;
+          background-attachment: local, local;
+
           border:1px solid var(--color-border);
           border-radius:10px;
           padding:6px;
+          background-color:#fafafa;
+          /* Scrollbar dezenter / ausblenden */
           scrollbar-width: none;
         }
         .af-wheel::-webkit-scrollbar{ width:0; height:0; }
 
-        /* Fades jetzt als Overlays oben/unten → kein „Durchscheinen“ mehr */
-        .af-wheel::before,
+        /* Center-Indicator (Slot-Linie) */
         .af-wheel::after{
           content:"";
-          position:absolute; left:0; right:0;
-          height: calc(var(--opt-h) * 1.2);
+          position:absolute; left:8px; right:8px;
+          top: calc(50% - var(--opt-h) / 2);
+          height: var(--opt-h);
+          border-top: 1px solid rgba(37,99,235,.35);
+          border-bottom: 1px solid rgba(37,99,235,.35);
           pointer-events:none;
         }
-        .af-wheel::before{
-          top:0;
-          background: linear-gradient(#fafafa, rgba(250,250,250,0));
-        }
-        .af-wheel::after{
-          bottom:0;
-          background: linear-gradient(rgba(250,250,250,0), #fafafa);
-        }
-      
-        /* Center-Indicator (Slot-Linie) */
-        .af-wheel::marker {}
-        .af-wheel:after; /* placeholder to avoid accidental deletion */
+
         .af-opt{
           height: var(--opt-h);
           line-height: var(--opt-h);
@@ -272,13 +269,13 @@ function TimePickerField({
           transform: scale(1.03);
         }
         .af-opt.is-soft-disabled{ opacity:.45; }
-      
+
         .af-time-actions{
           display:flex; align-items:center; gap:8px; margin-top:10px;
         }
-      
+
         @media (max-width: 420px){
-          .af-wheels{ --opt-h: 34px; } /* noch kompakter auf sehr kleinen Screens */
+          .af-wheels{ --opt-h: 34px; } /* noch etwas kompakter auf sehr kleinen Screens */
         }
       `}</style>
     </div>
