@@ -13,12 +13,12 @@ const LANE_GAP = 1; // % Spalt zwischen überlappenden Events
 
 /* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
    EVENT-BREITE & AUSRICHTUNG ANPASSEN:
-   - EVENT_WIDTH_FACTOR: 0..1 (z. B. 0.65 = 65% der Lane-Breite)
+   - EVENT_WIDTH_FACTOR: 0..1 (z. B. 0.30 = 30% der Lane-Breite)
    - EVENT_ALIGN: 'left' | 'center' | 'right'
    Passe diese beiden Werte nach Wunsch an.
    <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
-const EVENT_WIDTH_FACTOR = 0.3;
-const EVENT_ALIGN: "left" | "center" | "right" = "center";
+const EVENT_WIDTH_FACTOR = 0.30;
+const EVENT_ALIGN = "center"; // "left" | "center" | "right"
 
 const pad2 = (n) => String(n).padStart(2, "0");
 function toDate(x){
@@ -201,9 +201,9 @@ export default function DayPage({ params }){
               const height = Math.max(12, ((e - s)/60) * ROW_H);
 
               // >>> Breite/Ausrichtung innerhalb der Lane steuern
-              const laneW   = 100 / ev._laneCount;
-              const rawW    = Math.max(0, laneW - LANE_GAP);          // nutzbare Lane-Breite
-              const widthPct = rawW * EVENT_WIDTH_FACTOR;             // schmaler machen
+              const laneW    = 100 / ev._laneCount;
+              const rawW     = Math.max(0, laneW - LANE_GAP);     // nutzbare Lane-Breite
+              const widthPct = rawW * EVENT_WIDTH_FACTOR;         // schmaler machen
               let leftPct    = ev._lane * laneW;
               if (EVENT_ALIGN === "center") {
                 leftPct += (rawW - widthPct) / 2;
