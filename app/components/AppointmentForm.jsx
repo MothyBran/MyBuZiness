@@ -69,7 +69,7 @@ function TimePickerField({
   useEffect(()=>{
     if (vMin!=null){
       setTmpH(Math.floor(vMin/60));
-      setTmpM(Math.round((vMin%60)/5)*5); // auf 5er-Schritte runden
+      setTmpM(Math.round((vMin%60)/5)*5);
     }
   },[vMin]);
 
@@ -120,7 +120,7 @@ function TimePickerField({
   const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
-    <div className="field af-time-field" ref={hostRef}>
+    <div className={`field af-time-field ${open ? 'is-open' : ''}`} ref={hostRef}>
       <span className="label"> {label} </span>
 
       <button
@@ -190,6 +190,12 @@ function TimePickerField({
 
       <style jsx>{`
         .af-time-field{ position:relative; }
+        /* <<< Rahmen des Eingabefeldes ausblenden, solange das Wheel offen ist */
+        .af-time-field.is-open .af-time-display{
+          border-color: transparent !important;
+          box-shadow: none !important;
+        }
+
         .af-time-display{
           display:flex; align-items:center; justify-content:space-between;
           height: var(--af-field-h);
@@ -200,16 +206,18 @@ function TimePickerField({
         .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
       
         .af-time-pop{
-          position:absolute; z-index:20; top:100%; left:0; right:0;
+          position:absolute; z-index:50; top:100%; left:0; right:0;   /* z-index erhöht */
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
+          overflow: hidden; /* verhindert Durchscheinen an den Rändern */
         }
       
         /* ====== WHEEL-LAYOUT (kompakt & android-ähnlich) ====== */
         .af-wheels{
           --opt-h: 36px;                         /* Höhe eines Eintrags */
-          --wheel-h: calc(var(--opt-h) * 4);     /* 4 Einträge sichtbar */
+          --visible-slots: 4;                    /* Anzahl sichtbarer Slots */
+          --wheel-h: calc(var(--opt-h) * var(--visible-slots));
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
         }
       
@@ -219,34 +227,36 @@ function TimePickerField({
           overflow-y: auto;
           scroll-snap-type: y mandatory;
           -webkit-overflow-scrolling: touch;
-      
-          /* Fades oben/unten (ohne zusätzliches Markup) */
-          background:
-            linear-gradient(#fafafa, rgba(250,250,250,0)) top,
-            linear-gradient(rgba(250,250,250,0), #fafafa) bottom;
-          background-size: 100% calc(var(--opt-h) * 1.2), 100% calc(var(--opt-h) * 1.2);
-          background-repeat: no-repeat;
-          background-attachment: local, local;
-      
+
+          /* statt transparenter Fades: solides BG, Fades als Overlays */
+          background: #fafafa;
           border:1px solid var(--color-border);
           border-radius:10px;
           padding:6px;
-          background-color:#fafafa;
           scrollbar-width: none;
         }
         .af-wheel::-webkit-scrollbar{ width:0; height:0; }
-      
-        /* Center-Indicator (Slot-Linie) */
+
+        /* Fades jetzt als Overlays oben/unten → kein „Durchscheinen“ mehr */
+        .af-wheel::before,
         .af-wheel::after{
           content:"";
-          position:absolute; left:8px; right:8px;
-          top: calc(50% - var(--opt-h) / 2);
-          height: var(--opt-h);
-          border-top: 1px solid rgba(37,99,235,.35);
-          border-bottom: 1px solid rgba(37,99,235,.35);
+          position:absolute; left:0; right:0;
+          height: calc(var(--opt-h) * 1.2);
           pointer-events:none;
         }
+        .af-wheel::before{
+          top:0;
+          background: linear-gradient(#fafafa, rgba(250,250,250,0));
+        }
+        .af-wheel::after{
+          bottom:0;
+          background: linear-gradient(rgba(250,250,250,0), #fafafa);
+        }
       
+        /* Center-Indicator (Slot-Linie) */
+        .af-wheel::marker {}
+        .af-wheel:after; /* placeholder to avoid accidental deletion */
         .af-opt{
           height: var(--opt-h);
           line-height: var(--opt-h);
