@@ -322,7 +322,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
         .af-wrap{
           width: 100%;
-          max-width: 360px;         /* kompakter als zuvor → passt sicher ins Modal */
+          max-width: 560px;         /* kompakter als zuvor → passt sicher ins Modal */
           margin: 0 auto;
           box-sizing: border-box;
         }
