@@ -26,7 +26,6 @@ function timeFromMinutes(min){
   const hh = Math.floor(m/60), mm = m%60;
   return `${pad2(hh)}:${pad2(mm)}`;
 }
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 /* ===== Zeit-Picker (Android-Style: zwei Scrollspalten) ===== */
 function TimePickerField({
@@ -48,10 +47,6 @@ function TimePickerField({
   const [tmpM, setTmpM] = useState(()=> (vMin!=null ? (vMin%60) : 0));
 
   useEffect(()=>{
-    if (vMin!=null){ setTmpH(Math.floor(vMin/60)); setTmpM(vMin%60); }
-  },[vMin]);
-
-  useEffect(()=>{
     function onDoc(e){
       if (!open) return;
       if (!hostRef.current) return;
@@ -64,6 +59,10 @@ function TimePickerField({
       document.removeEventListener("touchstart", onDoc);
     };
   },[open]);
+
+  useEffect(()=>{
+    if (vMin!=null){ setTmpH(Math.floor(vMin/60)); setTmpM(vMin%60); }
+  },[vMin]);
 
   function apply(){
     let mm = tmpH*60 + tmpM;
@@ -80,12 +79,12 @@ function TimePickerField({
 
   const display = (value && /^\d{1,2}:\d{2}/.test(value)) ? value.slice(0,5) : "";
 
-  // weiches Min für visuelle Markierung
+  // weiches Min nur zur Markierung
   const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
     <div className="field af-time-field" ref={hostRef}>
-      <span className="label">{label}</span>
+      <span className="label"> {label} </span>
 
       <button
         type="button"
@@ -144,7 +143,9 @@ function TimePickerField({
         .af-time-field{ position:relative; }
         .af-time-display{
           display:flex; align-items:center; justify-content:space-between;
-          cursor:pointer; height: var(--af-field-h);
+          height: var(--af-field-h);
+          padding: 0 12px; /* wie .input */
+          cursor:pointer;
         }
         .af-time-text{ font-variant-numeric: tabular-nums; }
         .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
@@ -171,10 +172,6 @@ function TimePickerField({
         .af-opt.is-soft-disabled{ opacity:.45; }
         .af-time-actions{
           display:flex; align-items:center; gap:8px; margin-top:10px;
-        }
-
-        @media (max-width: 420px){
-          .af-wheel{ max-height: 160px; }
         }
       `}</style>
     </div>
@@ -204,20 +201,16 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
     if (found) setCustomerName(found.name);
   },[customerId, customers]);
 
-  // Ende-Minimum = Start + 30
   const endMin = useMemo(()=> minutesFromTime(startAt) + 30, [startAt]);
 
   async function submit(e){
     e.preventDefault();
     if (!title.trim()){ alert("Bezeichnung ist erforderlich."); return; }
-
-    // Ende validieren (falls gesetzt)
     let finalEnd = endAt;
     if (finalEnd){
       const mEnd = minutesFromTime(finalEnd);
       if (mEnd < endMin) finalEnd = timeFromMinutes(endMin);
     }
-
     setSaving(true);
     try{
       const payload = {
@@ -247,11 +240,11 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
   return (
     <form onSubmit={submit} className="form af-form">
       <div className="af-wrap">
-        {/* Zeile 1: Art | Datum (gleich breit & schmal) */}
+        {/* Zeile 1: Art | Datum (gleich breit, Text vertikal mittig) */}
         <div className="af-row2">
           <label className="field">
             <span className="label">Art</span>
-            <select className="select" value={kind} onChange={e=>setKind(e.target.value)}>
+            <select className="select af-control" value={kind} onChange={e=>setKind(e.target.value)}>
               <option value="appointment">Termin</option>
               <option value="order">Auftrag</option>
             </select>
@@ -259,17 +252,17 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
           <label className="field">
             <span className="label">Datum</span>
-            <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+            <input className="input af-control" type="date" value={date} onChange={e=>setDate(e.target.value)} />
           </label>
         </div>
 
-        {/* Zeile 2: Bezeichnung – gleiche Gesamtbreite wie Zeile 1 */}
+        {/* Zeile 2: Bezeichnung – gleiche Breite & Höhe wie Zeile 4 */}
         <label className="field">
           <span className="label">Bezeichnung *</span>
-          <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
+          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required />
         </label>
 
-        {/* Zeile 3: Start | Ende | Status – bündig unter Bezeichnung; gleiche Höhen */}
+        {/* Zeile 3: Start | Ende | Status – gleich hoch; Status-Text mittig */}
         <div className="af-row3">
           <TimePickerField
             label="Start"
@@ -292,7 +285,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           />
           <label className="field">
             <span className="label">Status</span>
-            <select className="select" value={status} onChange={e=>setStatus(e.target.value)}>
+            <select className="select af-control" value={status} onChange={e=>setStatus(e.target.value)}>
               <option value="open">offen</option>
               <option value="cancelled">abgesagt</option>
               <option value="done">abgeschlossen</option>
@@ -300,19 +293,19 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           </label>
         </div>
 
-        {/* Zeile 4: Kunde – gleiche Gesamtbreite wie Zeile 1/2 */}
+        {/* Zeile 4: Kunde – Referenzbreite/Höhe */}
         <label className="field">
           <span className="label">Kunde (optional)</span>
-          <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
+          <select className="select af-control" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
             <option value="">—</option>
             {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
 
-        {/* Zeile 5: Notiz – gleiche Gesamtbreite, höhere Textarea */}
+        {/* Zeile 5: Notiz – gleiche Breite wie Kunde/Bezeichnung, höhere Textarea */}
         <label className="field">
           <span className="label">Notiz (optional)</span>
-          <textarea className="textarea" rows={5} value={note} onChange={e=>setNote(e.target.value)} />
+          <textarea className="textarea af-textarea" rows={5} value={note} onChange={e=>setNote(e.target.value)} />
         </label>
 
         <div className="af-actions">
@@ -321,22 +314,24 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
         </div>
       </div>
 
-      {/* Strenges, bündiges, mobiles Styling (keine horizontale Scrollbarkeit) */}
+      {/* Strenges, bündiges, mobiles Styling */}
       <style jsx>{`
         .af-form{
-          --af-field-h: 44px;
+          --af-field-h: 44px;       /* einheitliche Feldhöhe (außer Textarea) */
         }
+
         .af-wrap{
           width: 100%;
-          max-width: 420px;          /* schmaler als zuvor → passt ins Modal auch mobil */
+          max-width: 360px;         /* kompakter als zuvor → passt sicher ins Modal */
           margin: 0 auto;
           box-sizing: border-box;
         }
+        .af-wrap *{ box-sizing: border-box; } /* verhindert Überbreite */
 
-        /* Rasterbreiten – alle Zeilen orientieren sich an der gleichen Wrap-Breite */
+        /* Rasterbreiten – alle Zeilen hängen an derselben Wrap-Breite */
         .af-row2{
           display:grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr; /* exakt gleich breit */
           gap:12px;
           align-items:start;
         }
@@ -347,32 +342,48 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           align-items:start;
         }
 
-        /* Einheitliche Feldhöhen (außer Textarea) */
-        :global(.af-form) .input,
-        :global(.af-form) .select{
+        /* Einheitliche Kontrolle für Inputs & Selects: gleiche Höhe, zentrierter Text */
+        .af-control{
           height: var(--af-field-h);
-          line-height: calc(var(--af-field-h) - 2px);
+          padding: 0 12px;         /* vertikale Mitte */
+          line-height: normal;     /* Browser-Default, verhindert ungleiche Zentrierung */
+          width: 100%;
         }
 
-        /* Selects haben je nach Browser eigene Höhen – erzwingen */
-        :global(.af-form) .select{
+        /* input[type="date"] auf gleiche optische Höhe bringen */
+        :global(.af-form) input[type="date"].af-control{
+          -webkit-appearance: none;
+          appearance: none;
+          padding: 0 12px;
+        }
+
+        /* Zeit-Button (TimePicker) – gleiche Höhe wie af-control */
+        :global(.af-form) .af-time-display{
+          height: var(--af-field-h);
+          padding: 0 12px;
+        }
+
+        /* Selects: sichere vertikale Zentrierung via Padding */
+        :global(.af-form) .select.af-control{
           -webkit-appearance: none;
           -moz-appearance: none;
           appearance: none;
-          padding-right: 26px;  /* Platz für native Pfeile */
+          background-position: right 10px center; /* native Pfeile */
         }
 
-        /* Zeit-Buttons aus dem TimePicker */
-        :global(.af-form) .af-time-display{
-          height: var(--af-field-h);
+        /* Textarea: volle Breite, automatisch höher */
+        .af-textarea{
+          width: 100%;
+          max-width: 100%;
+          resize: vertical;
         }
 
         .af-actions{
           display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top: 4px;
         }
 
-        /* Ganz kleine Displays: Kanten eng, trotzdem kein horizontales Scrollen */
-        @media (max-width: 420px){
+        /* Kleinstgeräte: volle Breite ohne horizontales Scrollen */
+        @media (max-width: 380px){
           .af-wrap{ max-width: 100%; padding: 0 4px; }
         }
       `}</style>
