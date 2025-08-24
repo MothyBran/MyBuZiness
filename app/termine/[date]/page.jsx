@@ -244,7 +244,7 @@ export default function DayPage({ params }){
         {!loading && !error && placed.length>0 && (
           <div className="list">
             {placed.map(ev=>{
-              const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${ev.endAt).slice(0,5)}`:""}`;
+              const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${String(ev.endAt).slice(0,5)}`:""}`;
               return (
                 <Link key={ev.id} href={`/termine/eintrag/${ev.id}`} className="list-item" style={{ textDecoration:"none" }}>
                   <div className={`item-icon ${ev.kind==='order'?'accent':''}`}>{ev.kind==='order'?"🧾":"📅"}</div>
@@ -273,4 +273,3 @@ export default function DayPage({ params }){
     </div>
   );
 }
-
