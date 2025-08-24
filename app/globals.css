@@ -198,6 +198,38 @@
   font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
 }
 
+/* ================== Monatsansicht (NEU: appt-*) ================== */
+.appt{ padding:14px; }
+.appt-cal{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.appt-cal-head{ text-align:center; font-size:12px; color: var(--color-muted); }
+.appt-cal-cell{
+  border:1px solid var(--color-border);
+  border-radius: 12px;
+  min-height: 112px;
+  padding: 10px 8px;
+  display:flex; flex-direction:column; justify-content:space-between;
+  text-decoration:none; color: inherit; background:#fff;
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.appt-cal-cell:hover{ box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.appt-cal-cell.is-muted{ opacity:.5; }
+.appt-cal-daynum-wrap{ display:flex; }
+.appt-cal-daynum{
+  width: 30px; height: 30px; border-radius: 999px;
+  display:flex; align-items:center; justify-content:center; font-weight:700;
+}
+.appt-cal-cell.is-today .appt-cal-daynum{ outline: 2px solid var(--danger); color: var(--danger); }
+.appt-cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height: 10px; align-items:center; }
+.appt-cal-dot{ width:8px; height:8px; border-radius:999px; background:#60A5FA; }
+.appt-cal-dot--order{ background:#F59E0B; }
+.appt-cal-more{
+  width:auto; padding:0 6px; height:18px; border-radius:999px; font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
+}
+
 /* ==========================================================================
    10) Day-View (globale, sanfte Defaults)
    ========================================================================== */
