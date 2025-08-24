@@ -6,20 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/app/components/Modal";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
+/* ===== Konfiguration ===== */
+const ROW_H = 44;          // Höhe je Stunde (px) – :30 liegt genau in der Mitte
+const LABEL_W = 72;        // Breite für das Stundenlabel links im Stunden-Container
+const LANE_GAP = 1;        // % Spalt zwischen überlappenden Events
+const EVENT_WIDTH_FACTOR = 0.30; // 0..1 (z. B. 0.30 = 30% der Lane-Breite)
+const EVENT_ALIGN = "center";    // "left" | "center" | "right"
+
 /* ===== Datum/Zeit Utils ===== */
-const ROW_H = 44;   // Höhe je Stunde (px) – :30 liegt genau in der Mitte
-const LABEL_W = 72; // Breite für das Stundenlabel links im Stunden-Container
-const LANE_GAP = 1; // % Spalt zwischen überlappenden Events
-
-/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-   EVENT-BREITE & AUSRICHTUNG ANPASSEN:
-   - EVENT_WIDTH_FACTOR: 0..1 (z. B. 0.30 = 30% der Lane-Breite)
-   - EVENT_ALIGN: 'left' | 'center' | 'right'
-   Passe diese beiden Werte nach Wunsch an.
-   <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
-const EVENT_WIDTH_FACTOR = 0.30;
-const EVENT_ALIGN = "center"; // "left" | "center" | "right"
-
 const pad2 = (n) => String(n).padStart(2, "0");
 function toDate(x){
   if (x instanceof Date) return x;
@@ -33,7 +27,6 @@ function toDate(x){
 function toYMD(d){ const z = toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
 function addDays(d, n){ const x = toDate(d); x.setDate(x.getDate()+n); return x; }
 function fmtDE(d){ const x = toDate(d); return `${pad2(x.getDate())}.${pad2(x.getMonth()+1)}.${x.getFullYear()}`; }
-
 /** robust: holt HH:MM auch aus "09:00:00+02" */
 function minutesFromTime(val){
   const m = String(val ?? "").match(/^\s*(\d{1,2}):(\d{2})/);
@@ -126,7 +119,7 @@ export default function DayPage({ params }){
 
   /* Klick auf Timeline → volle Stunde aus Y-Position ermitteln */
   const timelineRef = useRef(null);
-  function handleTimelineClick(e){
+  function handleOverlayClick(e){
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const y    = e.clientY - rect.top;
@@ -146,6 +139,7 @@ export default function DayPage({ params }){
           <Link className="btn-ghost" href={`/termine/${prevYMD}`}>◀︎</Link>
           <Link className="btn" href={`/termine/${todayYMD}`}>Heute</Link>
           <Link className="btn-ghost" href={`/termine/${nextYMD}`}>▶︎</Link>
+          <button className="btn" onClick={()=>openNewAt(9)}>+ Neuer Eintrag</button>
         </div>
       </div>
 
@@ -154,8 +148,7 @@ export default function DayPage({ params }){
         <div
           ref={timelineRef}
           className="timeline"
-          style={{ position:"relative", height: 24*ROW_H, cursor:"pointer" }}
-          onClick={handleTimelineClick}
+          style={{ position:"relative", height: 24*ROW_H }}
         >
           {/* Stunden-Container als Hintergrund (nutzt deine .day-block / .day-block-inner) */}
           {Array.from({length:24}, (_,h)=>(
@@ -181,17 +174,29 @@ export default function DayPage({ params }){
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.25, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.50, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
                 <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.75, borderTop:"1px dashed rgba(0,0,0,.08)" }} />
+
+                {/* Zeit-Container klickbar: volle Stunde */}
+                <button
+                  type="button"
+                  onClick={()=>openNewAt(h)}
+                  title={`+ Neuer Eintrag ${pad2(h)}:00`}
+                  style={{
+                    position:"absolute", inset:0,
+                    background:"transparent", border:0, cursor:"pointer"
+                  }}
+                />
               </div>
             </div>
           ))}
 
-          {/* Events-Layer */}
+          {/* Events-Layer (ein durchgehender Block pro Event) */}
           <div
             className="events-layer"
+            onClick={handleOverlayClick} /* Klick auf leere Bereiche → + Neuer Eintrag (volle Stunde) */
             style={{
               position:"absolute", inset:0,
               paddingLeft: LABEL_W, paddingRight: 8,
-              pointerEvents:"none", zIndex:2
+              zIndex:2, cursor:"pointer"
             }}
           >
             {placed.map(ev=>{
@@ -200,7 +205,7 @@ export default function DayPage({ params }){
               const top    = (s/60) * ROW_H;
               const height = Math.max(12, ((e - s)/60) * ROW_H);
 
-              // >>> Breite/Ausrichtung innerhalb der Lane steuern
+              // Breite/Ausrichtung innerhalb der Lane steuern
               const laneW    = 100 / ev._laneCount;
               const rawW     = Math.max(0, laneW - LANE_GAP);     // nutzbare Lane-Breite
               const widthPct = rawW * EVENT_WIDTH_FACTOR;         // schmaler machen
@@ -218,7 +223,7 @@ export default function DayPage({ params }){
                 <Link
                   key={ev.id}
                   href={`/termine/eintrag/${ev.id}`}
-                  className="tl-event"
+                  onClick={(e)=>e.stopPropagation()} /* damit nicht der Overlay-Klick greift */
                   style={{
                     position:"absolute",
                     top, height,
@@ -232,10 +237,10 @@ export default function DayPage({ params }){
                     color: "inherit",
                     textDecoration: "none",
                     overflow: "hidden",
-                    pointerEvents:"auto"
+                    display: "block",
+                    cursor:"pointer"
                   }}
                   title={`${ev.title || "(ohne Titel)"} • ${timeTxt}`}
-                  onClick={(e)=>e.stopPropagation()}
                 >
                   <div style={{ fontWeight:700, fontSize:14, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                     {ev.title || "(ohne Titel)"}
@@ -285,6 +290,21 @@ export default function DayPage({ params }){
           </div>
         )}
       </div>
+
+      {/* Modal */}
+      <Modal
+        open={openForm}
+        onClose={()=>setOpenForm(false)}
+        title="+ Neuer Eintrag"
+        maxWidth={720}
+      >
+        <AppointmentForm
+          initial={formInitial}
+          customers={customers}
+          onSaved={onSaved}
+          onCancel={()=>setOpenForm(false)}
+        />
+      </Modal>
     </div>
   );
 }
