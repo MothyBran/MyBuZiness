@@ -28,13 +28,13 @@ function timeFromMinutes(min){
 }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
-/* ===== Zeit-Picker (Android-like: zwei Scrollspalten) ===== */
+/* ===== Zeit-Picker (Android-Style: zwei Scrollspalten) ===== */
 function TimePickerField({
   label,
   value,
   onChange,
   minMinutes = null,   // z. B. Start+30 für Ende
-  allowClear = false,  // Ende kann leer sein
+  allowClear = false,  // Ende darf leer sein
   inputAriaLabel
 }){
   const [open, setOpen] = useState(false);
@@ -80,7 +80,7 @@ function TimePickerField({
 
   const display = (value && /^\d{1,2}:\d{2}/.test(value)) ? value.slice(0,5) : "";
 
-  // min-Logik im Wheel weich anzeigen (markieren), harte Prüfung bei apply()
+  // weiches Min für visuelle Markierung
   const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
@@ -144,14 +144,15 @@ function TimePickerField({
         .af-time-field{ position:relative; }
         .af-time-display{
           display:flex; align-items:center; justify-content:space-between;
-          cursor:pointer;
+          cursor:pointer; height: var(--af-field-h);
         }
         .af-time-text{ font-variant-numeric: tabular-nums; }
-        .af-time-ico{ font-size:20px; opacity:.8; margin-left:8px; }
+        .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
         .af-time-pop{
           position:absolute; z-index:20; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
+          max-width:100%;
         }
         .af-wheels{
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
@@ -246,7 +247,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
   return (
     <form onSubmit={submit} className="form af-form">
       <div className="af-wrap">
-        {/* Art | Datum (gleich breit, schmal) */}
+        {/* Zeile 1: Art | Datum (gleich breit & schmal) */}
         <div className="af-row2">
           <label className="field">
             <span className="label">Art</span>
@@ -262,13 +263,13 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           </label>
         </div>
 
-        {/* Bezeichnung – exakt so breit wie (Art..Datum) */}
+        {/* Zeile 2: Bezeichnung – gleiche Gesamtbreite wie Zeile 1 */}
         <label className="field">
           <span className="label">Bezeichnung *</span>
           <input className="input" value={title} onChange={e=>setTitle(e.target.value)} required />
         </label>
 
-        {/* Start | Ende | Status – drei gleich hohe, bündig unter Bezeichnung */}
+        {/* Zeile 3: Start | Ende | Status – bündig unter Bezeichnung; gleiche Höhen */}
         <div className="af-row3">
           <TimePickerField
             label="Start"
@@ -299,7 +300,7 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           </label>
         </div>
 
-        {/* Kunde – volle Breite wie Bezeichnung */}
+        {/* Zeile 4: Kunde – gleiche Gesamtbreite wie Zeile 1/2 */}
         <label className="field">
           <span className="label">Kunde (optional)</span>
           <select className="select" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
@@ -308,10 +309,10 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           </select>
         </label>
 
-        {/* Notizen – volle Breite wie Bezeichnung */}
+        {/* Zeile 5: Notiz – gleiche Gesamtbreite, höhere Textarea */}
         <label className="field">
           <span className="label">Notiz (optional)</span>
-          <textarea className="textarea" value={note} onChange={e=>setNote(e.target.value)} />
+          <textarea className="textarea" rows={5} value={note} onChange={e=>setNote(e.target.value)} />
         </label>
 
         <div className="af-actions">
@@ -320,16 +321,19 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
         </div>
       </div>
 
-      {/* Formular-Styles – mobile-first, ohne horizontales Scrollen */}
+      {/* Strenges, bündiges, mobiles Styling (keine horizontale Scrollbarkeit) */}
       <style jsx>{`
-        .af-form{ gap: 14px; }
+        .af-form{
+          --af-field-h: 44px;
+        }
         .af-wrap{
           width: 100%;
-          max-width: 560px;   /* schmal halten, damit nichts seitlich scrollt */
+          max-width: 420px;          /* schmaler als zuvor → passt ins Modal auch mobil */
           margin: 0 auto;
           box-sizing: border-box;
         }
 
+        /* Rasterbreiten – alle Zeilen orientieren sich an der gleichen Wrap-Breite */
         .af-row2{
           display:grid;
           grid-template-columns: 1fr 1fr;
@@ -343,21 +347,33 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           align-items:start;
         }
 
-        /* Einheitliche Höhe für Inputs/Selects im 3er-Grid */
+        /* Einheitliche Feldhöhen (außer Textarea) */
         :global(.af-form) .input,
         :global(.af-form) .select{
-          min-height: 40px;
+          height: var(--af-field-h);
+          line-height: calc(var(--af-field-h) - 2px);
+        }
+
+        /* Selects haben je nach Browser eigene Höhen – erzwingen */
+        :global(.af-form) .select{
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          padding-right: 26px;  /* Platz für native Pfeile */
+        }
+
+        /* Zeit-Buttons aus dem TimePicker */
+        :global(.af-form) .af-time-display{
+          height: var(--af-field-h);
         }
 
         .af-actions{
           display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top: 4px;
         }
 
-        /* Kleiner machen, damit alles ins Modal passt */
-        @media (max-width: 480px){
-          .af-wrap{ max-width: 100%; padding: 0 2px; }
-          :global(.af-form) .input,
-          :global(.af-form) .select{ min-height: 44px; }
+        /* Ganz kleine Displays: Kanten eng, trotzdem kein horizontales Scrollen */
+        @media (max-width: 420px){
+          .af-wrap{ max-width: 100%; padding: 0 4px; }
         }
       `}</style>
     </form>
