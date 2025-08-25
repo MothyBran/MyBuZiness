@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* ───────────────────────────── Helpers ───────────────────────────── */
+/* ───────── Helpers ───────── */
 const toInt = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
@@ -33,21 +33,34 @@ function money(cents, code = "EUR") {
   const n = Number(cents || 0) / 100;
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
 }
+function computeStatus(row) {
+  const raw = String(row.status || "").toLowerCase();
+  if (raw === "done" || raw === "abgeschlossen") return "done";
+  const due = row.dueDate ? new Date(row.dueDate) : null;
+  if (due) {
+    const t0 = new Date(); t0.setHours(0,0,0,0);
+    const d0 = new Date(due); d0.setHours(0,0,0,0);
+    if (d0 < t0) return "overdue";
+  }
+  return "open";
+}
 
-const input = { width: "100%", padding: "10px 12px", border: "1px solid #ddd", borderRadius: 12, background: "#fff" };
-const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 };
-const btn = { padding: "10px 12px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" };
-const btnGhost = { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" };
-const btnDanger = { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" };
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 16 };
+const S = {
+  input: { width: "100%", padding: "10px 12px", border: "1px solid #ddd", borderRadius: 12, background: "#fff" },
+  lbl:   { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 },
+  btn:   { padding: "10px 12px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" },
+  ghost: { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" },
+  danger:{ padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" },
+  card:  { background: "#fff", border: "1px solid #eee", borderRadius: 14, padding: 16 }
+};
 
-/* ───────────────────────────── Page ───────────────────────────── */
+/* ───────── Page ───────── */
 export default function InvoicesPage() {
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [currency, setCurrency] = useState("EUR");
-  const [vatExempt, setVatExempt] = useState(true); // §19 aus Einstellungen (true => 0% USt)
+  const [vatExempt, setVatExempt] = useState(true);
 
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,19 +81,7 @@ export default function InvoicesPage() {
       const st = setRes ? await setRes.json().catch(() => ({})) : null;
 
       setRows(Array.isArray(list?.data) ? list.data : []);
-      setProducts(
-        Array.isArray(pr?.data)
-          ? pr.data.map((p) => ({
-              id: p.id,
-              name: p.name || "-",
-              kind: p.kind || "product", // product | service | travel
-              priceCents: toInt(p.priceCents || 0),
-              hourlyRateCents: toInt(p.hourlyRateCents || 0),
-              travelBaseCents: toInt(p.travelBaseCents || 0),
-              travelPerKmCents: toInt(p.travelPerKmCents || 0),
-            }))
-          : []
-      );
+      setProducts(Array.isArray(pr?.data) ? pr.data : []);
       setCustomers(Array.isArray(cs?.data) ? cs.data : []);
       setCurrency(st?.data?.currencyDefault || "EUR");
       setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
@@ -106,7 +107,7 @@ export default function InvoicesPage() {
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h1 className="page-title" style={{ margin: 0 }}>Rechnungen</h1>
-          <button style={btn} onClick={() => setIsOpen(true)}>+ Neue Rechnung</button>
+          <button style={S.btn} onClick={() => setIsOpen(true)}>+ Neue Rechnung</button>
         </div>
       </div>
 
@@ -114,39 +115,60 @@ export default function InvoicesPage() {
       <div className="card">
         <div className="table-wrap">
           <table className="table table-fixed">
+            <colgroup>
+              <col style={{ width: "8%" }} />   {/* Status */}
+              <col style={{ width: "20%" }} />  {/* Nr. */}
+              <col style={{ width: "18%" }} />  {/* Datum */}
+              <col style={{ width: "34%" }} />  {/* Kunde */}
+              <col style={{ width: "20%" }} />  {/* Betrag */}
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ width: "20%" }}>Nr.</th>
-                <th style={{ width: "40%" }}>Kunde</th>
-                <th className="hide-sm" style={{ width: "20%" }}>Datum</th>
-                <th style={{ width: "20%" }}>Betrag</th>
+                <th>Status</th>
+                <th>Nr.</th>
+                <th className="hide-sm">Datum</th>
+                <th>Kunde</th>
+                <th>Betrag</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={4} style={{ color: "#6b7280" }}>Lade…</td></tr>}
+              {loading && <tr><td colSpan={5} style={{ color: "#6b7280" }}>Lade…</td></tr>}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Rechnungen vorhanden.</td></tr>
+                <tr><td colSpan={5} style={{ color: "#6b7280" }}>Keine Rechnungen vorhanden.</td></tr>
               )}
 
               {!loading && rows.map((r) => {
                 const d = r.issueDate ? new Date(r.issueDate) : null;
                 const dateStr = d ? d.toLocaleDateString() : "—";
                 const isOpenRow = expandedId === r.id;
+                const st = computeStatus(r); // open | overdue | done
+                const stLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
+
                 return (
                   <>
                     <tr key={r.id} className="row-clickable" onClick={() => toggleExpand(r.id)}>
+                      <td><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
                       <td className="ellipsis">#{r.invoiceNo || "-"}</td>
-                      <td className="ellipsis">{r.customerName || "—"}</td>
                       <td className="hide-sm">{dateStr}</td>
-                      <td>{money(r.grossCents, r.currency || currency)}</td>
+                      <td className="ellipsis">{r.customerName || "—"}</td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
                     </tr>
 
                     {isOpenRow && (
                       <tr key={r.id + "-details"}>
-                        <td colSpan={4} style={{ background: "#fafafa" }}>
-                          {/* Aktionen */}
-                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "8px" }}>
-                            <button style={btnDanger} className="btn-ghost" onClick={(e) => { e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
+                        <td colSpan={5} className="details-cell">
+                          {/* Kopf Detail + Aktionen */}
+                          <div className="detail-head">
+                            <div>
+                              <div className="muted">Rechnung</div>
+                              <div className="h5">#{r.invoiceNo || "-"}</div>
+                              <div className="muted">Status: <strong>{stLabel}</strong></div>
+                            </div>
+                            <div className="actions">
+                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); window.print(); }}>🖨️ Druckansicht</button>
+                              <EditInvoiceButton row={r} onSaved={()=>{ toggleExpand(r.id); load(); }} />
+                              <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
+                            </div>
                           </div>
 
                           {/* Positionsliste */}
@@ -167,7 +189,7 @@ export default function InvoicesPage() {
                                 {Array.isArray(r.items) && r.items.map((it, idx) => {
                                   const qty = toInt(it.quantity || 0);
                                   const unit = toInt(it.unitPriceCents || 0);
-                                  const base = toInt(it.extraBaseCents || 0); // aus API GET vorbereitet
+                                  const base = toInt(it.extraBaseCents || 0);
                                   const line = base + qty * unit;
                                   return (
                                     <tr key={idx}>
@@ -183,7 +205,7 @@ export default function InvoicesPage() {
                           </div>
 
                           {/* Summen */}
-                          <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
+                          <div className="totals">
                             Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                           </div>
                         </td>
@@ -209,31 +231,112 @@ export default function InvoicesPage() {
         />
       )}
 
-      {/* lokale Styles für Tabelle/Mobil */}
+      {/* Tabelle/Status Styles */}
       <style jsx global>{`
+        .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
         .table-wrap{ overflow-x:auto }
         .table{ width:100%; border-collapse:collapse }
         .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
         .row-clickable{ cursor:pointer }
         .ellipsis{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+        .hide-sm{ }
         @media (max-width: 760px){ .hide-sm{ display:none } }
+
+        .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b }
+        .st-dot.open{ background:#f59e0b }     /* gelb */
+        .st-dot.overdue{ background:#ef4444 }  /* rot */
+        .st-dot.done{ background:#10b981 }     /* grün */
+
+        .details-cell{ background:#fafafa }
+        .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
+        .actions{ display:flex; gap:8px; flex-wrap:wrap }
+        .muted{ color:#6b7280; font-size:12px }
+        .h5{ font-size:16px; font-weight:800 }
+
+        .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
+        @media print{
+          .page-title, .actions, .btn, .card > .table-wrap::-webkit-scrollbar { display:none !important; }
+          .card{ border:none; padding:0 }
+          .table th,.table td{ border-color:#ddd }
+        }
       `}</style>
     </main>
   );
 }
 
-/* ───────────────────────────── NewInvoiceModal ───────────────────────────── */
+/* ───────── Detail: „Korrigieren“ (PATCH) ───────── */
+function EditInvoiceButton({ row, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [invoiceNo, setInvoiceNo] = useState(row.invoiceNo || "");
+  const [issueDate, setIssueDate] = useState(row.issueDate ? String(row.issueDate).slice(0,10) : "");
+  const [dueDate, setDueDate] = useState(row.dueDate ? String(row.dueDate).slice(0,10) : "");
+  const [status, setStatus] = useState(row.status || "open");
+  const st = computeStatus(row);
+  const autoLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
+
+  async function save() {
+    const payload = { invoiceNo, issueDate: issueDate || null, dueDate: dueDate || null, status };
+    const res = await fetch(`/api/invoices/${row.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    }).catch(()=>null);
+    if (!res || !res.ok) { alert("Speichern fehlgeschlagen."); return; }
+    setOpen(false);
+    onSaved?.();
+  }
+
+  if (!open) return <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setOpen(true); }}>✏️ Korrigieren</button>;
+
+  return (
+    <div className="edit-pop" onClick={(e)=> e.stopPropagation()}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, minWidth: 520 }}>
+        <div>
+          <label style={S.lbl}>Rechnungs-Nr.</label>
+          <input value={invoiceNo} onChange={(e)=>setInvoiceNo(e.target.value)} style={S.input} />
+        </div>
+        <div>
+          <label style={S.lbl}>Rechnungsdatum</label>
+          <input type="date" value={issueDate} onChange={(e)=>setIssueDate(e.target.value)} style={S.input} />
+        </div>
+        <div>
+          <label style={S.lbl}>Fällig am</label>
+          <input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} style={S.input} />
+        </div>
+        <div>
+          <label style={S.lbl}>Status</label>
+          <select value={status} onChange={(e)=>setStatus(e.target.value)} style={S.input}>
+            <option value="open">offen</option>
+            <option value="overdue">überfällig</option>
+            <option value="done">abgeschlossen</option>
+          </select>
+          <div style={{ fontSize:12, color:"#6b7280", marginTop:6 }}>
+            Automatisch erkannt: <strong>{autoLabel}</strong>
+          </div>
+        </div>
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
+        <button style={S.ghost} onClick={()=>setOpen(false)}>Abbrechen</button>
+        <button style={S.btn} onClick={save}>Speichern</button>
+      </div>
+      <style jsx>{`
+        .edit-pop{
+          background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ───────── Modal: Neue Rechnung ───────── */
 function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, onSaved }) {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [customerId, setCustomerId] = useState("");
-
-  // Rabatt (wie bei Belegen; vor Steuer)
   const [discount, setDiscount] = useState("0");
 
-  // Positions-Zeile
   function makeRow() {
     return {
       id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
@@ -241,27 +344,23 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       name: "",
       kind: "product",
       quantity: 1,
-      unitPriceCents: 0,  // in Cents (fix außer travel)
-      baseCents: 0,       // Grundpreis (nur UI/Summen)
-      unitDisplay: "0,00" // String-Eingabe nur für travel
+      unitPriceCents: 0,
+      baseCents: 0,
+      unitDisplay: "0,00"
     };
   }
   const [items, setItems] = useState([makeRow()]);
 
-  // nächste Rechnungsnummer vorab holen (optional Endpoint)
+  // neue Nummer im Schema RN-YYMM-000 holen
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/invoices/nextNo", { cache: "no-store" });
         const js = await res.json().catch(() => ({}));
-        if (js?.nextNo) setInvoiceNo(String(js.nextNo));
+        if (js?.invoiceNo) setInvoiceNo(js.invoiceNo);
       } catch { /* noop */ }
     })();
   }, []);
-
-  function addRow() { setItems((prev) => [...prev, makeRow()]); }
-  function removeRow(id) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id))); }
-  function patchRow(id, patch) { setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
 
   function onPickProduct(id, productId) {
     const p = products.find((x) => x.id === productId);
@@ -271,30 +370,28 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       const hr = toInt(p.hourlyRateCents || 0);
       const gp = toInt(p.priceCents || 0);
       if (hr > 0) {
-        // Grundpreis + Stundensatz
         patchRow(id, { productId: p.id, name: p.name, kind: "service", baseCents: gp, unitPriceCents: hr, unitDisplay: fromCents(hr) });
       } else {
-        // Stück-/Einzelleistung ohne Stundensatz
         patchRow(id, { productId: p.id, name: p.name, kind: "service", baseCents: 0, unitPriceCents: gp, unitDisplay: fromCents(gp) });
       }
     } else if (p.kind === "travel") {
       const base = toInt(p.travelBaseCents || 0);
       const perKm = toInt(p.travelPerKmCents || 0);
-      // travel: Einheit editierbar
       patchRow(id, { productId: p.id, name: p.name, kind: "travel", baseCents: base, unitPriceCents: perKm, unitDisplay: fromCents(perKm) });
     } else {
-      // product
       const up = toInt(p.priceCents || 0);
       patchRow(id, { productId: p.id, name: p.name, kind: "product", baseCents: 0, unitPriceCents: up, unitDisplay: fromCents(up) });
     }
   }
+  function patchRow(id, patch) { setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
+  function addRow() { setItems((prev) => [...prev, makeRow()]); }
+  function removeRow(id) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id))); }
 
   function onQty(id, v) {
     const q = Math.max(0, toInt(v));
     patchRow(id, { quantity: q });
   }
   function onChangeUnitDisplay(id, v) {
-    // nur für travel freigeben – andere sind fix
     const row = items.find((r) => r.id === id);
     if (!row || row.kind !== "travel") return;
     patchRow(id, { unitDisplay: v, unitPriceCents: toCents(v) });
@@ -303,7 +400,6 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
     return toInt(row.baseCents || 0) + toInt(row.quantity || 0) * toInt(row.unitPriceCents || 0);
   }
 
-  // Summen inkl. Rabatt & USt (USt gemäß Einstellungen)
   const totals = useMemo(() => {
     const net = items.reduce((s, r) => s + lineSum(r), 0);
     const discountCents = Math.max(0, toCents(discount || "0"));
@@ -320,17 +416,16 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
     if (items.length === 0) return alert("Mindestens eine Position ist erforderlich.");
 
     const payload = {
-      invoiceNo: (invoiceNo || "").trim() || undefined, // Server generiert, wenn leer
+      invoiceNo: (invoiceNo || "").trim() || undefined,
       customerId,
       issueDate,
       dueDate: dueDate || null,
-      taxRate: totals.taxRate,           // aus Einstellungen (0% bei §19, sonst 19)
-      discountCents: totals.discountCents, // wird vom Server aktuell evtl. ignoriert – kann ich dir in der Route aktivieren
+      discountCents: totals.discountCents,
       items: items.map((r) => ({
         productId: r.productId || null,
         name: r.name || "Position",
         quantity: toInt(r.quantity || 0),
-        unitPriceCents: toInt(r.unitPriceCents || 0), // Server bestimmt Grundpreis aus Produkt
+        unitPriceCents: toInt(r.unitPriceCents || 0),
       })),
     };
 
@@ -359,28 +454,32 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       <div className="surface" style={{ width: "min(980px,100%)", marginTop: 24 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <h2 style={{ margin: 0 }}>Neue Rechnung</h2>
-          {/* kein X: schließen via Overlay oder Abbrechen */}
         </div>
 
-        {/* Kopf */}
+        {/* Kopf: 4 Felder – exakt, luftig */}
         <div className="surface" style={{ padding: 12, marginTop: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <div className="grid-head">
             <div>
-              <label style={lbl}>Rechnungs‑Nr.</label>
-              <input type="text" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} style={input} />
+              <label style={S.lbl}>Rechnungs-Nr.</label>
+              <input type="text" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} style={S.input} />
             </div>
             <div>
-              <label style={lbl}>Rechnungsdatum</label>
-              <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} style={input} />
+              <label style={S.lbl}>Rechnungsdatum</label>
+              <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} style={S.input} />
             </div>
             <div>
-              <label style={lbl}>Fällig am</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={input} />
+              <label style={S.lbl}>Fällig am</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={S.input} />
+            </div>
+            <div>
+              <label style={S.lbl}>Rabatt gesamt (€, optional)</label>
+              <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} style={S.input} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 12 }}>
+
+          <div className="grid-one" style={{ marginTop: 12 }}>
             <div>
-              <label style={lbl}>Kunde *</label>
+              <label style={S.lbl}>Kunde *</label>
               <CustomerPicker value={customerId} onChange={setCustomerId} />
             </div>
           </div>
@@ -404,7 +503,7 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
                   return (
                     <tr key={r.id}>
                       <td>
-                        <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={{ ...input, width: "100%" }}>
+                        <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={{ ...S.input, width: "100%" }}>
                           <option value="">— Produkt wählen —</option>
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
@@ -419,7 +518,7 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
                         )}
                       </td>
                       <td>
-                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={input}>
+                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={S.input}>
                           {Array.from({ length: 20 }).map((_, i) => {
                             const v = i + 1;
                             return <option key={v} value={v}>{v}</option>;
@@ -433,7 +532,7 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
                             value={r.unitDisplay}
                             onChange={(e) => onChangeUnitDisplay(r.id, e.target.value)}
                             onBlur={(e) => onChangeUnitDisplay(r.id, fromCents(toCents(e.target.value)))}
-                            style={{ ...input, textAlign: "right" }}
+                            style={{ ...S.input, textAlign: "right" }}
                           />
                         ) : (
                           money(r.unitPriceCents, currency)
@@ -450,29 +549,16 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button className="btn-ghost" style={btnGhost} onClick={() => setItems((p) => [...p, makeRow()])}>+ Position</button>
-            <button className="btn-ghost" style={btnGhost} onClick={() => setItems((p) => (p.length <= 1 ? p : p.slice(0, -1)))} disabled={items.length <= 1}>– Entfernen</button>
+            <button className="btn-ghost" style={S.ghost} onClick={() => setItems((p) => [...p, makeRow()])}>+ Position</button>
+            <button className="btn-ghost" style={S.ghost} onClick={() => setItems((p) => (p.length <= 1 ? p : p.slice(0, -1)))} disabled={items.length <= 1}>– Entfernen</button>
           </div>
         </div>
 
-        {/* Rabatt + Summen (inkl. Grundpreis, Rabatt, USt gemäß Einstellungen) */}
+        {/* Summen */}
         <div className="surface" style={{ padding: 12, marginTop: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
-            <div>
-              <label style={lbl}>Rabatt gesamt (€, optional)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                style={input}
-              />
-              <div className="subtle" style={{ marginTop: 6 }}>
-                Rabatt wird vor Steuer abgezogen. USt {vatExempt ? "(befreit §19)" : "19%"}.
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
+          <div className="totals-grid">
+            <div />
+            <div className="totals-box">
               <div>Zwischensumme: <strong>{money(totals.net, currency)}</strong></div>
               <div>Rabatt: <strong>- {money(totals.discountCents, currency)}</strong></div>
               <div>Netto: <strong>{money(totals.netAfterDiscount, currency)}</strong></div>
@@ -486,10 +572,26 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
 
         {/* Aktionen */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-          <button className="btn-ghost" style={btnGhost} onClick={onClose}>Abbrechen</button>
-          <button className="btn" style={btn} onClick={save}>Speichern</button>
+          <button className="btn-ghost" style={S.ghost} onClick={onClose}>Abbrechen</button>
+          <button className="btn" style={S.btn} onClick={save}>Speichern</button>
         </div>
       </div>
+
+      <style jsx>{`
+        .grid-head{
+          display:grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap:12px;
+        }
+        .grid-one{ display:grid; grid-template-columns: 1fr; gap:12px; }
+
+        .totals-grid{ display:grid; grid-template-columns: 1fr auto; align-items:flex-end; }
+        .totals-box{ text-align:right; }
+
+        @media (max-width: 720px){
+          .grid-head{ grid-template-columns: 1fr 1fr; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -501,7 +603,7 @@ function CustomerPicker({ value, onChange }) {
     setOpts(js.data || []);
   })(); }, []);
   return (
-    <select style={input} value={value} onChange={(e) => onChange(e.target.value)} required>
+    <select style={S.input} value={value} onChange={(e) => onChange(e.target.value)} required>
       <option value="">– wählen –</option>
       {opts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>
