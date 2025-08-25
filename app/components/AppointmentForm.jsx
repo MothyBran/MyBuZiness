@@ -38,11 +38,11 @@ function TimePickerField({
 }){
   const inputRef = useRef(null);
 
-  // Fallback-Wheel (dein bestehendes Look & Feel)
+  // Fallback-Wheel
   const [openWheel, setOpenWheel] = useState(false);
   const hours    = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
   const minutes5 = useMemo(()=>Array.from({length:12},(_,i)=>i*5),[]);
-  const OPT_H = 36;            // muss zu CSS --opt-h passen
+  const OPT_H = 36;
   const hRef = useRef(null);
   const mRef = useRef(null);
   const snapTimer = useRef(null);
@@ -61,11 +61,9 @@ function TimePickerField({
   function openPicker(){
     const el = inputRef.current;
     if (el && typeof el.showPicker === "function") {
-      // Chromium/Safari: nativen Picker anzeigen (wie beim Datum)
-      el.showPicker();
+      el.showPicker();       // nativer Picker wie beim Datum
     } else {
-      // Firefox/ältere Browser: Fallback auf Wheel
-      setOpenWheel(true);
+      setOpenWheel(true);    // Fallback auf Wheel
     }
   }
 
@@ -74,7 +72,6 @@ function TimePickerField({
     ? timeFromMinutes(minMinutes).slice(0,5)
     : undefined;
 
-  // Bei manueller Eingabe ggf. an min anpassen (wie Date-Validierung)
   function onBlurClamp(){
     if (typeof minMinutes !== "number") return;
     const val = (inputRef.current?.value || "");
@@ -95,7 +92,7 @@ function TimePickerField({
   function snapToIndex(el, index){
     if (!el) return;
     const visible = Math.max(1, Math.round(el.clientHeight / OPT_H));
-    const slot    = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2); // Mitte oder #2 bei 4 Slots
+    const slot    = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
     const top     = index*OPT_H - OPT_H*(slot-1);
     el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   }
@@ -104,8 +101,8 @@ function TimePickerField({
       clearTimeout(snapTimer.current);
       const el = e.currentTarget;
       snapTimer.current = setTimeout(()=>{
-        const visible = Math.max(1, Math.round(el.clientHeight / OPT_H));
-        const slot     = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
+        const visible    = Math.max(1, Math.round(el.clientHeight / OPT_H));
+        const slot       = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
         const currentTop = el.scrollTop;
         const approxIdx  = Math.round((currentTop + OPT_H*(slot-1)) / OPT_H);
         const maxIdx     = (which==='h') ? 23 : 11;
@@ -119,7 +116,6 @@ function TimePickerField({
 
   useEffect(()=>{
     if(!openWheel) return;
-    // beim Öffnen aktuelle Auswahl mittig in den Ziel-Slot scrollen
     centerTo(hRef.current, tmpH);
     centerTo(mRef.current, Math.round(tmpM/5));
     function onDoc(e){
@@ -134,7 +130,6 @@ function TimePickerField({
   },[openWheel, tmpH, tmpM]);
 
   function applyWheel(){
-    // min beachten
     let mm = tmpH*60 + tmpM;
     if (typeof minMinutes === "number" && mm < minMinutes){
       mm = minMinutes;
@@ -149,13 +144,14 @@ function TimePickerField({
     <label className="field af-time-native">
       <span className="label">{label}</span>
 
-      <div className={`af-time-wrap ${openWheel ? "is-open" : ""}`}>
+      {/* HINZUGEFÜGT: 'has-clear' für bessere Innen-Paddings, wenn Clear-Button existiert */}
+      <div className={`af-time-wrap ${openWheel ? "is-open" : ""} ${allowClear ? "has-clear" : ""}`}>
         {/* Native Eingabe wie beim Datum (manuell oder per Icon öffnen) */}
         <input
           ref={inputRef}
           type="time"
           className="input time-input af-time-input"
-          step={300}                      // 5-Minuten-Raster
+          step={300}
           value={value || ""}
           min={minAttr}
           onChange={(e)=> onChange(e.target.value)}
@@ -163,7 +159,7 @@ function TimePickerField({
           aria-label={inputAriaLabel || label}
         />
 
-        {/* Uhr-Icon öffnet nativen Picker; Fallback = Wheel */}
+        {/* Uhr-Icon (einziges Icon) – öffnet nativen Picker bzw. Fallback-Wheel */}
         <button
           type="button"
           className="af-clock"
@@ -184,7 +180,7 @@ function TimePickerField({
           </button>
         )}
 
-        {/* Fallback: dein kompaktes Wheel (nur wenn showPicker fehlt) */}
+        {/* Fallback: kompaktes Wheel */}
         {openWheel && (
           <div className="af-time-pop">
             <div className="af-wheels">
@@ -227,7 +223,6 @@ function TimePickerField({
               </div>
             </div>
 
-            {/* fixer Ziel-Slot-Rahmen (scrollt nicht mit) */}
             <div className="af-center-indicator" aria-hidden />
 
             <div className="af-time-actions">
@@ -241,34 +236,42 @@ function TimePickerField({
         )}
       </div>
 
-      {/* Styles: bündig, native Höhensystematik; Fallback-Wheel wie gehabt */}
+      {/* Styles – nur das Nötige geändert */}
       <style jsx>{`
         .af-time-native { width: 100%; }
-        .af-time-wrap { position: relative; display:block; }
-        .af-time-wrap.is-open .af-time-input{
-          border-color: transparent !important;
-          box-shadow: none !important;
+        .af-time-wrap { position: relative; display:block; min-width:0; }
+
+        /* WICHTIG: natives WebKit-Uhrsymbol verstecken → kein doppeltes Icon */
+        :global(input[type="time"].af-time-input::-webkit-calendar-picker-indicator){
+          display: none;
         }
 
-        /* Native Eingabe – gleiche Höhe wie die anderen Felder */
+        /* Eingabefeld kompakter halten (keine Überlappung mit "Status") */
         .af-time-input{
           height: var(--af-field-h);
           line-height: calc(var(--af-field-h) - 2px);
-          padding: 0 72px 0 12px; /* Platz für Icon & Clear */
+          padding: 0 40px 0 12px;     /* Basis: Platz für EIN Icon rechts */
           width: 100%;
         }
+        /* Wenn Clear vorhanden → mehr Innenabstand für zwei Buttons (Uhr + X) */
+        .af-time-wrap.has-clear .af-time-input{
+          padding-right: 68px;
+        }
 
-        /* Uhr-Button rechts im Feld */
+        /* Uhr-Button – EINZIGES sichtbares Icon */
         .af-clock{
-          position:absolute; top:50%; right:36px; transform: translateY(-50%);
+          position:absolute; top:50%; right:8px; transform: translateY(-50%);
           border:0; background:transparent; cursor:pointer;
-          width: 28px; height: 28px; line-height: 28px; text-align:center;
-          border-radius: 14px; font-size: 18px;
+          width: 24px; height: 24px; line-height: 24px; text-align:center;
+          border-radius: 12px; font-size: 16px;
           color: #374151;
         }
+        /* Wenn Clear existiert, Uhr etwas weiter nach links schieben */
+        .af-time-wrap.has-clear .af-clock{ right: 34px; }
+
         .af-clock:hover{ background: rgba(0,0,0,.06); }
 
-        /* Clear-Button (optional) */
+        /* Clear-Button (nur Ende) */
         .af-clear{
           position:absolute; top:50%; right:6px; transform: translateY(-50%);
           border:0; background:transparent; cursor:pointer;
@@ -278,14 +281,20 @@ function TimePickerField({
         }
         .af-clear:hover{ background: rgba(0,0,0,.06); }
 
-        /* ==== Fallback-Wheel (nur wenn openWheel) ==== */
+        /* Rahmen/Shadow des Eingabefeldes ausblenden, wenn Wheel offen → kein Durchscheinen */
+        .af-time-wrap.is-open .af-time-input{
+          border-color: transparent !important;
+          box-shadow: none !important;
+        }
+
+        /* ==== Fallback-Wheel (unverändert kompakt) ==== */
         .af-time-pop{
           position:absolute; z-index:30; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
           --opt-h: 36px;
-          --visible-slots: 4;             /* <— hier 4 oder 5 einstellbar */
+          --visible-slots: 4;             /* hier 4 oder 5 einstellbar */
           --wheel-h: calc(var(--opt-h) * var(--visible-slots));
         }
         .af-wheels{
