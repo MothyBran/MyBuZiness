@@ -116,7 +116,7 @@ export default function InvoicesPage() {
         <div className="table-wrap">
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "8%" }} />   {/* S */}
+              <col style={{ width: "8%" }} />   {/* Status */}
               <col style={{ width: "20%" }} />  {/* Nr. */}
               <col style={{ width: "18%" }} />  {/* Datum */}
               <col style={{ width: "34%" }} />  {/* Kunde */}
