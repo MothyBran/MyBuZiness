@@ -27,6 +27,35 @@ function timeFromMinutes(min){
   return `${pad2(hh)}:${pad2(mm)}`;
 }
 
+// app/components/AppointmentForm.jsx
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+
+/* ===== Helpers ===== */
+const pad2 = (n) => String(n).padStart(2, "0");
+function toDate(input){
+  if (input instanceof Date) return input;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [y,m,d]=input.split("-").map(Number);
+    return new Date(y, m-1, d, 12,0,0,0);
+  }
+  const d = new Date(input || Date.now());
+  return isNaN(d) ? new Date() : d;
+}
+function minutesFromTime(val){
+  const m = String(val ?? "").match(/^\s*(\d{1,2}):(\d{2})/);
+  if (!m) return 0;
+  const h  = Math.max(0, Math.min(23, parseInt(m[1],10)));
+  const mm = Math.max(0, Math.min(59, parseInt(m[2],10)));
+  return h*60 + mm;
+}
+function timeFromMinutes(min){
+  const m = Math.max(0, Math.min(23*60+59, min|0));
+  const hh = Math.floor(m/60), mm = m%60;
+  return `${pad2(hh)}:${pad2(mm)}`;
+}
+
 /* ===== Zeit-Picker – Native Eingabe + Icon öffnet Picker; Fallback = Wheel ===== */
 function TimePickerField({
   label,
@@ -144,9 +173,8 @@ function TimePickerField({
     <label className="field af-time-native">
       <span className="label">{label}</span>
 
-      {/* HINZUGEFÜGT: 'has-clear' für bessere Innen-Paddings, wenn Clear-Button existiert */}
       <div className={`af-time-wrap ${openWheel ? "is-open" : ""} ${allowClear ? "has-clear" : ""}`}>
-        {/* Native Eingabe wie beim Datum (manuell oder per Icon öffnen) */}
+        {/* Native Eingabe (manuell) */}
         <input
           ref={inputRef}
           type="time"
@@ -159,7 +187,7 @@ function TimePickerField({
           aria-label={inputAriaLabel || label}
         />
 
-        {/* Uhr-Icon (einziges Icon) – öffnet nativen Picker bzw. Fallback-Wheel */}
+        {/* EIN Icon – öffnet nativen Picker oder Fallback-Wheel */}
         <button
           type="button"
           className="af-clock"
@@ -236,29 +264,27 @@ function TimePickerField({
         )}
       </div>
 
-      {/* Styles – nur das Nötige geändert */}
+      {/* Styles – Breite der Zeit-Felder steuerbar über --time-col-w */}
       <style jsx>{`
         .af-time-native { width: 100%; }
         .af-time-wrap { position: relative; display:block; min-width:0; }
 
-        /* WICHTIG: natives WebKit-Uhrsymbol verstecken → kein doppeltes Icon */
+        /* DOPPELTES Uhr-Icon entfernen (native WebKit-Anzeige) */
         :global(input[type="time"].af-time-input::-webkit-calendar-picker-indicator){
           display: none;
         }
 
-        /* Eingabefeld kompakter halten (keine Überlappung mit "Status") */
         .af-time-input{
           height: var(--af-field-h);
           line-height: calc(var(--af-field-h) - 2px);
-          padding: 0 40px 0 12px;     /* Basis: Platz für EIN Icon rechts */
+          padding: 0 40px 0 12px;     /* Platz für EIN Icon rechts */
           width: 100%;
+          box-sizing: border-box;     /* verhindert Überbreite */
         }
-        /* Wenn Clear vorhanden → mehr Innenabstand für zwei Buttons (Uhr + X) */
         .af-time-wrap.has-clear .af-time-input{
-          padding-right: 68px;
+          padding-right: 68px;        /* Uhr + Clear */
         }
 
-        /* Uhr-Button – EINZIGES sichtbares Icon */
         .af-clock{
           position:absolute; top:50%; right:8px; transform: translateY(-50%);
           border:0; background:transparent; cursor:pointer;
@@ -266,12 +292,9 @@ function TimePickerField({
           border-radius: 12px; font-size: 16px;
           color: #374151;
         }
-        /* Wenn Clear existiert, Uhr etwas weiter nach links schieben */
         .af-time-wrap.has-clear .af-clock{ right: 34px; }
-
         .af-clock:hover{ background: rgba(0,0,0,.06); }
 
-        /* Clear-Button (nur Ende) */
         .af-clear{
           position:absolute; top:50%; right:6px; transform: translateY(-50%);
           border:0; background:transparent; cursor:pointer;
@@ -281,20 +304,19 @@ function TimePickerField({
         }
         .af-clear:hover{ background: rgba(0,0,0,.06); }
 
-        /* Rahmen/Shadow des Eingabefeldes ausblenden, wenn Wheel offen → kein Durchscheinen */
         .af-time-wrap.is-open .af-time-input{
           border-color: transparent !important;
           box-shadow: none !important;
         }
 
-        /* ==== Fallback-Wheel (unverändert kompakt) ==== */
+        /* ==== Fallback-Wheel ==== */
         .af-time-pop{
           position:absolute; z-index:30; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
           --opt-h: 36px;
-          --visible-slots: 4;             /* hier 4 oder 5 einstellbar */
+          --visible-slots: 4;             /* 4 oder 5 einstellbar */
           --wheel-h: calc(var(--opt-h) * var(--visible-slots));
         }
         .af-wheels{
@@ -348,12 +370,218 @@ function TimePickerField({
           display:flex; align-items:center; gap:8px; margin-top:10px;
           position: relative; z-index: 2;
         }
-
-        @media (max-width: 420px){
-          .af-time-pop{ --opt-h: 34px; }
-        }
       `}</style>
     </label>
+  );
+}
+
+/* ===== Haupt-Form ===== */
+export default function AppointmentForm({ initial = null, customers = [], onSaved, onCancel }){
+  const isEdit = !!initial?.id;
+
+  const [kind,setKind]=useState(initial?.kind || "appointment");
+  const [title,setTitle]=useState(initial?.title || "");
+  const [date,setDate]=useState(()=>{
+    const d = initial?.date ? toDate(initial.date) : new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  });
+  const [startAt,setStartAt]=useState(initial?.startAt?.slice(0,5) || "09:00");
+  const [endAt,setEndAt]=useState(initial?.endAt?.slice(0,5) || "");
+  const [customerId,setCustomerId]=useState(initial?.customerId || "");
+  const [customerName,setCustomerName]=useState(initial?.customerName || "");
+  const [status,setStatus]=useState(initial?.status || "open");
+  const [note,setNote]=useState(initial?.note || "");
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    const found = customers.find(c=>String(c.id)===String(customerId));
+    if (found) setCustomerName(found.name);
+  },[customerId, customers]);
+
+  const endMin = useMemo(()=> minutesFromTime(startAt) + 30, [startAt]);
+
+  async function submit(e){
+    e.preventDefault();
+    if (!title.trim()){ alert("Bezeichnung ist erforderlich."); return; }
+    let finalEnd = endAt;
+    if (finalEnd){
+      const mEnd = minutesFromTime(finalEnd);
+      if (mEnd < endMin) finalEnd = timeFromMinutes(endMin);
+    }
+    setSaving(true);
+    try{
+      const payload = {
+        kind, title, date,
+        startAt: startAt || "00:00",
+        endAt: finalEnd || null,
+        customerId: customerId || null,
+        customerName: customerName || null,
+        status, note
+      };
+      const url = isEdit ? `/api/appointments/${initial.id}` : `/api/appointments`;
+      const method = isEdit ? "PUT" : "POST";
+      const r = await fetch(url, {
+        method, headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+      });
+      if(!r.ok) throw new Error(await r.text().catch(()=> "save_failed"));
+      await r.json().catch(()=> ({}));
+      onSaved?.();
+    }catch(err){
+      console.error(err);
+      alert("Speichern fehlgeschlagen.");
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="form af-form">
+      <div className="af-wrap">
+        {/* Zeile 1: Art | Datum */}
+        <div className="af-row2">
+          <label className="field">
+            <span className="label">Art</span>
+            <select className="select af-control" value={kind} onChange={e=>setKind(e.target.value)}>
+              <option value="appointment">Termin</option>
+              <option value="order">Auftrag</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span className="label">Datum</span>
+            <input className="input af-control" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          </label>
+        </div>
+
+        {/* Zeile 2: Bezeichnung */}
+        <label className="field">
+          <span className="label">Bezeichnung *</span>
+          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required />
+        </label>
+
+        {/* Zeile 3: Start | Ende | Status */}
+        <div className="af-row3">
+          <TimePickerField
+            label="Start"
+            value={startAt}
+            onChange={(t)=>{
+              setStartAt(t);
+              if (endAt && minutesFromTime(endAt) < minutesFromTime(t)+30){
+                setEndAt(timeFromMinutes(minutesFromTime(t)+30));
+              }
+            }}
+            inputAriaLabel="Startzeit wählen"
+          />
+          <TimePickerField
+            label="Ende (optional)"
+            value={endAt}
+            onChange={setEndAt}
+            minMinutes={endMin}
+            allowClear
+            inputAriaLabel="Endzeit wählen"
+          />
+          <label className="field">
+            <span className="label">Status</span>
+            <select className="select af-control" value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="open">offen</option>
+              <option value="cancelled">abgesagt</option>
+              <option value="done">abgeschlossen</option>
+            </select>
+          </label>
+        </div>
+
+        {/* Zeile 4: Kunde */}
+        <label className="field">
+          <span className="label">Kunde (optional)</span>
+          <select className="select af-control" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
+            <option value="">—</option>
+            {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+
+        {/* Zeile 5: Notiz */}
+        <label className="field">
+          <span className="label">Notiz (optional)</span>
+          <textarea className="textarea af-textarea" rows={5} value={note} onChange={e=>setNote(e.target.value)} />
+        </label>
+
+        <div className="af-actions">
+          <button type="button" className="btn-ghost" onClick={onCancel}>Abbrechen</button>
+          <button type="submit" className="btn" disabled={saving}>{saving?"Speichert…":"Speichern"}</button>
+        </div>
+      </div>
+
+      {/* Strenges, bündiges, mobiles Styling + manuelle Breite der Zeitfelder */}
+      <style jsx>{`
+        .af-form{
+          --af-field-h: 44px;      /* einheitliche Feldhöhe (außer Textarea) */
+          --time-col-w: 130px;     /* <<< HIER Breite der Zeit-Felder einstellen */
+        }
+
+        .af-wrap{
+          width: 100%;
+          max-width: 360px;        /* kompakt fürs Modal */
+          margin: 0 auto;
+          box-sizing: border-box;
+        }
+        .af-wrap *{ box-sizing: border-box; }
+
+        .af-row2{
+          display:grid;
+          grid-template-columns: 1fr 1fr;
+          gap:12px;
+          align-items:start;
+        }
+
+        /* Drei Spalten: Zeit | Zeit | Status
+           Die ersten beiden Spalten sind fix (—time-col-w), Status füllt den Rest */
+        .af-row3{
+          display:grid;
+          grid-template-columns: var(--time-col-w) var(--time-col-w) 1fr;
+          gap:12px;                 /* Abstand zwischen Feldern */
+          align-items:start;
+          min-width: 0;
+        }
+
+        /* explizit: Zeit-Felder nicht größer als die definierte Spaltenbreite */
+        .af-row3 :global(.af-time-native){
+          max-width: var(--time-col-w);
+          width: 100%;
+        }
+
+        /* sehr kleine Geräte: schmäler oder umbrechen */
+        @media (max-width: 360px){
+          .af-form{ --time-col-w: 120px; }   /* etwas schmaler */
+        }
+        @media (max-width: 330px){
+          .af-row3{
+            grid-template-columns: 1fr 1fr;  /* Zeitfelder nebeneinander */
+          }
+          .af-row3 > .field:last-child{
+            grid-column: 1 / -1;            /* Status unter die Zeiten */
+          }
+        }
+
+        /* Einheitliche Höhe für Inputs/Selects */
+        .af-control{
+          height: var(--af-field-h);
+          padding: 0 12px;
+          line-height: normal;
+          width: 100%;
+        }
+
+        /* Textarea: volle Breite */
+        .af-textarea{
+          width: 100%;
+          max-width: 100%;
+          resize: vertical;
+        }
+
+        .af-actions{
+          display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top: 4px;
+        }
+      `}</style>
+    </form>
   );
 }
 
