@@ -27,7 +27,7 @@ function timeFromMinutes(min){
   return `${pad2(hh)}:${pad2(mm)}`;
 }
 
-/* ===== Zeit-Picker (Android-Style: zwei Scrollspalten) ===== */
+/* ===== Zeit-Picker – Native Eingabe + Icon öffnet Picker; Fallback = Wheel ===== */
 function TimePickerField({
   label,
   value,
@@ -36,27 +36,94 @@ function TimePickerField({
   allowClear = false,  // Ende darf leer sein
   inputAriaLabel
 }){
-  const [open, setOpen] = useState(false);
-  const hostRef = useRef(null);
-  const vMin = typeof value === "string" && value ? minutesFromTime(value) : null;
+  const inputRef = useRef(null);
 
-  const hours = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
+  // Fallback-Wheel (dein bestehendes Look & Feel)
+  const [openWheel, setOpenWheel] = useState(false);
+  const hours    = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
   const minutes5 = useMemo(()=>Array.from({length:12},(_,i)=>i*5),[]);
-
-  // Wheel-Option-Höhe (muss zu CSS --opt-h passen)
-  const OPT_H = 36;
+  const OPT_H = 36;            // muss zu CSS --opt-h passen
   const hRef = useRef(null);
   const mRef = useRef(null);
   const snapTimer = useRef(null);
 
+  const vMin = typeof value === "string" && value ? minutesFromTime(value) : null;
   const [tmpH, setTmpH] = useState(()=> (vMin!=null ? Math.floor(vMin/60) : 9));
   const [tmpM, setTmpM] = useState(()=> (vMin!=null ? Math.round((vMin%60)/5)*5 : 0));
 
   useEffect(()=>{
+    if (vMin!=null){
+      setTmpH(Math.floor(vMin/60));
+      setTmpM(Math.round((vMin%60)/5)*5);
+    }
+  },[vMin]);
+
+  function openPicker(){
+    const el = inputRef.current;
+    if (el && typeof el.showPicker === "function") {
+      // Chromium/Safari: nativen Picker anzeigen (wie beim Datum)
+      el.showPicker();
+    } else {
+      // Firefox/ältere Browser: Fallback auf Wheel
+      setOpenWheel(true);
+    }
+  }
+
+  // min-Attribut für native Eingabe
+  const minAttr = typeof minMinutes === "number"
+    ? timeFromMinutes(minMinutes).slice(0,5)
+    : undefined;
+
+  // Bei manueller Eingabe ggf. an min anpassen (wie Date-Validierung)
+  function onBlurClamp(){
+    if (typeof minMinutes !== "number") return;
+    const val = (inputRef.current?.value || "");
+    if (!/^\d{1,2}:\d{2}/.test(val)) return;
+    if (minutesFromTime(val) < minMinutes){
+      const t = timeFromMinutes(minMinutes).slice(0,5);
+      onChange(t);
+      if (inputRef.current) inputRef.current.value = t;
+    }
+  }
+
+  // ===== Wheel-Helpers (Fallback)
+  function centerTo(el, index){
+    if(!el) return;
+    const target = index * OPT_H - (el.clientHeight/2 - OPT_H/2);
+    el.scrollTo({ top: Math.max(0, target) });
+  }
+  function snapToIndex(el, index){
+    if (!el) return;
+    const visible = Math.max(1, Math.round(el.clientHeight / OPT_H));
+    const slot    = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2); // Mitte oder #2 bei 4 Slots
+    const top     = index*OPT_H - OPT_H*(slot-1);
+    el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }
+  function handleWheelScroll(which){
+    return (e)=>{
+      clearTimeout(snapTimer.current);
+      const el = e.currentTarget;
+      snapTimer.current = setTimeout(()=>{
+        const visible = Math.max(1, Math.round(el.clientHeight / OPT_H));
+        const slot     = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
+        const currentTop = el.scrollTop;
+        const approxIdx  = Math.round((currentTop + OPT_H*(slot-1)) / OPT_H);
+        const maxIdx     = (which==='h') ? 23 : 11;
+        const idx        = Math.max(0, Math.min(maxIdx, approxIdx));
+        const targetTop  = idx*OPT_H - OPT_H*(slot-1);
+        el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+        if (which==='h') setTmpH(idx); else setTmpM(idx*5);
+      }, 80);
+    };
+  }
+
+  useEffect(()=>{
+    if(!openWheel) return;
+    // beim Öffnen aktuelle Auswahl mittig in den Ziel-Slot scrollen
+    centerTo(hRef.current, tmpH);
+    centerTo(mRef.current, Math.round(tmpM/5));
     function onDoc(e){
-      if (!open) return;
-      if (!hostRef.current) return;
-      if (!hostRef.current.contains(e.target)) setOpen(false);
+      if (!e.target.closest?.('.af-time-pop')) setOpenWheel(false);
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("touchstart", onDoc, { passive:true });
@@ -64,216 +131,196 @@ function TimePickerField({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
     };
-  },[open]);
+  },[openWheel, tmpH, tmpM]);
 
-  useEffect(()=>{
-    if (vMin!=null){
-      setTmpH(Math.floor(vMin/60));
-      setTmpM(Math.round((vMin%60)/5)*5); // auf 5er-Schritte runden
-    }
-  },[vMin]);
-
-  // Beim Öffnen die aktuelle Auswahl mittig anzeigen
-  useEffect(()=>{
-    if(!open) return;
-    const centerTo = (el, index)=>{
-      if(!el) return;
-      const target = index * OPT_H - (el.clientHeight/2 - OPT_H/2);
-      el.scrollTo({ top: Math.max(0, target) });
-    };
-    centerTo(hRef.current, tmpH);
-    centerTo(mRef.current, Math.round(tmpM/5));
-  },[open, tmpH, tmpM]);
-
-  function handleWheelScroll(which){
-    return (e)=>{
-      clearTimeout(snapTimer.current);
-      const el = e.currentTarget;
-      snapTimer.current = setTimeout(()=>{
-        const center = el.scrollTop + el.clientHeight/2;
-        const idx = Math.round((center - OPT_H/2) / OPT_H);
-        const clampedIdx = Math.max(0, Math.min(which==='h' ? 23 : 11, idx));
-        const targetTop = clampedIdx * OPT_H - (el.clientHeight/2 - OPT_H/2);
-        el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-        if (which==='h') setTmpH(clampedIdx);
-        else setTmpM(clampedIdx * 5);
-      }, 80);
-    };
-  }
-
-  useEffect(()=>()=>clearTimeout(snapTimer.current),[]);
-
-  function apply(){
+  function applyWheel(){
+    // min beachten
     let mm = tmpH*60 + tmpM;
     if (typeof minMinutes === "number" && mm < minMinutes){
       mm = minMinutes;
     }
-    onChange(timeFromMinutes(mm));
-    setOpen(false);
+    const t = timeFromMinutes(mm).slice(0,5);
+    onChange(t);
+    if (inputRef.current) inputRef.current.value = t;
+    setOpenWheel(false);
   }
-  function clearVal(){
-    onChange("");
-    setOpen(false);
-  }
-
-  const display = (value && /^\d{1,2}:\d{2}/.test(value)) ? value.slice(0,5) : "";
-  const softMin = typeof minMinutes === "number" ? minMinutes : -1;
 
   return (
-    <div className={`field af-time-field ${open ? "is-open" : ""}`} ref={hostRef}>
-      <span className="label"> {label} </span>
+    <label className="field af-time-native">
+      <span className="label">{label}</span>
 
-      <button
-        type="button"
-        className="input af-time-display"
-        aria-label={inputAriaLabel || label}
-        onClick={()=>setOpen(v=>!v)}
-      >
-        <span className="af-time-text">{display || "—"}</span>
-        <span className="af-time-ico" aria-hidden>🕒</span>
-      </button>
+      <div className={`af-time-wrap ${openWheel ? "is-open" : ""}`}>
+        {/* Native Eingabe wie beim Datum (manuell oder per Icon öffnen) */}
+        <input
+          ref={inputRef}
+          type="time"
+          className="input time-input af-time-input"
+          step={300}                      // 5-Minuten-Raster
+          value={value || ""}
+          min={minAttr}
+          onChange={(e)=> onChange(e.target.value)}
+          onBlur={onBlurClamp}
+          aria-label={inputAriaLabel || label}
+        />
 
-      {open && (
-        <div className="af-time-pop">
-          <div className="af-wheels">
-            <div
-              className="af-wheel"
-              ref={hRef}
-              onScroll={handleWheelScroll('h')}
-              role="listbox"
-              aria-label="Stunden"
-            >
-              {hours.map(h=>{
-                const mm = h*60 + tmpM;
-                const disabledSoft = softMin>=0 && mm < softMin;
-                return (
+        {/* Uhr-Icon öffnet nativen Picker; Fallback = Wheel */}
+        <button
+          type="button"
+          className="af-clock"
+          aria-label="Uhrzeit auswählen"
+          onClick={openPicker}
+          title="Uhrzeit auswählen"
+        >🕒</button>
+
+        {allowClear && value && (
+          <button
+            type="button"
+            className="af-clear"
+            onClick={()=> onChange("")}
+            aria-label="Zeit leeren"
+            title="Zeit leeren"
+          >
+            ✕
+          </button>
+        )}
+
+        {/* Fallback: dein kompaktes Wheel (nur wenn showPicker fehlt) */}
+        {openWheel && (
+          <div className="af-time-pop">
+            <div className="af-wheels">
+              <div
+                className="af-wheel"
+                ref={hRef}
+                onScroll={handleWheelScroll('h')}
+                role="listbox"
+                aria-label="Stunden"
+              >
+                {hours.map(h=>(
                   <button
                     key={h}
                     type="button"
-                    className={`af-opt ${tmpH===h?"is-active":""} ${disabledSoft?"is-soft-disabled":""}`}
-                    onClick={()=>setTmpH(h)}
-                  >{pad2(h)}</button>
-                );
-              })}
-            </div>
-            <div
-              className="af-wheel"
-              ref={mRef}
-              onScroll={handleWheelScroll('m')}
-              role="listbox"
-              aria-label="Minuten"
-            >
-              {minutes5.map(m=>{
-                const mm = tmpH*60 + m;
-                const disabledSoft = softMin>=0 && mm < softMin;
-                return (
+                    className={`af-opt ${tmpH===h?"is-active":""}`}
+                    onClick={()=>{
+                      setTmpH(h); snapToIndex(hRef.current, h);
+                    }}
+                  >{String(h).padStart(2,"0")}</button>
+                ))}
+              </div>
+
+              <div
+                className="af-wheel"
+                ref={mRef}
+                onScroll={handleWheelScroll('m')}
+                role="listbox"
+                aria-label="Minuten"
+              >
+                {minutes5.map(m=>(
                   <button
                     key={m}
                     type="button"
-                    className={`af-opt ${tmpM===m?"is-active":""} ${disabledSoft?"is-soft-disabled":""}`}
-                    onClick={()=>setTmpM(m)}
-                  >{pad2(m)}</button>
-                );
-              })}
+                    className={`af-opt ${tmpM===m?"is-active":""}`}
+                    onClick={()=>{
+                      setTmpM(m); snapToIndex(mRef.current, Math.round(m/5));
+                    }}
+                  >{String(m).padStart(2,"0")}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* fixer Ziel-Slot-Rahmen (scrollt nicht mit) */}
+            <div className="af-center-indicator" aria-hidden />
+
+            <div className="af-time-actions">
+              {allowClear && (
+                <button type="button" className="btn-ghost" onClick={()=>setOpenWheel(false)}>Abbrechen</button>
+              )}
+              <div style={{flex:1}} />
+              <button type="button" className="btn" onClick={applyWheel}>OK</button>
             </div>
           </div>
+        )}
+      </div>
 
-          {/* Center-Indikator als Overlay (bleibt fix, scrollt NICHT mit) */}
-          <div className="af-center-indicator" aria-hidden />
-
-          <div className="af-time-actions">
-            {allowClear && (
-              <button type="button" className="btn-ghost" onClick={clearVal}>Leeren</button>
-            )}
-            <div style={{flex:1}} />
-            <button type="button" className="btn" onClick={apply}>OK</button>
-          </div>
-        </div>
-      )}
-
+      {/* Styles: bündig, native Höhensystematik; Fallback-Wheel wie gehabt */}
       <style jsx>{`
-        .af-time-field{ position:relative; }
-
-        /* Rahmen/Shadow des Eingabefeldes ausblenden, wenn Wheel offen */
-        .af-time-field.is-open .af-time-display{
+        .af-time-native { width: 100%; }
+        .af-time-wrap { position: relative; display:block; }
+        .af-time-wrap.is-open .af-time-input{
           border-color: transparent !important;
           box-shadow: none !important;
         }
 
-        .af-time-display{
-          display:flex; align-items:center; justify-content:space-between;
+        /* Native Eingabe – gleiche Höhe wie die anderen Felder */
+        .af-time-input{
           height: var(--af-field-h);
-          padding: 0 12px;
-          cursor:pointer;
+          line-height: calc(var(--af-field-h) - 2px);
+          padding: 0 72px 0 12px; /* Platz für Icon & Clear */
+          width: 100%;
         }
-        .af-time-text{ font-variant-numeric: tabular-nums; }
-        .af-time-ico{ font-size:20px; opacity:.85; margin-left:8px; }
-      
+
+        /* Uhr-Button rechts im Feld */
+        .af-clock{
+          position:absolute; top:50%; right:36px; transform: translateY(-50%);
+          border:0; background:transparent; cursor:pointer;
+          width: 28px; height: 28px; line-height: 28px; text-align:center;
+          border-radius: 14px; font-size: 18px;
+          color: #374151;
+        }
+        .af-clock:hover{ background: rgba(0,0,0,.06); }
+
+        /* Clear-Button (optional) */
+        .af-clear{
+          position:absolute; top:50%; right:6px; transform: translateY(-50%);
+          border:0; background:transparent; cursor:pointer;
+          width: 24px; height: 24px; line-height: 24px; text-align:center;
+          border-radius: 12px;
+          color: #6b7280;
+        }
+        .af-clear:hover{ background: rgba(0,0,0,.06); }
+
+        /* ==== Fallback-Wheel (nur wenn openWheel) ==== */
         .af-time-pop{
           position:absolute; z-index:30; top:100%; left:0; right:0;
           margin-top:8px; background:#fff; border:1px solid var(--color-border);
           border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
           max-width:100%;
-          /* Für Overlays (Fades & Center-Line) als Bezug */
-          --opt-h: 36px;                 /* Höhe eines Eintrags */
-          --visible-slots: 4;            /* Anzahl sichtbarer Slots (z.B. 4 oder 5) */
+          --opt-h: 36px;
+          --visible-slots: 4;             /* <— hier 4 oder 5 einstellbar */
           --wheel-h: calc(var(--opt-h) * var(--visible-slots));
         }
-      
-        /* ====== Wheels – Optik bleibt wie zuvor ====== */
         .af-wheels{
           display:grid; grid-template-columns: 1fr 1fr; gap:10px;
           position: relative;
         }
-
         .af-wheel{
           position: relative;
           height: var(--wheel-h);
           overflow-y: auto;
           scroll-snap-type: y mandatory;
           -webkit-overflow-scrolling: touch;
-
-          /* Fades NICHT mehr als background (sonst „wandern“ sie mit) */
-          background-color:#fafafa;
-
+          background:
+            linear-gradient(#fafafa, rgba(250,250,250,0)) top,
+            linear-gradient(rgba(250,250,250,0), #fafafa) bottom;
+          background-size: 100% calc(var(--opt-h) * 1.2), 100% calc(var(--opt-h) * 1.2);
+          background-repeat: no-repeat;
+          background-attachment: local, local;
           border:1px solid var(--color-border);
           border-radius:10px;
           padding:6px;
           scrollbar-width: none;
-          z-index: 1; /* unter den Overlays/Center-Indikator */
+          z-index: 1;
         }
         .af-wheel::-webkit-scrollbar{ width:0; height:0; }
-
-        /* Fades jetzt als Overlays des Popovers, damit sie nicht mitscrollen */
-        .af-time-pop::before,
-        .af-time-pop::after{
-          content:"";
-          position:absolute; left:10px; right:10px;
-          height: calc(var(--opt-h) * 1.2);
-          pointer-events:none;
-          z-index: 3;
-        }
-        .af-time-pop::before{
-          top:10px;
-          background: linear-gradient(#fafafa, rgba(250,250,250,0));
-        }
-        .af-time-pop::after{
-          top: calc(10px + var(--wheel-h) - var(--opt-h) * 1.2);
-          background: linear-gradient(rgba(250,250,250,0), #fafafa);
-        }
-
-        /* Center-Indikator (fix, scrollt nicht mit, geht über beide Wheels) */
         .af-center-indicator{
           position:absolute;
           left:10px; right:10px;
-          top: calc(10px + var(--wheel-h)/2 - var(--opt-h)/2);
+          top: calc(10px + (var(--wheel-h) / var(--visible-slots)) * (Math.ceil(var(--visible-slots)/2) - 1));
           height: var(--opt-h);
           border-top: 1px solid rgba(37,99,235,.35);
           border-bottom: 1px solid rgba(37,99,235,.35);
           pointer-events:none;
           z-index: 4;
         }
-      
         .af-opt{
           height: var(--opt-h);
           line-height: var(--opt-h);
@@ -288,18 +335,16 @@ function TimePickerField({
           border-color:#2563eb; background:#eff6ff; font-weight:700;
           transform: scale(1.03);
         }
-        .af-opt.is-soft-disabled{ opacity:.45; }
-      
         .af-time-actions{
           display:flex; align-items:center; gap:8px; margin-top:10px;
           position: relative; z-index: 2;
         }
-      
+
         @media (max-width: 420px){
-          .af-time-pop{ --opt-h: 34px; } /* kompakter auf sehr kleinen Screens */
+          .af-time-pop{ --opt-h: 34px; }
         }
       `}</style>
-    </div>
+    </label>
   );
 }
 
