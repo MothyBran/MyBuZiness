@@ -1,6 +1,5 @@
 // app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
-import { renderNumber, nextDigitSequence } from "@/lib/numbering";
 
 /** Helpers */
 const toInt = (v) => {
@@ -129,19 +128,29 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
     }
 
-    // Settings: KU, taxRateDefault, currency, invoiceNumberFormat
+    // Einstellungen
     const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
     const currency = body.currency || settings.currency || "EUR";
-    const format = settings.invoiceNumberFormat || "{YYYY}-{SEQ5}";
 
-    // Rechnungsnummer: manuell oder per Format + Sequenz
+    // Rechnungsnummer: RN-YYMM-000 (YY = Jahr 2-stellig, MM = Monat 2-stellig, fortlaufend pro Monat)
     let invoiceNo = (body.invoiceNo || "").trim();
     if (!invoiceNo) {
-      const seq = await nextDigitSequence(q, `"Invoice"`, `"invoiceNo"`);
-      invoiceNo = renderNumber(format, seq, body.issueDate ? new Date(body.issueDate) : new Date());
+      const baseDate = body.issueDate ? new Date(body.issueDate) : new Date();
+      const yy = String(baseDate.getFullYear()).slice(-2);
+      const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
+      const yymm = `${yy}${mm}`;
+      const pattern = `^RN-${yymm}-(\\d{3})$`;
+      const row = (await q(
+        `SELECT COALESCE(MAX( (regexp_match("invoiceNo", $1))[1]::int ), 0) AS last
+           FROM "Invoice"
+          WHERE "invoiceNo" ~ $1`,
+        [pattern]
+      )).rows[0];
+      const next = Number(row?.last || 0) + 1;
+      invoiceNo = `RN-${yymm}-${String(next).padStart(3, "0")}`;
     }
 
     const id = uuid();
@@ -165,7 +174,7 @@ export async function POST(request) {
       productMap = new Map(prows.map(p => [p.id, p]));
     }
 
-    // Items + Summen (Grundpreis berücksichtigen)
+    // Items + Summen
     const prepared = [];
     let net = 0;
 
@@ -196,7 +205,7 @@ export async function POST(request) {
       });
     }
 
-    // Rabatt optional: in Summen berücksichtigen (persistieren nur bei Bedarf)
+    // Rabatt optional (vor Steuer)
     const discountCents = toInt(body.discountCents || 0);
     const netAfterDiscount = Math.max(0, net - discountCents);
     const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
