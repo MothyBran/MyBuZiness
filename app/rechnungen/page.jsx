@@ -63,7 +63,7 @@ export default function InvoicesPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
-  const [printFor, setPrintFor] = useState(null); // Invoice für Druckansicht
+  const [printFor, setPrintFor] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -121,11 +121,11 @@ export default function InvoicesPage() {
         <div className="table-wrap">
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "70px" }} />    {/* Status */}
-              <col style={{ width: "200px" }} />   {/* Nr. */}
-              <col style={{ width: "160px" }} />   {/* Datum */}
-              <col />                               {/* Kunde (flex) */}
-              <col style={{ width: "200px" }} />   {/* Betrag */}
+              <col style={{ width: "70px" }} />
+              <col style={{ width: "200px" }} />
+              <col style={{ width: "160px" }} />
+              <col />
+              <col style={{ width: "200px" }} />
             </colgroup>
             <thead>
               <tr>
@@ -146,7 +146,7 @@ export default function InvoicesPage() {
                 const d = r.issueDate ? new Date(r.issueDate) : null;
                 const dateStr = d ? d.toLocaleDateString() : "—";
                 const isOpenRow = expandedId === r.id;
-                const st = computeStatus(r); // open | overdue | done
+                const st = computeStatus(r);
                 const stLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
                 const customer = customers.find(c => String(c.id) === String(r.customerId));
 
@@ -163,7 +163,6 @@ export default function InvoicesPage() {
                     {isOpenRow && (
                       <tr key={r.id + "-details"}>
                         <td colSpan={5} className="details-cell">
-                          {/* Kopf Detail + Aktionen */}
                           <div className="detail-head">
                             <div>
                               <div className="muted">Rechnung</div>
@@ -177,8 +176,8 @@ export default function InvoicesPage() {
                             </div>
                           </div>
 
-                          {/* Positionsliste – keine eigene Scrollbar mehr */}
-                          <div className="table-wrap no-inner-scroll" style={{ padding: "0 8px 2px" }}>
+                          {/* Positionsliste */}
+                          <div className="table-wrap positions">
                             <table className="table table-fixed" style={{ minWidth: 760 }}>
                               <thead>
                                 <tr>
@@ -204,19 +203,12 @@ export default function InvoicesPage() {
                             </table>
                           </div>
 
-                          {/* Summen */}
                           <div className="totals">
                             Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                           </div>
 
-                          {/* Druckvorlage – nur für diesen Datensatz */}
                           {printFor?.row?.id === r.id && (
-                            <PrintArea
-                              row={r}
-                              settings={settings}
-                              currency={currency}
-                              customer={customer}
-                            />
+                            <PrintArea row={r} settings={settings} currency={currency} customer={customer} />
                           )}
                         </td>
                       </tr>
@@ -242,7 +234,7 @@ export default function InvoicesPage() {
         />
       )}
 
-      {/* Modal: Korrigieren (alles editierbar) */}
+      {/* Modal: Korrigieren (alles editierbar, inkl. Status) */}
       {editRow && (
         <InvoiceModal
           mode="edit"
@@ -256,9 +248,8 @@ export default function InvoicesPage() {
         />
       )}
 
-      {/* Styles nur für diese Seite */}
       <style jsx global>{`
-        .ivx-page{ overflow-x:hidden; } /* keine Seitenscroller horizontal */
+        .ivx-page{ overflow-x:hidden; }
         .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
         .ivx-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
         .muted{ color:#6b7280 }
@@ -271,23 +262,69 @@ export default function InvoicesPage() {
         /* NUR die Tabellen-Card bekommt horizontales Scrolling */
         .card.table-card .table-wrap{ overflow-x:auto }
 
-        /* Innerhalb von Detail & Modal KEIN eigener horizontaler Scroll mehr */
-        .details-cell .table-wrap.no-inner-scroll{ overflow-x: visible; }
+        /* Detail-Positionsliste: horizontales Scrollen erlaubt, aber innerhalb der Card */
+        .details-cell .table-wrap.positions{ overflow-x:auto }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
         .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
         .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b }
-        .st-dot.open{ background:#f59e0b }     /* gelb */
-        .st-dot.overdue{ background:#ef4444 }  /* rot */
-        .st-dot.done{ background:#10b981 }     /* grün */
+        .st-dot.open{ background:#f59e0b }
+        .st-dot.overdue{ background:#ef4444 }
+        .st-dot.done{ background:#10b981 }
 
         .details-cell{ background:#fafafa }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
-
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
+
+        /* ===== Modals ===== */
+        .ivx-modal{
+          position: fixed; inset: 0; background: rgba(0,0,0,.4);
+          display: flex; align-items: flex-start; justify-content: center;
+          padding: 16px; z-index: 50;
+        }
+        .ivx-modal-box{
+          width: min(980px, 100%);
+          margin-top: 24px;
+          background:#fff; border:1px solid #eee; border-radius:14px;
+          max-height: calc(100vh - 48px);
+          overflow-y: auto;           /* nur vertikal scrollen */
+          overflow-x: hidden;         /* kein horizontales Scrolling fürs Fenster */
+        }
+        .ivx-modal-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding: 14px 16px; border-bottom: 1px solid #eee;
+          position: sticky; top: 0; background:#fff; z-index: 1;
+        }
+        .ivx-modal-actions{
+          display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
+          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+        }
+
+        .surface.section{ padding: 12px 16px; }
+
+        /* Kopf-Felder: kompakt, überlappen nicht, wrappen sauber */
+        .head-rows{ display:flex; flex-direction:column; gap:10px; }
+        .row{ display:flex; flex-wrap:wrap; gap:12px; }
+        .cell{ display:block; flex: 1 1 auto; }
+
+        /* Feste, realistische Max-Breiten pro Feld */
+        .w-no    { flex: 0 1 220px; max-width: 260px; }
+        .w-date  { flex: 0 1 180px; max-width: 220px; }
+        .w-money { flex: 0 1 180px; max-width: 220px; }
+        .w-status{ flex: 0 1 180px; max-width: 220px; }
+        .w-full  { flex: 1 1 640px; max-width: 640px; }
+
+        /* Produkt/Dienstleistung Card im Modal: H-Scroll nur hier */
+        .positions .table-wrap{ overflow-x:auto }
+        .positions .table{ min-width:760px }
+
+        @media (max-width: 720px){
+          .w-no{ max-width: 220px; } .w-date{ max-width: 200px; } .w-money{ max-width: 200px; } .w-status{ max-width: 200px; }
+          .w-full{ flex-basis: 100%; max-width: 100%; }
+        }
 
         /* ===== Druck: nur print-area ausgeben ===== */
         @media print{
@@ -308,6 +345,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
   const [dueDate, setDueDate] = useState(initial?.dueDate ? String(initial.dueDate).slice(0,10) : "");
   const [customerId, setCustomerId] = useState(initial?.customerId || "");
   const [discount, setDiscount] = useState("0");
+  const [status, setStatus] = useState(initial?.status || "open");  // nur bei Edit sichtbar
 
   function makeRow() {
     return {
@@ -400,7 +438,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
     if (!customerId) return alert("Bitte Kunde wählen.");
     if (items.length === 0) return alert("Mindestens eine Position ist erforderlich.");
 
-    const payload = {
+    const basePayload = {
       invoiceNo: (invoiceNo || "").trim() || undefined,
       customerId,
       issueDate,
@@ -415,6 +453,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
     };
 
     if (isEdit) {
+      const payload = { ...basePayload, status }; // Status nur beim Editen mitsenden
       const res = await fetch(`/api/invoices/${initial.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -424,6 +463,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
       if (!res || !res.ok || !js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
       onSaved?.();
     } else {
+      const payload = { ...basePayload, status: "open" }; // neu: standardmäßig offen
       const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -476,13 +516,26 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                 <CustomerPicker value={customerId} onChange={setCustomerId} />
               </div>
             </div>
+
+            {isEdit && (
+              <div className="row">
+                <div className="cell w-status">
+                  <label style={S.lbl}>Status</label>
+                  <select value={status} onChange={(e)=>setStatus(e.target.value)} style={S.input}>
+                    <option value="open">offen</option>
+                    <option value="done">abgeschlossen</option>
+                    {/* "overdue" wird automatisch anhand Fälligkeit berechnet */}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Positionen – keine eigene horizontale Scrollbar */}
-        <div className="surface section">
-          <div className="table-wrap no-inner-scroll">
-            <table className="table table-fixed" style={{ minWidth: 760 }}>
+        {/* Positionen – nur diese Card darf horizontal scrollen */}
+        <div className="surface section positions">
+          <div className="table-wrap">
+            <table className="table table-fixed">
               <thead>
                 <tr>
                   <th style={{ width: "50%" }}>Produkt/Dienstleistung</th>
@@ -497,7 +550,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                   return (
                     <tr key={r.id}>
                       <td>
-                        <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={{ ...S.input, width: "100%" }}>
+                        <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={{ ...S.input, width: "100%", maxWidth: "100%" }}>
                           <option value="">— Produkt wählen —</option>
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>
@@ -512,7 +565,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                         )}
                       </td>
                       <td>
-                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={S.input}>
+                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={{ ...S.input, maxWidth: "100%" }}>
                           {Array.from({ length: 20 }).map((_, i) => {
                             const v = i + 1;
                             return <option key={v} value={v}>{v}</option>;
@@ -526,7 +579,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                             value={r.unitDisplay}
                             onChange={(e) => onChangeUnitDisplay(r.id, e.target.value)}
                             onBlur={(e) => onChangeUnitDisplay(r.id, fromCents(toCents(e.target.value)))}
-                            style={{ ...S.input, textAlign: "right" }}
+                            style={{ ...S.input, textAlign: "right", maxWidth: "100%" }}
                           />
                         ) : (
                           money(r.unitPriceCents, currency)
@@ -564,62 +617,11 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
           </div>
         </div>
 
-        {/* Aktionen */}
         <div className="ivx-modal-actions">
           <button className="btn-ghost" style={S.ghost} onClick={onClose}>Abbrechen</button>
           <button className="btn" style={S.btn} onClick={save}>{isEdit ? "Speichern" : "Anlegen"}</button>
         </div>
       </div>
-
-      <style jsx>{`
-        .ivx-modal{
-          position: fixed; inset: 0; background: rgba(0,0,0,.4);
-          display: flex; align-items: flex-start; justify-content: center;
-          padding: 16px; z-index: 50;
-        }
-        .ivx-modal-box{
-          width: min(980px, 100%);
-          margin-top: 24px;
-          background:#fff; border:1px solid #eee; border-radius:14px;
-          max-height: calc(100vh - 48px);
-          overflow: auto; /* Modal scrollbar, wenn Inhalt zu lang */
-        }
-        .ivx-modal-head{
-          display:flex; align-items:center; justify-content:space-between;
-          padding: 14px 16px; border-bottom: 1px solid #eee;
-          position: sticky; top: 0; background:#fff; z-index: 1;
-        }
-        .ivx-modal-actions{
-          display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
-          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
-        }
-
-        .surface.section{ padding: 12px 16px; }
-
-        /* Kopf kompakt: zwei Zeilen á 2 Felder + Kunde */
-        .head-rows{ display:flex; flex-direction:column; gap:10px; }
-        .row{ display:flex; gap:12px; flex-wrap:wrap; }
-        .cell{ display:block; }
-        .w-no{ width: 220px; }       /* RN-YYMM-000 passt luftig */
-        .w-date{ width: 180px; }     /* XX.XX.XXXX / Date Input */
-        .w-money{ width: 180px; }    /* 0,00 */
-        .w-full{ width: min(640px, 100%); } /* Kunde über volle Reihe */
-
-        /* KEIN eigener Horizontal-Scroll im Modal/Detail */
-        .table-wrap.no-inner-scroll{ overflow-x: visible; }
-
-        .table{ width:100%; border-collapse:collapse; min-width:600px }
-        .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
-        .table-fixed{ table-layout:fixed }
-
-        .totals-grid{ display:grid; grid-template-columns: 1fr auto; align-items:flex-end; }
-        .totals-box{ text-align:right; }
-
-        @media (max-width: 720px){
-          .w-no{ width: 200px; } .w-date{ width: 160px; } .w-money{ width: 160px; }
-          .w-full{ width: 100%; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -629,11 +631,10 @@ function PrintArea({ row, settings, currency, customer }) {
   const firm = settings || {};
   const dueTxt = row.dueDate ? new Date(row.dueDate).toLocaleDateString("de-DE") : null;
 
-  // Kunde aus Props priorisieren; Fallback auf evtl. mitgelieferte Felder
-  const custName  = customer?.name || row.customerName || "";
-  const custStreet= customer?.addressStreet || row.customerStreet || "";
-  const custZip   = customer?.addressZip || row.customerZip || "";
-  const custCity  = customer?.addressCity || row.customerCity || "";
+  const custName   = customer?.name || row.customerName || "";
+  const custStreet = customer?.addressStreet || row.customerStreet || "";
+  const custZip    = customer?.addressZip || row.customerZip || "";
+  const custCity   = customer?.addressCity || row.customerCity || "";
 
   const firmLineLeft = [
     (firm.companyName || "").trim(),
@@ -644,13 +645,12 @@ function PrintArea({ row, settings, currency, customer }) {
   return (
     <div className="print-area">
       <div className="print-page">
-        {/* Kopf: Absenderzeile links; rechts Kontakt + Kopfblock */}
+        {/* Kopf */}
         <div className="ph-head">
           <div className="ph-left">
             {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
             {firmLineLeft && <div className="ph-fromline">{firmLineLeft}</div>}
             <div className="ph-sep" />
-            {/* Empfänger */}
             <div className="ph-recipient">
               <div className="ph-rec-label">Empfänger</div>
               <div className="ph-rec-name">{custName}</div>
@@ -702,7 +702,7 @@ function PrintArea({ row, settings, currency, customer }) {
           }
         </div>
 
-        {/* Summenblock */}
+        {/* Summen */}
         <div className="ph-totals">
           <div>Netto: <strong>{money(row.netCents, row.currency || currency)}</strong></div>
           <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
