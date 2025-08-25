@@ -83,7 +83,7 @@ export default function InvoicesPage() {
       setProducts(Array.isArray(pr?.data) ? pr.data : []);
       setCustomers(Array.isArray(cs?.data) ? cs.data : []);
       if (st?.data) setSettings(st.data);
-      setCurrency(st?.data?.currency || "EUR");                       // <- aus Settings
+      setCurrency(st?.data?.currency || "EUR");
       setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
     } finally {
       setLoading(false);
@@ -148,6 +148,7 @@ export default function InvoicesPage() {
                 const isOpenRow = expandedId === r.id;
                 const st = computeStatus(r); // open | overdue | done
                 const stLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
+                const customer = customers.find(c => String(c.id) === String(r.customerId));
 
                 return (
                   <>
@@ -155,7 +156,7 @@ export default function InvoicesPage() {
                       <td><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
                       <td className="nowrap">#{r.invoiceNo || "-"}</td>
                       <td className="hide-sm nowrap">{dateStr}</td>
-                      <td>{r.customerName || "—"}</td>
+                      <td>{r.customerName || customer?.name || "—"}</td>
                       <td className="nowrap" style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
                     </tr>
 
@@ -176,8 +177,8 @@ export default function InvoicesPage() {
                             </div>
                           </div>
 
-                          {/* Positionsliste – Scroll NUR innerhalb der Tabelle */}
-                          <div className="table-wrap" style={{ padding: "0 8px 2px" }}>
+                          {/* Positionsliste – keine eigene Scrollbar mehr */}
+                          <div className="table-wrap no-inner-scroll" style={{ padding: "0 8px 2px" }}>
                             <table className="table table-fixed" style={{ minWidth: 760 }}>
                               <thead>
                                 <tr>
@@ -210,7 +211,12 @@ export default function InvoicesPage() {
 
                           {/* Druckvorlage – nur für diesen Datensatz */}
                           {printFor?.row?.id === r.id && (
-                            <PrintArea row={r} settings={settings} currency={currency} />
+                            <PrintArea
+                              row={r}
+                              settings={settings}
+                              currency={currency}
+                              customer={customer}
+                            />
                           )}
                         </td>
                       </tr>
@@ -252,7 +258,7 @@ export default function InvoicesPage() {
 
       {/* Styles nur für diese Seite */}
       <style jsx global>{`
-        .ivx-page{ overflow-x:hidden; } /* verhindert Seitenscrollen horizontal */
+        .ivx-page{ overflow-x:hidden; } /* keine Seitenscroller horizontal */
         .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
         .ivx-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
         .muted{ color:#6b7280 }
@@ -262,9 +268,11 @@ export default function InvoicesPage() {
         .hide-sm{ }
         @media (max-width: 760px){ .hide-sm{ display:none } }
 
-        /* NUR die Tabellen-Card und Detail-Positions-Tabellen bekommen horizontales Scrolling */
+        /* NUR die Tabellen-Card bekommt horizontales Scrolling */
         .card.table-card .table-wrap{ overflow-x:auto }
-        .details-cell .table-wrap{ overflow-x:auto }
+
+        /* Innerhalb von Detail & Modal KEIN eigener horizontaler Scroll mehr */
+        .details-cell .table-wrap.no-inner-scroll{ overflow-x: visible; }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
         .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
@@ -471,9 +479,9 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
           </div>
         </div>
 
-        {/* Positionen */}
+        {/* Positionen – keine eigene horizontale Scrollbar */}
         <div className="surface section">
-          <div className="table-wrap">
+          <div className="table-wrap no-inner-scroll">
             <table className="table table-fixed" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
@@ -574,7 +582,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
           margin-top: 24px;
           background:#fff; border:1px solid #eee; border-radius:14px;
           max-height: calc(100vh - 48px);
-          overflow: auto; /* <- Modal scrollbar, wenn Inhalt zu lang */
+          overflow: auto; /* Modal scrollbar, wenn Inhalt zu lang */
         }
         .ivx-modal-head{
           display:flex; align-items:center; justify-content:space-between;
@@ -597,7 +605,9 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
         .w-money{ width: 180px; }    /* 0,00 */
         .w-full{ width: min(640px, 100%); } /* Kunde über volle Reihe */
 
-        .table-wrap{ overflow-x:auto } /* nur innerhalb von Cards (hier: Positionen) scrollen */
+        /* KEIN eigener Horizontal-Scroll im Modal/Detail */
+        .table-wrap.no-inner-scroll{ overflow-x: visible; }
+
         .table{ width:100%; border-collapse:collapse; min-width:600px }
         .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
@@ -615,39 +625,51 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
 }
 
 /* ───────── Drucklayout ───────── */
-function PrintArea({ row, settings, currency }) {
+function PrintArea({ row, settings, currency, customer }) {
   const firm = settings || {};
   const dueTxt = row.dueDate ? new Date(row.dueDate).toLocaleDateString("de-DE") : null;
+
+  // Kunde aus Props priorisieren; Fallback auf evtl. mitgelieferte Felder
+  const custName  = customer?.name || row.customerName || "";
+  const custStreet= customer?.addressStreet || row.customerStreet || "";
+  const custZip   = customer?.addressZip || row.customerZip || "";
+  const custCity  = customer?.addressCity || row.customerCity || "";
+
+  const firmLineLeft = [
+    (firm.companyName || "").trim(),
+    (firm.address1 || "").trim(),
+    [firm.postalCode, firm.city].filter(Boolean).join(" ")
+  ].filter(Boolean).join(" • ");
 
   return (
     <div className="print-area">
       <div className="print-page">
-        {/* Briefkopf – nur Settings-Daten */}
+        {/* Kopf: Absenderzeile links; rechts Kontakt + Kopfblock */}
         <div className="ph-head">
           <div className="ph-left">
             {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
-            <div className="ph-name">{firm.companyName || ""}</div>
-            {firm.ownerName ? <div className="ph-sub">Inhaber: {firm.ownerName}</div> : null}
-            {firm.address1 && <div>{firm.address1}</div>}
-            {firm.address2 && <div>{firm.address2}</div>}
-            {(firm.postalCode || firm.city) && <div>{firm.postalCode} {firm.city}</div>}
-            {firm.email && <div>{firm.email}</div>}
-            {firm.phone && <div>{firm.phone}</div>}
-            {firm.website && <div>{firm.website}</div>}
+            {firmLineLeft && <div className="ph-fromline">{firmLineLeft}</div>}
+            <div className="ph-sep" />
+            {/* Empfänger */}
+            <div className="ph-recipient">
+              <div className="ph-rec-label">Empfänger</div>
+              <div className="ph-rec-name">{custName}</div>
+              {custStreet && <div>{custStreet}</div>}
+              {(custZip || custCity) && <div>{custZip} {custCity}</div>}
+            </div>
           </div>
+
           <div className="ph-right">
             <div className="ph-title">RECHNUNG</div>
             <div>Nr.: <strong>{row.invoiceNo}</strong></div>
             <div>Datum: <strong>{row.issueDate ? new Date(row.issueDate).toLocaleDateString("de-DE") : ""}</strong></div>
+            {(firm.email || firm.phone) && (
+              <div className="ph-contact">
+                {firm.email && <div>{firm.email}</div>}
+                {firm.phone && <div>{firm.phone}</div>}
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Empfänger */}
-        <div className="ph-recipient">
-          <div className="ph-rec-label">Rechnung an</div>
-          <div className="ph-rec-name">{row.customerName || ""}</div>
-          {row.customerStreet && <div>{row.customerStreet}</div>}
-          {(row.customerZip || row.customerCity) && <div>{row.customerZip} {row.customerCity}</div>}
         </div>
 
         {/* Positionen */}
@@ -687,35 +709,36 @@ function PrintArea({ row, settings, currency }) {
           <div className="ph-total">Gesamt: <strong>{money(row.grossCents, row.currency || currency)}</strong></div>
         </div>
 
-        {/* Fußzeile – Bank/Steuer aus Settings */}
+        {/* Fußzeile – Bank/Steuer */}
         <div className="ph-footer">
           {firm.bankAccount && <div><strong>Bankverbindung:</strong> {firm.bankAccount}</div>}
           {firm.vatId && <div><strong>USt-ID:</strong> {firm.vatId}</div>}
-          {/* Weitere Hinweise aus Settings könntest du als 'footerText' ergänzen */}
         </div>
       </div>
 
       <style jsx>{`
         .print-page{ padding: 24px 28px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; }
-        .ph-head{ display:flex; justify-content:space-between; gap:12px; }
-        .ph-left{ max-width: 60%; }
+        .ph-head{ display:flex; justify-content:space-between; gap:18px; }
+        .ph-left{ flex:1; min-width: 55%; }
+        .ph-right{ text-align:right; min-width: 35%; }
         .ph-logo{ max-height: 48px; margin-bottom: 8px; }
-        .ph-name{ font-size: 18pt; font-weight: 800; }
-        .ph-sub{ color:#333; margin-bottom: 6px; }
-        .ph-right{ text-align:right; }
-        .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
+        .ph-fromline{ font-weight:700; margin-top:4px; }
+        .ph-sep{ height: 1px; background:#222; margin: 8px 0 12px; }
 
-        .ph-recipient{ margin: 18px 0 10px; }
+        .ph-recipient{ margin: 0 0 10px; }
         .ph-rec-label{ font-size:10pt; color:#555; }
         .ph-rec-name{ font-size:12pt; font-weight:700; }
 
-        .ph-table{ width:100%; border-collapse: collapse; margin-top: 12px; }
+        .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
+        .ph-contact{ margin-top: 10px; }
+
+        .ph-table{ width:100%; border-collapse: collapse; margin-top: 16px; }
         .ph-table th, .ph-table td{ border-bottom: 1px solid #ddd; padding: 8px; text-align:right; }
         .ph-table .ta-left{ text-align:left; }
 
-        .ph-note{ margin: 12px 0; }
+        .ph-note{ margin: 14px 0; }
 
-        .ph-totals{ margin-top: 10px; text-align: right; }
+        .ph-totals{ margin-top: 12px; text-align: right; }
         .ph-total{ font-size: 14pt; font-weight: 800; margin-top: 6px; }
 
         .ph-footer{ border-top: 1px solid #ddd; margin-top: 18px; padding-top: 10px; font-size: 10pt; color:#333; }
