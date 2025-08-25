@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /* ───────── Helpers ───────── */
-const toInt = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
-};
+const toInt = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.trunc(n) : 0; };
 function toCents(input) {
   if (input == null) return 0;
   if (typeof input === "number") return Math.round(input * 100);
@@ -44,7 +41,6 @@ function computeStatus(row) {
   }
   return "open";
 }
-
 const S = {
   input: { width: "100%", padding: "10px 12px", border: "1px solid #ddd", borderRadius: 12, background: "#fff" },
   lbl:   { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 },
@@ -59,12 +55,16 @@ export default function InvoicesPage() {
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [currency, setCurrency] = useState("EUR");
   const [vatExempt, setVatExempt] = useState(true);
 
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+
+  const [printFor, setPrintFor] = useState(null); // Invoice für Druckansicht
 
   async function load() {
     setLoading(true);
@@ -83,6 +83,7 @@ export default function InvoicesPage() {
       setRows(Array.isArray(list?.data) ? list.data : []);
       setProducts(Array.isArray(pr?.data) ? pr.data : []);
       setCustomers(Array.isArray(cs?.data) ? cs.data : []);
+      if (st?.data) setSettings(st.data);
       setCurrency(st?.data?.currencyDefault || "EUR");
       setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
     } finally {
@@ -101,6 +102,12 @@ export default function InvoicesPage() {
     load();
   }
 
+  function onPrint(row){
+    setPrintFor({ row, settings });
+    // kleiner Delay, damit DOM für die Druckvorlage gerendert ist
+    setTimeout(()=> window.print(), 50);
+  }
+
   return (
     <main className="grid-gap-16">
       {/* Kopf */}
@@ -116,15 +123,15 @@ export default function InvoicesPage() {
         <div className="table-wrap">
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "8%" }} />   {/* Status */}
-              <col style={{ width: "20%" }} />  {/* Nr. */}
-              <col style={{ width: "18%" }} />  {/* Datum */}
-              <col style={{ width: "34%" }} />  {/* Kunde */}
-              <col style={{ width: "20%" }} />  {/* Betrag */}
+              <col style={{ width: "70px" }} />    {/* Status */}
+              <col style={{ width: "200px" }} />   {/* Nr. */}
+              <col style={{ width: "160px" }} />   {/* Datum */}
+              <col />                               {/* Kunde (flex) */}
+              <col style={{ width: "200px" }} />   {/* Betrag */}
             </colgroup>
             <thead>
               <tr>
-                <th>Status</th>
+                <th title="Status">🚦</th>
                 <th>Nr.</th>
                 <th className="hide-sm">Datum</th>
                 <th>Kunde</th>
@@ -148,10 +155,10 @@ export default function InvoicesPage() {
                   <>
                     <tr key={r.id} className="row-clickable" onClick={() => toggleExpand(r.id)}>
                       <td><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
-                      <td className="ellipsis">#{r.invoiceNo || "-"}</td>
-                      <td className="hide-sm">{dateStr}</td>
-                      <td className="ellipsis">{r.customerName || "—"}</td>
-                      <td style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
+                      <td className="nowrap">#{r.invoiceNo || "-"}</td>
+                      <td className="hide-sm nowrap">{dateStr}</td>
+                      <td>{r.customerName || "—"}</td>
+                      <td className="nowrap" style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
                     </tr>
 
                     {isOpenRow && (
@@ -165,8 +172,8 @@ export default function InvoicesPage() {
                               <div className="muted">Status: <strong>{stLabel}</strong></div>
                             </div>
                             <div className="actions">
-                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); window.print(); }}>🖨️ Druckansicht</button>
-                              <EditInvoiceButton row={r} onSaved={()=>{ toggleExpand(r.id); load(); }} />
+                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); onPrint(r); }}>🖨️ Druckansicht</button>
+                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>✏️ Korrigieren</button>
                               <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
                             </div>
                           </div>
@@ -186,20 +193,14 @@ export default function InvoicesPage() {
                                 {(!r.items || r.items.length === 0) && (
                                   <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
                                 )}
-                                {Array.isArray(r.items) && r.items.map((it, idx) => {
-                                  const qty = toInt(it.quantity || 0);
-                                  const unit = toInt(it.unitPriceCents || 0);
-                                  const base = toInt(it.extraBaseCents || 0);
-                                  const line = base + qty * unit;
-                                  return (
-                                    <tr key={idx}>
-                                      <td className="ellipsis">{it.name || "—"}</td>
-                                      <td>{qty}</td>
-                                      <td>{money(unit, r.currency || currency)}</td>
-                                      <td>{money(line, r.currency || currency)}</td>
-                                    </tr>
-                                  );
-                                })}
+                                {Array.isArray(r.items) && r.items.map((it, idx) => (
+                                  <tr key={idx}>
+                                    <td>{it.name || "—"}</td>
+                                    <td>{toInt(it.quantity || 0)}</td>
+                                    <td>{money(toInt(it.unitPriceCents || 0), r.currency || currency)}</td>
+                                    <td>{money(toInt(it.lineTotalCents || 0), r.currency || currency)}</td>
+                                  </tr>
+                                ))}
                               </tbody>
                             </table>
                           </div>
@@ -208,6 +209,11 @@ export default function InvoicesPage() {
                           <div className="totals">
                             Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                           </div>
+
+                          {/* Druckvorlage – nur für diesen Datensatz */}
+                          {printFor?.row?.id === r.id && (
+                            <PrintArea row={r} settings={settings} currency={currency} />
+                          )}
                         </td>
                       </tr>
                     )}
@@ -221,13 +227,28 @@ export default function InvoicesPage() {
 
       {/* Modal: Neue Rechnung */}
       {isOpen && (
-        <NewInvoiceModal
+        <InvoiceModal
+          mode="create"
           customers={customers}
           products={products}
           currency={currency}
           vatExempt={vatExempt}
           onClose={() => setIsOpen(false)}
           onSaved={() => { setIsOpen(false); load(); }}
+        />
+      )}
+
+      {/* Modal: Korrigieren (alles editierbar) */}
+      {editRow && (
+        <InvoiceModal
+          mode="edit"
+          initial={editRow}
+          customers={customers}
+          products={products}
+          currency={currency}
+          vatExempt={vatExempt}
+          onClose={() => setEditRow(null)}
+          onSaved={() => { setEditRow(null); load(); }}
         />
       )}
 
@@ -239,7 +260,7 @@ export default function InvoicesPage() {
         .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
         .row-clickable{ cursor:pointer }
-        .ellipsis{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+        .nowrap{ white-space:nowrap }
         .hide-sm{ }
         @media (max-width: 760px){ .hide-sm{ display:none } }
 
@@ -255,86 +276,25 @@ export default function InvoicesPage() {
         .h5{ font-size:16px; font-weight:800 }
 
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
+
+        /* ===== Druck: nur print-area ausgeben ===== */
         @media print{
-          .page-title, .actions, .btn, .card > .table-wrap::-webkit-scrollbar { display:none !important; }
-          .card{ border:none; padding:0 }
-          .table th,.table td{ border-color:#ddd }
+          body *{ visibility: hidden !important; }
+          .print-area, .print-area *{ visibility: visible !important; }
+          .print-area{ position: absolute; left:0; top:0; width:100%; padding:0 !important; margin:0 !important; }
         }
       `}</style>
     </main>
   );
 }
 
-/* ───────── Detail: „Korrigieren“ (PATCH) ───────── */
-function EditInvoiceButton({ row, onSaved }) {
-  const [open, setOpen] = useState(false);
-  const [invoiceNo, setInvoiceNo] = useState(row.invoiceNo || "");
-  const [issueDate, setIssueDate] = useState(row.issueDate ? String(row.issueDate).slice(0,10) : "");
-  const [dueDate, setDueDate] = useState(row.dueDate ? String(row.dueDate).slice(0,10) : "");
-  const [status, setStatus] = useState(row.status || "open");
-  const st = computeStatus(row);
-  const autoLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
-
-  async function save() {
-    const payload = { invoiceNo, issueDate: issueDate || null, dueDate: dueDate || null, status };
-    const res = await fetch(`/api/invoices/${row.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
-    }).catch(()=>null);
-    if (!res || !res.ok) { alert("Speichern fehlgeschlagen."); return; }
-    setOpen(false);
-    onSaved?.();
-  }
-
-  if (!open) return <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setOpen(true); }}>✏️ Korrigieren</button>;
-
-  return (
-    <div className="edit-pop" onClick={(e)=> e.stopPropagation()}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10, minWidth: 520 }}>
-        <div>
-          <label style={S.lbl}>Rechnungs-Nr.</label>
-          <input value={invoiceNo} onChange={(e)=>setInvoiceNo(e.target.value)} style={S.input} />
-        </div>
-        <div>
-          <label style={S.lbl}>Rechnungsdatum</label>
-          <input type="date" value={issueDate} onChange={(e)=>setIssueDate(e.target.value)} style={S.input} />
-        </div>
-        <div>
-          <label style={S.lbl}>Fällig am</label>
-          <input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} style={S.input} />
-        </div>
-        <div>
-          <label style={S.lbl}>Status</label>
-          <select value={status} onChange={(e)=>setStatus(e.target.value)} style={S.input}>
-            <option value="open">offen</option>
-            <option value="overdue">überfällig</option>
-            <option value="done">abgeschlossen</option>
-          </select>
-          <div style={{ fontSize:12, color:"#6b7280", marginTop:6 }}>
-            Automatisch erkannt: <strong>{autoLabel}</strong>
-          </div>
-        </div>
-      </div>
-      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
-        <button style={S.ghost} onClick={()=>setOpen(false)}>Abbrechen</button>
-        <button style={S.btn} onClick={save}>Speichern</button>
-      </div>
-      <style jsx>{`
-        .edit-pop{
-          background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-/* ───────── Modal: Neue Rechnung ───────── */
-function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, onSaved }) {
-  const [invoiceNo, setInvoiceNo] = useState("");
-  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState("");
-  const [customerId, setCustomerId] = useState("");
+/* ───────── Modal (Neu/Korrigieren) ───────── */
+function InvoiceModal({ mode="create", initial=null, customers, products, currency, vatExempt, onClose, onSaved }) {
+  const isEdit = mode === "edit";
+  const [invoiceNo, setInvoiceNo] = useState(initial?.invoiceNo || "");
+  const [issueDate, setIssueDate] = useState(initial?.issueDate ? String(initial.issueDate).slice(0,10) : new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(initial?.dueDate ? String(initial.dueDate).slice(0,10) : "");
+  const [customerId, setCustomerId] = useState(initial?.customerId || "");
   const [discount, setDiscount] = useState("0");
 
   function makeRow() {
@@ -349,19 +309,36 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       unitDisplay: "0,00"
     };
   }
-  const [items, setItems] = useState([makeRow()]);
+  const [items, setItems] = useState(()=>{
+    if (isEdit && Array.isArray(initial?.items) && initial.items.length){
+      return initial.items.map(it => ({
+        id: crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()),
+        productId: it.productId || "",
+        name: it.name || "",
+        kind: "product",
+        quantity: toInt(it.quantity || 0),
+        unitPriceCents: toInt(it.unitPriceCents || 0),
+        baseCents: toInt(it.lineTotalCents||0) - toInt(it.quantity||0)*toInt(it.unitPriceCents||0), // Schätzung
+        unitDisplay: fromCents(toInt(it.unitPriceCents||0))
+      }));
+    }
+    return [makeRow()];
+  });
 
-  // neue Nummer im Schema RN-YYMM-000 holen
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/invoices/nextNo", { cache: "no-store" });
-        const js = await res.json().catch(() => ({}));
-        if (js?.invoiceNo) setInvoiceNo(js.invoiceNo);
-      } catch { /* noop */ }
-    })();
-  }, []);
+  useEffect(()=>{
+    // nächste Nummer holen (nur Neu)
+    if (!isEdit){
+      (async () => {
+        try {
+          const res = await fetch("/api/invoices/nextNo", { cache: "no-store" });
+          const js = await res.json().catch(() => ({}));
+          if (js?.invoiceNo) setInvoiceNo(js.invoiceNo);
+        } catch {}
+      })();
+    }
+  },[isEdit]);
 
+  function patchRow(id, patch) { setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
   function onPickProduct(id, productId) {
     const p = products.find((x) => x.id === productId);
     if (!p) { patchRow(id, { productId: "", name: "", kind: "product", unitPriceCents: 0, baseCents: 0, unitDisplay: "0,00" }); return; }
@@ -383,7 +360,6 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       patchRow(id, { productId: p.id, name: p.name, kind: "product", baseCents: 0, unitPriceCents: up, unitDisplay: fromCents(up) });
     }
   }
-  function patchRow(id, patch) { setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
   function addRow() { setItems((prev) => [...prev, makeRow()]); }
   function removeRow(id) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id))); }
 
@@ -396,9 +372,7 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
     if (!row || row.kind !== "travel") return;
     patchRow(id, { unitDisplay: v, unitPriceCents: toCents(v) });
   }
-  function lineSum(row) {
-    return toInt(row.baseCents || 0) + toInt(row.quantity || 0) * toInt(row.unitPriceCents || 0);
-  }
+  function lineSum(row) { return toInt(row.baseCents || 0) + toInt(row.quantity || 0) * toInt(row.unitPriceCents || 0); }
 
   const totals = useMemo(() => {
     const net = items.reduce((s, r) => s + lineSum(r), 0);
@@ -429,64 +403,73 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
       })),
     };
 
-    const res = await fetch("/api/invoices", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => null);
-    const js = res ? await res.json().catch(() => ({})) : null;
-    if (!res || !res.ok || !js?.ok) {
-      alert(js?.error || "Speichern fehlgeschlagen.");
-      return;
+    if (isEdit) {
+      const res = await fetch(`/api/invoices/${initial.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+      const js = res ? await res.json().catch(() => ({})) : null;
+      if (!res || !res.ok || !js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+      onSaved?.();
+    } else {
+      const res = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+      const js = res ? await res.json().catch(() => ({})) : null;
+      if (!res || !res.ok || !js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+      onSaved?.();
     }
-    onSaved?.();
   }
 
   return (
     <div
       role="dialog" aria-modal="true"
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,.4)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50
-      }}
+      className="modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <div className="surface" style={{ width: "min(980px,100%)", marginTop: 24 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <h2 style={{ margin: 0 }}>Neue Rechnung</h2>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2 style={{ margin: 0 }}>{isEdit ? "Rechnung korrigieren" : "Neue Rechnung"}</h2>
+          <button className="btn-ghost" style={S.ghost} onClick={onClose}>Schließen</button>
         </div>
 
-        {/* Kopf: 4 Felder – exakt, luftig */}
-        <div className="surface" style={{ padding: 12, marginTop: 12 }}>
-          <div className="grid-head">
-            <div>
-              <label style={S.lbl}>Rechnungs-Nr.</label>
-              <input type="text" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} style={S.input} />
+        {/* Kopf: kompakt – 2 Reihen á 2 Felder; Kunde darunter */}
+        <div className="surface section">
+          <div className="head-rows">
+            <div className="row">
+              <div className="cell w-no">
+                <label style={S.lbl}>Rechnungs-Nr.</label>
+                <input type="text" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} style={S.input} />
+              </div>
+              <div className="cell w-date">
+                <label style={S.lbl}>Rechnungsdatum</label>
+                <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} style={S.input} />
+              </div>
             </div>
-            <div>
-              <label style={S.lbl}>Rechnungsdatum</label>
-              <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} style={S.input} />
+            <div className="row">
+              <div className="cell w-date">
+                <label style={S.lbl}>Fällig am</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={S.input} />
+              </div>
+              <div className="cell w-money">
+                <label style={S.lbl}>Rabatt gesamt (€, optional)</label>
+                <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} style={S.input} />
+              </div>
             </div>
-            <div>
-              <label style={S.lbl}>Fällig am</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={S.input} />
-            </div>
-            <div>
-              <label style={S.lbl}>Rabatt gesamt (€, optional)</label>
-              <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} style={S.input} />
-            </div>
-          </div>
-
-          <div className="grid-one" style={{ marginTop: 12 }}>
-            <div>
-              <label style={S.lbl}>Kunde *</label>
-              <CustomerPicker value={customerId} onChange={setCustomerId} />
+            <div className="row">
+              <div className="cell w-full">
+                <label style={S.lbl}>Kunde *</label>
+                <CustomerPicker value={customerId} onChange={setCustomerId} />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Positionen */}
-        <div className="surface" style={{ padding: 12, marginTop: 16 }}>
+        <div className="surface section">
           <div className="table-wrap">
             <table className="table table-fixed" style={{ minWidth: 760 }}>
               <thead>
@@ -513,7 +496,7 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
                         </select>
                         {toInt(r.baseCents) > 0 && (
                           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-                            inkl. Grundpreis: {money(r.baseCents, currency)}
+                            inkl. Grundpreis: {money(r.baseCents)}
                           </div>
                         )}
                       </td>
@@ -535,11 +518,11 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
                             style={{ ...S.input, textAlign: "right" }}
                           />
                         ) : (
-                          money(r.unitPriceCents, currency)
+                          money(r.unitPriceCents)
                         )}
                       </td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
-                        {money(sum, currency)}
+                        {money(sum)}
                       </td>
                     </tr>
                   );
@@ -549,53 +532,191 @@ function NewInvoiceModal({ customers, products, currency, vatExempt, onClose, on
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button className="btn-ghost" style={S.ghost} onClick={() => setItems((p) => [...p, makeRow()])}>+ Position</button>
-            <button className="btn-ghost" style={S.ghost} onClick={() => setItems((p) => (p.length <= 1 ? p : p.slice(0, -1)))} disabled={items.length <= 1}>– Entfernen</button>
+            <button className="btn-ghost" style={S.ghost} onClick={addRow}>+ Position</button>
+            <button className="btn-ghost" style={S.ghost} onClick={()=>setItems(p => p.length<=1?p:p.slice(0,-1))} disabled={items.length <= 1}>– Entfernen</button>
           </div>
         </div>
 
         {/* Summen */}
-        <div className="surface" style={{ padding: 12, marginTop: 16 }}>
+        <div className="surface section">
           <div className="totals-grid">
             <div />
             <div className="totals-box">
-              <div>Zwischensumme: <strong>{money(totals.net, currency)}</strong></div>
-              <div>Rabatt: <strong>- {money(totals.discountCents, currency)}</strong></div>
-              <div>Netto: <strong>{money(totals.netAfterDiscount, currency)}</strong></div>
-              <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(totals.tax, currency)}</strong></div>
+              <div>Zwischensumme: <strong>{money(totals.net)}</strong></div>
+              <div>Rabatt: <strong>- {money(totals.discountCents)}</strong></div>
+              <div>Netto: <strong>{money(totals.netAfterDiscount)}</strong></div>
+              <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(totals.tax)}</strong></div>
               <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
-                Gesamt: {money(totals.gross, currency)}
+                Gesamt: {money(totals.gross)}
               </div>
             </div>
           </div>
         </div>
 
         {/* Aktionen */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+        <div className="modal-actions">
           <button className="btn-ghost" style={S.ghost} onClick={onClose}>Abbrechen</button>
-          <button className="btn" style={S.btn} onClick={save}>Speichern</button>
+          <button className="btn" style={S.btn} onClick={save}>{isEdit ? "Speichern" : "Anlegen"}</button>
         </div>
       </div>
 
       <style jsx>{`
-        .grid-head{
-          display:grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap:12px;
+        .modal-overlay{
+          position: fixed; inset: 0; background: rgba(0,0,0,.4);
+          display: flex; align-items: flex-start; justify-content: center;
+          padding: 16px; z-index: 50;
         }
-        .grid-one{ display:grid; grid-template-columns: 1fr; gap:12px; }
+        .modal-box{
+          width: min(980px, 100%);
+          margin-top: 24px;
+          background:#fff; border:1px solid #eee; border-radius:14px;
+          /* Scrollbar für hohen Inhalt */
+          max-height: calc(100vh - 48px);
+          overflow: auto;
+        }
+        .modal-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding: 14px 16px; border-bottom: 1px solid #eee;
+          position: sticky; top: 0; background:#fff; z-index: 1;
+        }
+        .modal-actions{
+          display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
+          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+        }
+
+        .surface.section{ padding: 12px 16px; }
+
+        /* Kopf kompakt: zwei Zeilen á 2 Felder + Kunde */
+        .head-rows{ display:flex; flex-direction:column; gap:10px; }
+        .row{ display:flex; gap:12px; flex-wrap:wrap; }
+        .cell{ display:block; }
+        .w-no{ width: 220px; }       /* RN-YYMM-000 passt luftig */
+        .w-date{ width: 180px; }     /* XX.XX.XXXX / Date Input */
+        .w-money{ width: 180px; }    /* 0,00 */
+        .w-full{ width: min(640px, 100%); } /* Kunde über „Zeile 3“ */
 
         .totals-grid{ display:grid; grid-template-columns: 1fr auto; align-items:flex-end; }
         .totals-box{ text-align:right; }
 
         @media (max-width: 720px){
-          .grid-head{ grid-template-columns: 1fr 1fr; }
+          .w-no{ width: 200px; } .w-date{ width: 160px; } .w-money{ width: 160px; }
+          .w-full{ width: 100%; }
         }
       `}</style>
     </div>
   );
 }
 
+/* ───────── Drucklayout ───────── */
+function PrintArea({ row, settings, currency }) {
+  const firm = settings || {};
+  const dueTxt = row.dueDate ? new Date(row.dueDate).toLocaleDateString("de-DE") : null;
+
+  return (
+    <div className="print-area">
+      <div className="print-page">
+        {/* Briefkopf */}
+        <div className="ph-head">
+          <div className="ph-left">
+            {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
+            <div className="ph-name">{firm.firmName || ""}</div>
+            <div className="ph-sub">{firm.owner ? `Inhaber: ${firm.owner}` : ""}</div>
+            {firm.street && <div>{firm.street}</div>}
+            {(firm.zip || firm.city) && <div>{firm.zip} {firm.city}</div>}
+            {firm.email && <div>{firm.email}</div>}
+            {firm.phone && <div>{firm.phone}</div>}
+          </div>
+          <div className="ph-right">
+            <div className="ph-title">RECHNUNG</div>
+            <div>Nr.: <strong>{row.invoiceNo}</strong></div>
+            <div>Datum: <strong>{row.issueDate ? new Date(row.issueDate).toLocaleDateString("de-DE") : ""}</strong></div>
+          </div>
+        </div>
+
+        {/* Empfänger */}
+        <div className="ph-recipient">
+          <div className="ph-rec-label">Rechnung an</div>
+          <div className="ph-rec-name">{row.customerName || ""}</div>
+          {row.customerStreet && <div>{row.customerStreet}</div>}
+          {(row.customerZip || row.customerCity) && <div>{row.customerZip} {row.customerCity}</div>}
+        </div>
+
+        {/* Positionen */}
+        <table className="ph-table">
+          <thead>
+            <tr>
+              <th className="ta-left">Bezeichnung</th>
+              <th>Menge</th>
+              <th>Einzelpreis</th>
+              <th>Summe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.isArray(row.items) && row.items.map((it, idx)=>(
+              <tr key={idx}>
+                <td className="ta-left">{it.name || ""}</td>
+                <td>{toInt(it.quantity || 0)}</td>
+                <td>{money(toInt(it.unitPriceCents || 0), row.currency || currency)}</td>
+                <td>{money(toInt(it.lineTotalCents || 0), row.currency || currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Zahlungsinfo/Hinweis */}
+        <div className="ph-note">
+          {dueTxt
+            ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> auf die unten aufgeführten Bankdaten.</>
+            : <>Bitte überweisen Sie den Gesamtbetrag auf die unten aufgeführten Bankdaten.</>
+          }
+        </div>
+
+        {/* Summenblock */}
+        <div className="ph-totals">
+          <div>Netto: <strong>{money(row.netCents, row.currency || currency)}</strong></div>
+          <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
+          <div className="ph-total">Gesamt: <strong>{money(row.grossCents, row.currency || currency)}</strong></div>
+        </div>
+
+        {/* Fußzeile – Bank/Steuer */}
+        <div className="ph-footer">
+          {firm.bankName && <div><strong>Bank:</strong> {firm.bankName}</div>}
+          {(firm.iban || firm.bic) && <div><strong>IBAN/BIC:</strong> {firm.iban || ""} {firm.bic || ""}</div>}
+          {(firm.vatId || firm.taxId) && <div><strong>USt-ID/St-Nr.:</strong> {firm.vatId || ""} {firm.taxId || ""}</div>}
+          {firm.footerText && <div>{firm.footerText}</div>}
+        </div>
+      </div>
+
+      <style jsx>{`
+        .print-page{ padding: 24px 28px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; }
+        .ph-head{ display:flex; justify-content:space-between; gap:12px; }
+        .ph-left{ max-width: 60%; }
+        .ph-logo{ max-height: 48px; margin-bottom: 8px; }
+        .ph-name{ font-size: 18pt; font-weight: 800; }
+        .ph-sub{ color:#333; margin-bottom: 6px; }
+        .ph-right{ text-align:right; }
+        .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
+
+        .ph-recipient{ margin: 18px 0 10px; }
+        .ph-rec-label{ font-size:10pt; color:#555; }
+        .ph-rec-name{ font-size:12pt; font-weight:700; }
+
+        .ph-table{ width:100%; border-collapse: collapse; margin-top: 12px; }
+        .ph-table th, .ph-table td{ border-bottom: 1px solid #ddd; padding: 8px; text-align:right; }
+        .ph-table .ta-left{ text-align:left; }
+
+        .ph-note{ margin: 12px 0; }
+
+        .ph-totals{ margin-top: 10px; text-align: right; }
+        .ph-total{ font-size: 14pt; font-weight: 800; margin-top: 6px; }
+
+        .ph-footer{ border-top: 1px solid #ddd; margin-top: 18px; padding-top: 10px; font-size: 10pt; color:#333; }
+      `}</style>
+    </div>
+  );
+}
+
+/* ───────── Kunden-Picker ───────── */
 function CustomerPicker({ value, onChange }) {
   const [opts, setOpts] = useState([]);
   useEffect(() => { (async () => {
