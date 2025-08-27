@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 /* ───────── Helpers ───────── */
 const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
@@ -13,16 +13,6 @@ function fmtDEDate(input){
   const d = input ? new Date(input) : null;
   return d && !isNaN(d) ? d.toLocaleDateString("de-DE") : "—";
 }
-
-/** Belegnummer-Formatter: BN-jjmm-000 */
-function formatReceiptNo(nextDigits, dateStr){
-  const d = dateStr ? new Date(dateStr) : new Date();
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = pad2(d.getMonth()+1);
-  const seq = String(Number(nextDigits || 1) % 1000).padStart(3, "0");
-  return `BN-${yy}${mm}-${seq}`;
-}
-
 async function safeGet(url, fallback){
   try{
     const r = await fetch(url, { cache:"no-store" });
@@ -48,7 +38,7 @@ export default function ReceiptsPage(){
 
   // Modal-State
   const [isOpen, setIsOpen] = useState(false);
-  const [editRow, setEditRow] = useState(null); // null = Neuer Beleg
+  const [editRow, setEditRow] = useState(null);
 
   // Formularfelder im Modal
   const [receiptNo, setReceiptNo] = useState("");
@@ -63,26 +53,15 @@ export default function ReceiptsPage(){
   async function load(){
     setLoading(true);
     try{
-      const [listRes, prodRes, custRes, setRes] = await Promise.all([
-        safeGet("/api/receipts", { ok:true, data:[] }),
-        safeGet("/api/products", { ok:true, data:[] }),
-        safeGet("/api/customers", { ok:true, data:[] }),
-        safeGet("/api/settings", { ok:true, data:{} }),
-      ]);
+      // WICHTIG: explizites Limit & no-store
+      const listRes = await safeGet("/api/receipts?limit=500", { ok:true, data:[] });
+      const prodRes = await safeGet("/api/products", { ok:true, data:[] });
+      const custRes = await safeGet("/api/customers", { ok:true, data:[] });
+      const setRes  = await safeGet("/api/settings", { ok:true, data:{} });
 
-      setRows(Array.isArray(listRes?.data) ? listRes.data : []);
-      setProducts(
-        Array.isArray(prodRes?.data)
-          ? prodRes.data.map(p=>({
-              id: p.id, name: p.name || "-",
-              kind: p.kind || "product",
-              priceCents: toInt(p.priceCents || 0),
-              hourlyRateCents: toInt(p.hourlyRateCents || 0),
-              travelBaseCents: toInt(p.travelBaseCents || 0),
-              travelPerKmCents: toInt(p.travelPerKmCents || 0),
-            }))
-          : []
-      );
+      const list = Array.isArray(listRes?.data) ? listRes.data : [];
+      setRows(list);
+      setProducts(Array.isArray(prodRes?.data) ? prodRes.data : []);
       setCustomers(Array.isArray(custRes?.data) ? custRes.data : []);
       setCurrency(setRes?.data?.currency || "EUR");
       setVatExemptDefault(typeof setRes?.data?.kleinunternehmer === "boolean" ? setRes.data.kleinunternehmer : true);
@@ -99,9 +78,12 @@ export default function ReceiptsPage(){
     setDiscount("0");
     setCustomerId("");
     setItems([makeEmptyItem()]);
-    // nächste Nummer holen & in BN-jjmm-000 umwandeln
-    const js = await safeGet("/api/receipts/nextNo", { ok:true, nextNo:"1" });
-    setReceiptNo(formatReceiptNo(js?.nextNo || "1", new Date().toISOString().slice(0,10)));
+    // Falls dein Backend eine Next-No anbietet, hier abrufen – sonst leer lassen
+    const js = await safeGet("/api/receipts/nextNo", { ok:true, nextNo:null });
+    const yy = String(new Date().getFullYear()).slice(-2);
+    const mm = pad2(new Date().getMonth()+1);
+    const seq = String(Number(js?.nextNo || 1) % 1000).padStart(3, "0");
+    setReceiptNo(`BN-${yy}${mm}-${seq}`);
     setIsOpen(true);
   }
 
@@ -110,7 +92,7 @@ export default function ReceiptsPage(){
     setReceiptNo(row.receiptNo || "");
     setFormDate(row.date ? String(row.date).slice(0,10) : new Date().toISOString().slice(0,10));
     setDiscount("0");
-    setCustomerId(String(row.customerId || "")); // optional – wird ggf. vom Backend ignoriert, falls Spalte fehlt
+    setCustomerId(String(row.customerId || "")); // optional
     const its = Array.isArray(row.items) ? row.items : [];
     setItems(
       its.length
@@ -129,16 +111,6 @@ export default function ReceiptsPage(){
   }
 
   function closeModal(){ setIsOpen(false); }
-
-  // Wenn Datum im NEU-Modal geändert wird und die Nummer im BN-Format ist, Monat neu einsetzen
-  useEffect(()=>{
-    if(!isOpen || editRow) return;
-    if(/^BN-\d{4}-\d{3}$/.test(receiptNo)){
-      // seq behalten, nur Präfix updaten
-      const seq = receiptNo.slice(-3);
-      setReceiptNo(formatReceiptNo(seq, formDate));
-    }
-  },[formDate, isOpen, editRow]); // eslint-disable-line
 
   function patchItem(id, patch){
     setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
@@ -173,7 +145,6 @@ export default function ReceiptsPage(){
 
   async function saveReceipt(e){
     e?.preventDefault?.();
-    // Clean Items
     const clean = items
       .map(it => ({
         productId: it.productId || null,
@@ -186,24 +157,23 @@ export default function ReceiptsPage(){
     if(clean.length===0){ alert("Bitte mindestens eine Position anlegen."); return; }
 
     const payload = {
-      receiptNo: (receiptNo||"").trim() || undefined, // wenn leer -> Backend generiert gemäß Settings
+      receiptNo: (receiptNo||"").trim() || undefined,
       date: formDate || null,
       discountCents: totals.discountCents,
       currency,
       vatExempt: !!vatExemptDefault,
-      customerId: customerId || null, // optional – Backend darf ignorieren, wenn Spalte fehlt
+      customerId: customerId || null, // optional
       items: clean,
     };
 
     if(editRow){
-      // Hinweis: Dein Backend hat aktuell GET/DELETE – wenn PUT/PATCH fehlt, Info anzeigen
       const res = await fetch(`/api/receipts/${editRow.id}`, {
         method: "PUT",
         headers: { "content-type":"application/json" },
         body: JSON.stringify(payload),
       }).catch(()=>null);
       if(!res || !res.ok){
-        alert("Bearbeiten nicht möglich (PUT /api/receipts/[id] fehlt eventuell).");
+        alert("Bearbeiten fehlgeschlagen.");
         return;
       }
     }else{
@@ -256,18 +226,19 @@ export default function ReceiptsPage(){
               {loading && <tr><td colSpan={3} className="muted">Lade…</td></tr>}
               {!loading && rows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
 
-              {!loading && rows.map(r=>{
+              {!loading && rows.map((r, idx)=>{
                 const isOpen = expandedId===r.id;
+                const curr = r.currency || currency || "EUR";
                 return (
-                  <>
-                    <tr key={r.id} className="row-clickable" onClick={()=>toggleExpand(r.id)}>
+                  <React.Fragment key={r.id || idx}>
+                    <tr className="row-clickable" onClick={()=> toggleExpand(r.id)}>
                       <td className="ellipsis">#{r.receiptNo || "—"}</td>
                       <td>{fmtDEDate(r.date)}</td>
-                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
+                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, curr)}</td>
                     </tr>
 
                     {isOpen && (
-                      <tr key={r.id+"-detail"}>
+                      <tr>
                         <td colSpan={3} className="details-cell">
                           <div className="detail-head">
                             <div>
@@ -296,16 +267,16 @@ export default function ReceiptsPage(){
                                 {(!r.items || r.items.length===0) && (
                                   <tr><td colSpan={4} className="muted">Keine Positionen.</td></tr>
                                 )}
-                                {Array.isArray(r.items) && r.items.map((it,idx)=>{
+                                {Array.isArray(r.items) && r.items.map((it, i)=>{
                                   const qty = toInt(it.quantity||0);
                                   const unit= toInt(it.unitPriceCents||0);
                                   const line= toInt(it.lineTotalCents || (qty*unit));
                                   return (
-                                    <tr key={idx}>
+                                    <tr key={i}>
                                       <td className="ellipsis">{it.name || "—"}</td>
                                       <td>{qty}</td>
-                                      <td>{money(unit, r.currency || currency)}</td>
-                                      <td>{money(line, r.currency || currency)}</td>
+                                      <td>{money(unit, curr)}</td>
+                                      <td>{money(line, curr)}</td>
                                     </tr>
                                   );
                                 })}
@@ -314,12 +285,12 @@ export default function ReceiptsPage(){
                           </div>
 
                           <div className="totals">
-                            Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
+                            Netto: {money(r.netCents, curr)} · USt: {money(r.taxCents, curr)} · Gesamt: {money(r.grossCents, curr)}
                           </div>
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -475,8 +446,8 @@ export default function ReceiptsPage(){
           margin-top: 24px;
           background:#fff; border:1px solid #eee; border-radius:14px;
           max-height: calc(100vh - 48px);
-          overflow-y: auto;           /* vertikal scrollen */
-          overflow-x: hidden;         /* kein horizontales Scrolling fürs Fenster */
+          overflow-y: auto;
+          overflow-x: hidden;
         }
         .ivx-modal-head{
           display:flex; align-items:center; justify-content:space-between;
@@ -489,20 +460,16 @@ export default function ReceiptsPage(){
         }
 
         .surface.section{ padding: 12px 16px; }
-
-        /* Kopf-Felder: wie im Rechnungsmodul – kompakt & ohne Überlappungen */
         .head-rows{ display:flex; flex-direction:column; gap:10px; }
         .row{ display:flex; flex-wrap:wrap; gap:12px; }
         .cell{ display:block; flex: 1 1 auto; }
         .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
         .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
 
-        /* feste Max-Breiten (überlappen nicht, wrappen sauber) */
         .w-no    { flex: 0 1 220px; max-width: 260px; }
         .w-date  { flex: 0 1 180px; max-width: 220px; }
         .w-money { flex: 0 1 200px; max-width: 240px; }
 
-        /* Positions-Card: H-Scroll nur hier */
         .positions .table-wrap{ overflow-x:auto }
         .positions .table{ min-width:720px }
 
