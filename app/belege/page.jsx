@@ -1,3 +1,4 @@
+// app/belege/page.jsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,8 +11,9 @@ function money(cents, curr = "EUR") {
 }
 function pad2(n){ return String(n).padStart(2,"0"); }
 function fmtDEDate(input){
-  const d = input ? new Date(input) : null;
-  return d && !isNaN(d) ? d.toLocaleDateString("de-DE") : "—";
+  if (!input) return "—";
+  const d = new Date(input);
+  return isNaN(d) ? "—" : d.toLocaleDateString("de-DE");
 }
 async function safeGet(url, fallback){
   try{
@@ -22,6 +24,14 @@ async function safeGet(url, fallback){
   }catch{
     return fallback;
   }
+}
+/** Nimmt verschiedenste API-Formen an: Array | {data:Array} | {rows:Array} | {data:{rows:Array}} */
+function unpackList(resp){
+  if (Array.isArray(resp)) return resp;
+  if (Array.isArray(resp?.data)) return resp.data;
+  if (Array.isArray(resp?.rows)) return resp.rows;
+  if (Array.isArray(resp?.data?.rows)) return resp.data.rows;
+  return [];
 }
 
 /* ───────── Seite ───────── */
@@ -53,18 +63,25 @@ export default function ReceiptsPage(){
   async function load(){
     setLoading(true);
     try{
-      // WICHTIG: explizites Limit & no-store
-      const listRes = await safeGet("/api/receipts?limit=500", { ok:true, data:[] });
-      const prodRes = await safeGet("/api/products", { ok:true, data:[] });
-      const custRes = await safeGet("/api/customers", { ok:true, data:[] });
-      const setRes  = await safeGet("/api/settings", { ok:true, data:{} });
+      const listRes = await safeGet("/api/receipts?limit=500", []);
+      const prodRes = await safeGet("/api/products", []);
+      const custRes = await safeGet("/api/customers", []);
+      const setRes  = await safeGet("/api/settings", {});
 
-      const list = Array.isArray(listRes?.data) ? listRes.data : [];
-      setRows(list);
-      setProducts(Array.isArray(prodRes?.data) ? prodRes.data : []);
-      setCustomers(Array.isArray(custRes?.data) ? custRes.data : []);
-      setCurrency(setRes?.data?.currency || "EUR");
-      setVatExemptDefault(typeof setRes?.data?.kleinunternehmer === "boolean" ? setRes.data.kleinunternehmer : true);
+      const list = unpackList(listRes);
+      setRows(Array.isArray(list) ? list : []);
+
+      const prodList = unpackList(prodRes);
+      setProducts(Array.isArray(prodList) ? prodList : []);
+
+      const custList = unpackList(custRes);
+      setCustomers(Array.isArray(custList) ? custList : []);
+
+      setCurrency(setRes?.data?.currency || setRes?.currency || "EUR");
+      const ku = (typeof setRes?.data?.kleinunternehmer === "boolean") ? setRes.data.kleinunternehmer
+               : (typeof setRes?.kleinunternehmer === "boolean") ? setRes.kleinunternehmer
+               : true;
+      setVatExemptDefault(ku);
     }finally{
       setLoading(false);
     }
@@ -78,8 +95,8 @@ export default function ReceiptsPage(){
     setDiscount("0");
     setCustomerId("");
     setItems([makeEmptyItem()]);
-    // Falls dein Backend eine Next-No anbietet, hier abrufen – sonst leer lassen
-    const js = await safeGet("/api/receipts/nextNo", { ok:true, nextNo:null });
+    // nächste Nummer (falls Route vorhanden) – sonst einfache BN-Logik
+    const js = await safeGet("/api/receipts/nextNo", { nextNo: null });
     const yy = String(new Date().getFullYear()).slice(-2);
     const mm = pad2(new Date().getMonth()+1);
     const seq = String(Number(js?.nextNo || 1) % 1000).padStart(3, "0");
@@ -89,7 +106,7 @@ export default function ReceiptsPage(){
 
   function openEdit(row){
     setEditRow(row);
-    setReceiptNo(row.receiptNo || "");
+    setReceiptNo(row.receiptNo || row.no || row.number || "");
     setFormDate(row.date ? String(row.date).slice(0,10) : new Date().toISOString().slice(0,10));
     setDiscount("0");
     setCustomerId(String(row.customerId || "")); // optional
@@ -196,6 +213,7 @@ export default function ReceiptsPage(){
     await load();
   }
 
+  /* ───────── Render ───────── */
   return (
     <main className="ivx-page">
       {/* Kopf */}
@@ -229,21 +247,22 @@ export default function ReceiptsPage(){
               {!loading && rows.map((r, idx)=>{
                 const isOpen = expandedId===r.id;
                 const curr = r.currency || currency || "EUR";
+                const recNo = r.receiptNo || r.no || r.number || r.title || "—";
                 return (
                   <React.Fragment key={r.id || idx}>
-                    <tr className="row-clickable" onClick={()=> toggleExpand(r.id)}>
-                      <td className="ellipsis">#{r.receiptNo || "—"}</td>
+                    <tr className="row-clickable" onClick={()=> r.id && toggleExpand(r.id)}>
+                      <td className="ellipsis">#{recNo}</td>
                       <td>{fmtDEDate(r.date)}</td>
-                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, curr)}</td>
+                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents ?? r.totalCents ?? r.amountCents, curr)}</td>
                     </tr>
 
-                    {isOpen && (
+                    {isOpen && r.id && (
                       <tr>
                         <td colSpan={3} className="details-cell">
                           <div className="detail-head">
                             <div>
                               <div className="muted">Beleg</div>
-                              <div className="h5">#{r.receiptNo || "—"}</div>
+                              <div className="h5">#{recNo}</div>
                               {r.customerName && <div className="muted">Kunde: <strong>{r.customerName}</strong></div>}
                             </div>
                             <div className="actions">
@@ -270,7 +289,7 @@ export default function ReceiptsPage(){
                                 {Array.isArray(r.items) && r.items.map((it, i)=>{
                                   const qty = toInt(it.quantity||0);
                                   const unit= toInt(it.unitPriceCents||0);
-                                  const line= toInt(it.lineTotalCents || (qty*unit));
+                                  const line= toInt(it.lineTotalCents ?? (qty*unit));
                                   return (
                                     <tr key={i}>
                                       <td className="ellipsis">{it.name || "—"}</td>
@@ -285,7 +304,7 @@ export default function ReceiptsPage(){
                           </div>
 
                           <div className="totals">
-                            Netto: {money(r.netCents, curr)} · USt: {money(r.taxCents, curr)} · Gesamt: {money(r.grossCents, curr)}
+                            Netto: {money(r.netCents ?? r.subtotalCents, curr)} · USt: {money(r.taxCents ?? 0, curr)} · Gesamt: {money(r.grossCents ?? r.totalCents ?? r.amountCents, curr)}
                           </div>
                         </td>
                       </tr>
