@@ -1,7 +1,8 @@
 // app/api/receipts/route.js
-import { initDb, q } from "@/lib/db";
+import { initDb, q } from "@/lib/db"; // ggf. anpassen: "@/db" oder relativ importieren
+import { randomUUID } from "crypto";
 
-/** helpers */
+/* helpers */
 const toInt = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
@@ -32,22 +33,23 @@ export async function GET(request) {
       [limit]
     )).rows;
 
-    return Response.json({ ok:true, data: rows }, { headers: { "cache-control":"no-store" } });
+    return Response.json({ ok: true, data: rows }, { headers: { "cache-control": "no-store" } });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500 });
   }
 }
 
 export async function POST(request) {
   try {
     await initDb();
-    const body = await request.json().catch(()=> ({}));
+    const body = await request.json().catch(() => ({}));
     const items = Array.isArray(body.items) ? body.items : [];
     if (items.length === 0) {
-      return new Response(JSON.stringify({ ok:false, error:"Mindestens eine Position ist erforderlich." }), { status:400 });
+      return new Response(JSON.stringify({ ok: false, error: "Mindestens eine Position ist erforderlich." }), { status: 400 });
     }
 
-    const receiptNo = (body.receiptNo || "").trim();
+    const id = randomUUID(); // <— wir erzeugen die Kopf-ID selbst
+    const receiptNo = (body.receiptNo || "").trim() || null;
     const date = body.date || null;
     const vatExempt = !!body.vatExempt;
     const currency = body.currency || "EUR";
@@ -60,16 +62,18 @@ export async function POST(request) {
     }
     const netAfter = Math.max(0, net - discountCents);
     const taxRate = vatExempt ? 0 : 19;
-    const taxCents = Math.round(netAfter * (taxRate/100));
+    const taxCents = Math.round(netAfter * (taxRate / 100));
     const grossCents = netAfter + taxCents;
 
     await q("BEGIN");
 
-    // Optional: customerId verwenden, wenn Spalte vorhanden
+    // Prüfen, ob es die Spalte "customerId" gibt (optional)
     let withCustomer = false;
     try { await q(`SELECT "customerId" FROM "Receipt" WHERE false`); withCustomer = true; } catch {}
 
+    // Insert Receipt (mit eigener ID)
     const cols = [
+      `"id"`,
       `"receiptNo"`,
       `"date"`,
       `"vatExempt"`,
@@ -81,40 +85,61 @@ export async function POST(request) {
       `"createdAt"`,
       `"updatedAt"`
     ];
-    const placeholders = ["$1","COALESCE($2, CURRENT_DATE)","$3","$4","$5","$6","$7","$8","now()","now()"];
-    const params = [receiptNo || null, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents];
+    const vals = [
+      "$1",           // id
+      "$2",           // receiptNo
+      "COALESCE($3::date, CURRENT_DATE)",
+      "$4",           // vatExempt
+      "$5",           // currency
+      "$6",           // netCents (nach Rabatt)
+      "$7",           // taxCents
+      "$8",           // grossCents
+      "$9",           // discountCents
+      "now()",
+      "now()"
+    ];
+    const params = [
+      id, receiptNo, date, vatExempt, currency,
+      netAfter, taxCents, grossCents, discountCents
+    ];
 
     if (withCustomer) {
       cols.splice(5, 0, `"customerId"`);
-      placeholders.splice(5, 0, "$9");
+      vals.splice(5, 0, "$10");
       params.push(body.customerId || null);
     }
 
-    const insertSql = `INSERT INTO "Receipt" (${cols.join(",")}) VALUES (${placeholders.join(",")}) RETURNING "id","receiptNo"`;
+    const insertSql = `INSERT INTO "Receipt" (${cols.join(",")}) VALUES (${vals.join(",")}) RETURNING "id","receiptNo"`;
     const head = (await q(insertSql, params)).rows[0];
-    const id = head.id;
 
+    // Insert Items – ebenfalls mit eigener ID
     for (const it of items) {
+      const itemId = randomUUID();
+      const qty = toInt(it.quantity || 0);
+      const unit = toInt(it.unitPriceCents || 0);
+      const line = qty * unit;
+
       await q(
         `INSERT INTO "ReceiptItem"
            ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
          VALUES
-           (gen_random_uuid(),$1,$2,$3,$4,$5,$6,now(),now())`,
+           ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
         [
-          id,
+          itemId,
+          id, // <— unser oben erzeugtes Beleg-ID
           it.productId || null,
           (it.name || "Position").trim(),
-          toInt(it.quantity || 0),
-          toInt(it.unitPriceCents || 0),
-          toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0),
+          qty,
+          unit,
+          line,
         ]
       );
     }
 
     await q("COMMIT");
-    return Response.json({ ok:true, data: { id, receiptNo: head.receiptNo } }, { status:201 });
+    return Response.json({ ok: true, data: { id: head.id, receiptNo: head.receiptNo } }, { status: 201 });
   } catch (e) {
     try { await q("ROLLBACK"); } catch {}
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 400 });
   }
 }
