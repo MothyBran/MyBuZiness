@@ -2,58 +2,80 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/* Utils */
+/* ───────── Helpers ───────── */
+const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
 function money(cents, curr = "EUR") {
   const n = Number(cents || 0) / 100;
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
 }
-const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
-
-function makeEmptyItem() {
-  // baseCents (Grundpreis), kind für saubere Summen
-  return { productId: "", name: "", quantity: 1, unitPriceCents: 0, baseCents: 0, kind: "product", lineTotalCents: 0 };
+function pad2(n){ return String(n).padStart(2,"0"); }
+function fmtDEDate(input){
+  const d = input ? new Date(input) : null;
+  return d && !isNaN(d) ? d.toLocaleDateString("de-DE") : "—";
 }
 
-export default function ReceiptsPage() {
-  /* Listen- & UI-State */
+/** Belegnummer-Formatter: BN-jjmm-000 */
+function formatReceiptNo(nextDigits, dateStr){
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = pad2(d.getMonth()+1);
+  const seq = String(Number(nextDigits || 1) % 1000).padStart(3, "0");
+  return `BN-${yy}${mm}-${seq}`;
+}
+
+async function safeGet(url, fallback){
+  try{
+    const r = await fetch(url, { cache:"no-store" });
+    if(!r.ok) return fallback;
+    const js = await r.json().catch(()=>fallback);
+    return js ?? fallback;
+  }catch{
+    return fallback;
+  }
+}
+
+/* ───────── Seite ───────── */
+export default function ReceiptsPage(){
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+
+  const [currency, setCurrency] = useState("EUR");
+  const [vatExemptDefault, setVatExemptDefault] = useState(true);
+
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* Settings */
-  const [currency, setCurrency] = useState("EUR");
-  const [vatExemptDefault, setVatExemptDefault] = useState(true); // §19 aus Einstellungen
-
-  /* Modal (Neu/Bearbeiten) */
+  // Modal-State
   const [isOpen, setIsOpen] = useState(false);
-  const [editId, setEditId] = useState(null);     // null = neu
-  const [receiptNo, setReceiptNo] = useState(""); // editierbar
-  const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editRow, setEditRow] = useState(null); // null = Neuer Beleg
+
+  // Formularfelder im Modal
+  const [receiptNo, setReceiptNo] = useState("");
+  const [formDate, setFormDate] = useState(()=> new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("0");
+  const [customerId, setCustomerId] = useState(""); // optional!
   const [items, setItems] = useState([makeEmptyItem()]);
 
-  /* Laden */
-  async function load() {
+  function makeEmptyItem(){ return { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, kind:"product" }; }
+
+  useEffect(()=>{ load(); },[]);
+  async function load(){
     setLoading(true);
-    try {
-      const [listRes, prodRes, setRes] = await Promise.all([
-        fetch("/api/receipts", { cache: "no-store" }),
-        fetch("/api/products", { cache: "no-store" }),
-        fetch("/api/settings", { cache: "no-store" }),
+    try{
+      const [listRes, prodRes, custRes, setRes] = await Promise.all([
+        safeGet("/api/receipts", { ok:true, data:[] }),
+        safeGet("/api/products", { ok:true, data:[] }),
+        safeGet("/api/customers", { ok:true, data:[] }),
+        safeGet("/api/settings", { ok:true, data:{} }),
       ]);
 
-      const list = await listRes.json().catch(() => ({}));
-      const pr = await prodRes.json().catch(() => ({}));
-      const st = await setRes.json().catch(() => ({}));
-
-      /* Produkte normalisieren */
+      setRows(Array.isArray(listRes?.data) ? listRes.data : []);
       setProducts(
-        Array.isArray(pr?.data)
-          ? pr.data.map((p) => ({
-              id: p.id,
-              name: p.name || "-",
-              kind: p.kind || "product",              // product | service | travel
+        Array.isArray(prodRes?.data)
+          ? prodRes.data.map(p=>({
+              id: p.id, name: p.name || "-",
+              kind: p.kind || "product",
               priceCents: toInt(p.priceCents || 0),
               hourlyRateCents: toInt(p.hourlyRateCents || 0),
               travelBaseCents: toInt(p.travelBaseCents || 0),
@@ -61,288 +83,223 @@ export default function ReceiptsPage() {
             }))
           : []
       );
-
-      setCurrency(st?.data?.currencyDefault || "EUR");
-      setVatExemptDefault(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
-
-      setRows(Array.isArray(list?.data) ? list.data : []);
-    } catch (e) {
-      console.error("Receipts load error:", e);
-      setRows([]);
-      setProducts([]);
-    } finally {
+      setCustomers(Array.isArray(custRes?.data) ? custRes.data : []);
+      setCurrency(setRes?.data?.currency || "EUR");
+      setVatExemptDefault(typeof setRes?.data?.kleinunternehmer === "boolean" ? setRes.data.kleinunternehmer : true);
+    }finally{
       setLoading(false);
     }
   }
-  useEffect(() => { load(); }, []);
 
-  function toggleExpand(id) {
-    setExpandedId((prev) => (prev === id ? null : id));
-  }
+  function toggleExpand(id){ setExpandedId(prev => prev===id ? null : id); }
 
-  /* Nächste Belegnummer holen (optional Backend /api/receipts/nextNo) */
-  async function fetchNextReceiptNo() {
-    try {
-      const res = await fetch("/api/receipts/nextNo", { cache: "no-store" });
-      if (res.ok) {
-        const js = await res.json().catch(() => ({}));
-        if (js?.nextNo) return String(js.nextNo);
-      }
-    } catch {}
-    // Fallback, falls Endpoint (noch) nicht existiert
-    return String(Date.now());
-  }
-
-  /* Modal öffnen (Neu) */
-  async function openNew() {
-    setEditId(null);
-    setFormDate(new Date().toISOString().slice(0, 10));
+  async function openNew(){
+    setEditRow(null);
+    setFormDate(new Date().toISOString().slice(0,10));
     setDiscount("0");
+    setCustomerId("");
     setItems([makeEmptyItem()]);
-    const nextNo = await fetchNextReceiptNo();
-    setReceiptNo(nextNo);
+    // nächste Nummer holen & in BN-jjmm-000 umwandeln
+    const js = await safeGet("/api/receipts/nextNo", { ok:true, nextNo:"1" });
+    setReceiptNo(formatReceiptNo(js?.nextNo || "1", new Date().toISOString().slice(0,10)));
     setIsOpen(true);
   }
 
-  /* Modal öffnen (Bearbeiten) */
-  function openEdit(row) {
-    setEditId(row.id);
+  function openEdit(row){
+    setEditRow(row);
     setReceiptNo(row.receiptNo || "");
-    setFormDate(row.date ? String(row.date).slice(0, 10) : new Date().toISOString().slice(0, 10));
-    setDiscount("0"); // falls du Rabatt speicherst, hier setzen
+    setFormDate(row.date ? String(row.date).slice(0,10) : new Date().toISOString().slice(0,10));
+    setDiscount("0");
+    setCustomerId(String(row.customerId || "")); // optional – wird ggf. vom Backend ignoriert, falls Spalte fehlt
     const its = Array.isArray(row.items) ? row.items : [];
     setItems(
       its.length
-        ? its.map((it) => ({
+        ? its.map(it=>({
+            id: crypto?.randomUUID?.() || String(Math.random()),
             productId: it.productId || "",
             name: it.name || "",
             quantity: toInt(it.quantity || 1),
             unitPriceCents: toInt(it.unitPriceCents || 0),
             baseCents: 0,
             kind: "product",
-            lineTotalCents: toInt(it.lineTotalCents || 0),
           }))
         : [makeEmptyItem()]
     );
     setIsOpen(true);
   }
 
-  function closeModal() { setIsOpen(false); }
+  function closeModal(){ setIsOpen(false); }
 
-  function updateItem(idx, patch) {
-    setItems((prev) => {
-      const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
-      const x = next[idx];
-      x.lineTotalCents = toInt(x.baseCents || 0) + (toInt(x.quantity) * toInt(x.unitPriceCents));
-      return next;
-    });
-  }
-
-  /** FIX: Preislogik beim Produktwechsel */
-  function onProductSelect(idx, productId) {
-    const p = products.find((x) => x.id === productId);
-    if (!p) {
-      updateItem(idx, { productId: "", name: "", unitPriceCents: 0, baseCents: 0, kind: "product" });
-      return;
+  // Wenn Datum im NEU-Modal geändert wird und die Nummer im BN-Format ist, Monat neu einsetzen
+  useEffect(()=>{
+    if(!isOpen || editRow) return;
+    if(/^BN-\d{4}-\d{3}$/.test(receiptNo)){
+      // seq behalten, nur Präfix updaten
+      const seq = receiptNo.slice(-3);
+      setReceiptNo(formatReceiptNo(seq, formDate));
     }
+  },[formDate, isOpen, editRow]); // eslint-disable-line
 
-    let unit = 0;  // was als "Einzelpreis" angezeigt wird
-    let base = 0;  // Grundpreis je Beleg
-    let kind = p.kind || "product";
-
-    if (kind === "service") {
-      const hr = toInt(p.hourlyRateCents || 0);
-      const gp = toInt(p.priceCents || 0);
-      if (hr > 0) {
-        // Dienstleistung mit Stundensatz: Grundpreis + Stunden*Stundensatz
-        base = gp;
-        unit = hr;
-      } else {
-        // Dienstleistung OHNE Stundensatz: wie "pro Stück" – kein Grundpreis, Einzelpreis = Grundpreis
-        base = 0;
-        unit = gp;
-      }
-    } else if (kind === "travel") {
-      base = toInt(p.travelBaseCents || 0);
-      unit = toInt(p.travelPerKmCents || 0);
-    } else {
-      // product
-      base = 0;
-      unit = toInt(p.priceCents || 0);
-    }
-
-    updateItem(idx, {
-      productId: p.id,
-      name: p.name,
-      unitPriceCents: unit,
-      baseCents: base,
-      kind
-    });
+  function patchItem(id, patch){
+    setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
   }
+  function onPickProduct(id, productId){
+    const p = products.find(x=>String(x.id)===String(productId));
+    if(!p){ patchItem(id, { productId:"", name:"", unitPriceCents:0, baseCents:0, kind:"product" }); return; }
+    let unit=0, base=0, kind=p.kind||"product";
+    if(kind==="service"){
+      const hr = toInt(p.hourlyRateCents||0);
+      const gp = toInt(p.priceCents||0);
+      if(hr>0){ base = gp; unit = hr; } else { base = 0; unit = gp; }
+    }else if(kind==="travel"){
+      base = toInt(p.travelBaseCents||0);
+      unit = toInt(p.travelPerKmCents||0);
+    }else{
+      base = 0; unit = toInt(p.priceCents||0);
+    }
+    patchItem(id, { productId:p.id, name:p.name, unitPriceCents:unit, baseCents:base, kind });
+  }
+  function addRow(){ setItems(prev => [...prev, makeEmptyItem()]); }
+  function removeLastRow(){ setItems(prev => prev.length<=1 ? prev : prev.slice(0,-1)); }
 
-  function addRow() { setItems((prev) => [...prev, makeEmptyItem()]); }
-  function removeRow(idx) { setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx))); }
+  const totals = useMemo(()=>{
+    const net = items.reduce((s,r)=> s + toInt(r.baseCents||0) + toInt(r.quantity||0)*toInt(r.unitPriceCents||0), 0);
+    const discountCents = Math.max(0, Math.round(parseFloat(String(discount||"0").replace(",", ".")) * 100) || 0);
+    const netAfter = Math.max(0, net - discountCents);
+    const tax = vatExemptDefault ? 0 : Math.round(netAfter * 0.19);
+    const gross = netAfter + tax;
+    return { net, discountCents, netAfter, tax, gross };
+  },[items, discount, vatExemptDefault]);
 
-  /* Summen (inkl. Grundpreis je Position) */
-  const calc = useMemo(() => {
-    const netCents = items.reduce((s, it) => {
-      const base = toInt(it.baseCents || 0);
-      const unit = toInt(it.unitPriceCents || 0);
-      const qty  = toInt(it.quantity || 0);
-      return s + base + (qty * unit);
-    }, 0);
+  async function saveReceipt(e){
+    e?.preventDefault?.();
+    // Clean Items
+    const clean = items
+      .map(it => ({
+        productId: it.productId || null,
+        name: (it.name||"").trim() || "Position",
+        quantity: toInt(it.quantity||0),
+        unitPriceCents: toInt(it.unitPriceCents||0),
+      }))
+      .filter(it => it.quantity>0);
 
-    const discountCents = Math.max(0, Math.round(parseFloat((discount || "0").replace(",", ".")) * 100) || 0);
-    const netAfterDiscount = Math.max(0, netCents - discountCents);
-    const taxCents = vatExemptDefault ? 0 : Math.round(netAfterDiscount * 0.19);
-    const grossCents = netAfterDiscount + taxCents;
-    return { netCents, discountCents, netAfterDiscount, taxCents, grossCents };
-  }, [items, discount, vatExemptDefault]);
+    if(clean.length===0){ alert("Bitte mindestens eine Position anlegen."); return; }
 
-  /* Speichern (Neu/Update) – Server rechnet final inkl. Grundpreis */
-  async function saveReceipt() {
-    try {
-      const cleanItems = items
-        .map((it) => ({
-          productId: it.productId || null,
-          name: (it.name || "").trim() || "Position",
-          quantity: toInt(it.quantity || 0),
-          unitPriceCents: toInt(it.unitPriceCents || 0),
-        }))
-        .filter((it) => it.quantity > 0 && it.unitPriceCents >= 0);
+    const payload = {
+      receiptNo: (receiptNo||"").trim() || undefined, // wenn leer -> Backend generiert gemäß Settings
+      date: formDate || null,
+      discountCents: totals.discountCents,
+      currency,
+      vatExempt: !!vatExemptDefault,
+      customerId: customerId || null, // optional – Backend darf ignorieren, wenn Spalte fehlt
+      items: clean,
+    };
 
-      if (cleanItems.length === 0) {
-        alert("Bitte mindestens eine Position mit Menge > 0 anlegen.");
+    if(editRow){
+      // Hinweis: Dein Backend hat aktuell GET/DELETE – wenn PUT/PATCH fehlt, Info anzeigen
+      const res = await fetch(`/api/receipts/${editRow.id}`, {
+        method: "PUT",
+        headers: { "content-type":"application/json" },
+        body: JSON.stringify(payload),
+      }).catch(()=>null);
+      if(!res || !res.ok){
+        alert("Bearbeiten nicht möglich (PUT /api/receipts/[id] fehlt eventuell).");
         return;
       }
-
-      const payload = {
-        receiptNo,
-        date: formDate || null,
-        vatExempt: !!vatExemptDefault,
-        currency,
-        discountCents: calc.discountCents,
-        items: cleanItems,
-      };
-
-      if (editId) {
-        const res = await fetch(`/api/receipts/${editId}`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        }).catch(() => null);
-        if (!res || !res.ok) {
-          alert("Aktualisieren fehlgeschlagen (PUT /api/receipts/[id] fehlt evtl.).");
-          return;
-        }
-      } else {
-        const res = await fetch("/api/receipts", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        }).catch(() => null);
-        if (!res || !res.ok) {
-          alert("Speichern fehlgeschlagen.");
-          return;
-        }
-      }
-
-      setIsOpen(false);
-      await load();
-    } catch (e) {
-      console.error("saveReceipt error:", e);
-      alert("Speichern fehlgeschlagen (Technischer Fehler).");
+    }else{
+      const res = await fetch("/api/receipts", {
+        method: "POST",
+        headers: { "content-type":"application/json" },
+        body: JSON.stringify(payload),
+      }).catch(()=>null);
+      if(!res || !res.ok){ alert("Speichern fehlgeschlagen."); return; }
     }
+    setIsOpen(false);
+    await load();
   }
 
-  /* Löschen */
-  async function deleteReceipt(id) {
-    if (!confirm("Beleg wirklich löschen?")) return;
-    try {
-      const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" }).catch(() => null);
-      if (!res || !res.ok) {
-        alert("Löschen fehlgeschlagen (DELETE /api/receipts/[id] fehlt evtl.).");
-        return;
-      }
-      if (expandedId === id) setExpandedId(null);
-      await load();
-    } catch (e) {
-      console.error("deleteReceipt error:", e);
-      alert("Löschen fehlgeschlagen (Technischer Fehler).");
-    }
+  async function deleteReceipt(id){
+    if(!confirm("Beleg wirklich löschen?")) return;
+    const res = await fetch(`/api/receipts/${id}`, { method:"DELETE" }).catch(()=>null);
+    if(!res || !res.ok){ alert("Löschen fehlgeschlagen."); return; }
+    if(expandedId===id) setExpandedId(null);
+    await load();
   }
 
   return (
-    <main className="grid-gap-16">
+    <main className="ivx-page">
       {/* Kopf */}
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <h1 className="page-title" style={{ margin: 0 }}>Belege</h1>
+        <div className="ivx-head">
+          <h1 className="page-title" style={{ margin:0 }}>Belege</h1>
           <button className="btn" onClick={openNew}>+ Neuer Beleg</button>
         </div>
       </div>
 
-      {/* Tabelle */}
-      <div className="card">
+      {/* Tabelle – NUR diese Card ist horizontal scrollbar */}
+      <div className="card table-card">
         <div className="table-wrap">
           <table className="table table-fixed">
+            <colgroup>
+              <col style={{ width:"40%" }} />
+              <col style={{ width:"30%" }} />
+              <col style={{ width:"30%" }} />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ width: "34%" }}>Nr.</th>
-                <th style={{ width: "33%" }}>Datum</th>
-                <th style={{ width: "33%" }}>Betrag</th>
+                <th>Nr.</th>
+                <th>Datum</th>
+                <th style={{ textAlign:"right" }}>Betrag</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={3} style={{ color: "#6b7280" }}>Lade…</td></tr>}
-              {!loading && rows.length === 0 && (
-                <tr><td colSpan={3} style={{ color: "#6b7280" }}>Keine Belege vorhanden.</td></tr>
-              )}
+              {loading && <tr><td colSpan={3} className="muted">Lade…</td></tr>}
+              {!loading && rows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
 
-              {!loading && rows.map((r) => {
-                const d = r.date ? new Date(r.date) : null;
-                const dateStr = d ? d.toLocaleDateString() : "—";
-                const isOpen = expandedId === r.id;
+              {!loading && rows.map(r=>{
+                const isOpen = expandedId===r.id;
                 return (
                   <>
-                    <tr
-                      key={r.id}
-                      className="row-clickable"
-                      onClick={() => toggleExpand(r.id)}
-                    >
-                      <td className="ellipsis">#{r.receiptNo || "-"}</td>
-                      <td>{dateStr}</td>
-                      <td>{money(r.grossCents, r.currency || currency)}</td>
+                    <tr key={r.id} className="row-clickable" onClick={()=>toggleExpand(r.id)}>
+                      <td className="ellipsis">#{r.receiptNo || "—"}</td>
+                      <td>{fmtDEDate(r.date)}</td>
+                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
                     </tr>
 
                     {isOpen && (
-                      <tr key={r.id + "-details"}>
-                        <td colSpan={3} style={{ background: "#fafafa" }}>
-                          {/* Aktionszeile */}
-                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "8px" }}>
-                            <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>⚙️ Bearbeiten</button>
-                            <button className="btn-ghost" onClick={(e) => { e.stopPropagation(); deleteReceipt(r.id); }}>❌ Löschen</button>
+                      <tr key={r.id+"-detail"}>
+                        <td colSpan={3} className="details-cell">
+                          <div className="detail-head">
+                            <div>
+                              <div className="muted">Beleg</div>
+                              <div className="h5">#{r.receiptNo || "—"}</div>
+                              {r.customerName && <div className="muted">Kunde: <strong>{r.customerName}</strong></div>}
+                            </div>
+                            <div className="actions">
+                              <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); openEdit(r); }}>✏️ Bearbeiten</button>
+                              <button className="btn-ghost danger" onClick={(e)=>{ e.stopPropagation(); deleteReceipt(r.id); }}>❌ Löschen</button>
+                            </div>
                           </div>
 
                           {/* Positionsliste */}
-                          <div className="table-wrap" style={{ padding: "0 8px 2px" }}>
+                          <div className="table-wrap positions">
                             <table className="table table-fixed" style={{ minWidth: 720 }}>
                               <thead>
                                 <tr>
-                                  <th style={{ width: "50%" }}>Bezeichnung</th>
-                                  <th style={{ width: "10%" }}>Menge</th>
-                                  <th style={{ width: "20%" }}>Einzelpreis</th>
-                                  <th style={{ width: "20%" }}>Summe</th>
+                                  <th style={{ width:"50%" }}>Bezeichnung</th>
+                                  <th style={{ width:"10%" }}>Menge</th>
+                                  <th style={{ width:"20%" }}>Einzelpreis</th>
+                                  <th style={{ width:"20%" }}>Summe</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {(!r.items || r.items.length === 0) && (
-                                  <tr><td colSpan={4} style={{ color: "#6b7280" }}>Keine Positionen.</td></tr>
+                                {(!r.items || r.items.length===0) && (
+                                  <tr><td colSpan={4} className="muted">Keine Positionen.</td></tr>
                                 )}
-                                {Array.isArray(r.items) && r.items.map((it, idx) => {
-                                  const qty = toInt(it.quantity || 0);
-                                  const unit = toInt(it.unitPriceCents || 0);
-                                  const line = toInt(it.lineTotalCents || (qty * unit)); // DB enthält lineTotalCents bereits korrekt
+                                {Array.isArray(r.items) && r.items.map((it,idx)=>{
+                                  const qty = toInt(it.quantity||0);
+                                  const unit= toInt(it.unitPriceCents||0);
+                                  const line= toInt(it.lineTotalCents || (qty*unit));
                                   return (
                                     <tr key={idx}>
                                       <td className="ellipsis">{it.name || "—"}</td>
@@ -356,9 +313,8 @@ export default function ReceiptsPage() {
                             </table>
                           </div>
 
-                          {/* Gesamtsumme */}
-                          <div style={{ textAlign: "right", padding: "6px 8px 10px", fontWeight: 800 }}>
-                            Gesamt: {money(r.grossCents, r.currency || currency)}
+                          <div className="totals">
+                            Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                           </div>
                         </td>
                       </tr>
@@ -371,85 +327,85 @@ export default function ReceiptsPage() {
         </div>
       </div>
 
-      {/* Modal (Neu/Bearbeiten) */}
+      {/* Modal: Neu / Bearbeiten */}
       {isOpen && (
         <div
-          role="dialog"
-          aria-modal="true"
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
+          role="dialog" aria-modal="true"
+          className="ivx-modal"
+          onClick={(e)=>{ if(e.target===e.currentTarget) closeModal(); }}
         >
-          <div className="surface" style={{ width: "min(980px, 100%)", marginTop: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <h2 style={{ margin: 0 }}>{editId ? "Beleg bearbeiten" : "Neuer Beleg"}</h2>
+          <div className="ivx-modal-box" onClick={(e)=>e.stopPropagation()}>
+            <div className="ivx-modal-head">
+              <h2>{editRow ? "Beleg bearbeiten" : "Neuer Beleg"}</h2>
+              <button className="btn-ghost" onClick={closeModal}>Schließen</button>
             </div>
 
-            {/* Kopfzeile: Beleg‑Nr. + Datum */}
-            <div className="surface" style={{ padding: 12, marginTop: 12 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={lbl}>Beleg‑Nr.</label>
-                  <input
-                    type="text"
-                    value={receiptNo}
-                    onChange={(e) => setReceiptNo(e.target.value)}
-                    style={inp}
-                  />
+            {/* Kopf-Felder – 2 Reihen à 2 Felder + Kunde (optional) */}
+            <div className="surface section">
+              <div className="head-rows">
+                <div className="row">
+                  <div className="cell w-no">
+                    <label className="lbl">Beleg-Nr.</label>
+                    <input type="text" value={receiptNo} onChange={(e)=>setReceiptNo(e.target.value)} className="inp" />
+                  </div>
+                  <div className="cell w-date">
+                    <label className="lbl">Datum</label>
+                    <input type="date" value={formDate} onChange={(e)=>setFormDate(e.target.value)} className="inp" />
+                  </div>
                 </div>
-                <div>
-                  <label style={lbl}>Datum</label>
-                  <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inp} />
+                <div className="row">
+                  <div className="cell w-money">
+                    <label className="lbl">Rabatt gesamt (€, optional)</label>
+                    <input type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} className="inp" />
+                  </div>
+                  <div className="cell w-date">
+                    <label className="lbl">Kunde (optional)</label>
+                    <select className="inp" value={customerId} onChange={(e)=>setCustomerId(e.target.value)}>
+                      <option value="">— wählen —</option>
+                      {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Positionen */}
-            <div className="surface" style={{ padding: 12, marginTop: 16 }}>
+            {/* Positionen – nur diese Card darf horizontal scrollen */}
+            <div className="surface section positions">
               <div className="table-wrap">
-                <table className="table pos-table">
+                <table className="table table-fixed">
                   <thead>
                     <tr>
-                      <th style={{ width: "50%" }}>Produkt/Dienstleistung</th>
-                      <th style={{ width: "16%" }}>Menge</th>
-                      <th style={{ width: "17%" }}>Einzelpreis</th>
-                      <th style={{ width: "17%" }}>Summe</th>
+                      <th style={{ width:"50%" }}>Produkt/Dienstleistung</th>
+                      <th style={{ width:"16%" }}>Menge</th>
+                      <th style={{ width:"17%" }}>Einzelpreis</th>
+                      <th style={{ width:"17%" }}>Summe</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((it, idx) => {
-                      const sum = toInt(it.baseCents || 0) + (toInt(it.quantity) * toInt(it.unitPriceCents));
+                    {items.map((r)=>{
+                      const sum = toInt(r.baseCents||0) + toInt(r.quantity||0)*toInt(r.unitPriceCents||0);
                       return (
-                        <tr key={idx}>
+                        <tr key={r.id}>
                           <td>
-                            <select
-                              value={it.productId}
-                              onChange={(e) => onProductSelect(idx, e.target.value)}
-                              style={{ ...inp, width: "100%" }}
-                            >
+                            <select value={r.productId} onChange={(e)=>onPickProduct(r.id, e.target.value)} className="inp" style={{ width:"100%" }}>
                               <option value="">— Produkt wählen —</option>
-                              {products.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                              ))}
+                              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                           </td>
                           <td>
                             <select
-                              value={String(it.quantity ?? 1)}
-                              onChange={(e) => updateItem(idx, { quantity: toInt(e.target.value) })}
-                              style={{ ...inp, textAlign: "right" }}
+                              value={String(r.quantity ?? 1)}
+                              onChange={(e)=>patchItem(r.id, { quantity: toInt(e.target.value) })}
+                              className="inp"
                             >
-                              {Array.from({ length: 20 }).map((_, i) => {
-                                const v = i + 1;
+                              {Array.from({length:20}).map((_,i)=>{
+                                const v = i+1;
                                 return <option key={v} value={v}>{v}</option>;
                               })}
                             </select>
                           </td>
-                          <td style={{ textAlign: "right", fontWeight: 600 }}>
-                            {money(toInt(it.unitPriceCents), currency)}
-                          </td>
-                          <td style={{ textAlign: "right", fontWeight: 700 }}>
-                            {money(sum, currency)}
-                          </td>
+                          <td style={{ textAlign:"right", fontWeight:600 }}>{money(r.unitPriceCents, currency)}</td>
+                          <td style={{ textAlign:"right", fontWeight:700 }}>{money(sum, currency)}</td>
                         </tr>
                       );
                     })}
@@ -457,57 +413,106 @@ export default function ReceiptsPage() {
                 </table>
               </div>
 
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
                 <button className="btn-ghost" onClick={addRow}>+ Position</button>
-                <button className="btn-ghost" onClick={() => removeRow(items.length - 1)} disabled={items.length <= 1}>– Entfernen</button>
+                <button className="btn-ghost" onClick={removeLastRow} disabled={items.length<=1}>– Entfernen</button>
               </div>
             </div>
 
-            {/* Rabatt + Summen (inkl. Grundpreis) */}
-            <div className="surface" style={{ padding: 12, marginTop: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: 12 }}>
-                <div>
-                  <label style={lbl}>Rabatt gesamt (€, optional)</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    style={inp}
-                  />
-                  <div className="subtle" style={{ marginTop: 6 }}>
-                    Rabatt wird vor Steuer abgezogen. USt {vatExemptDefault ? "(befreit §19)" : "19%"}.
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div>Zwischensumme: <strong>{money(calc.netCents, currency)}</strong></div>
-                  <div>Rabatt: <strong>- {money(calc.discountCents, currency)}</strong></div>
-                  <div>Netto: <strong>{money(calc.netAfterDiscount, currency)}</strong></div>
-                  <div>USt {vatExemptDefault ? "(befreit §19)" : "19%"}: <strong>{money(calc.taxCents, currency)}</strong></div>
-                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
-                    Gesamt: {money(calc.grossCents, currency)}
+            {/* Summen */}
+            <div className="surface section">
+              <div className="totals-grid">
+                <div />
+                <div className="totals-box">
+                  <div>Zwischensumme: <strong>{money(totals.net, currency)}</strong></div>
+                  <div>Rabatt: <strong>- {money(totals.discountCents, currency)}</strong></div>
+                  <div>Netto: <strong>{money(totals.netAfter, currency)}</strong></div>
+                  <div>USt {vatExemptDefault ? "(befreit §19)" : "19%"}: <strong>{money(totals.tax, currency)}</strong></div>
+                  <div style={{ fontSize:18, fontWeight:800, marginTop:6 }}>
+                    Gesamt: {money(totals.gross, currency)}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Aktionen */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <div className="ivx-modal-actions">
               <button className="btn-ghost" onClick={closeModal}>Abbrechen</button>
-              <button className="btn" onClick={saveReceipt}>{editId ? "Aktualisieren" : "Speichern"}</button>
+              <button className="btn" onClick={saveReceipt}>{editRow ? "Speichern" : "Anlegen"}</button>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        .ivx-page{ overflow-x:hidden; }
+        .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
+        .ivx-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
+        .muted{ color:#6b7280 }
+        .h5{ font-size:16px; font-weight:800 }
+        .row-clickable{ cursor:pointer }
+        .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+        .table{ width:100%; border-collapse:collapse; min-width: 560px }
+        .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
+        .table-fixed{ table-layout:fixed }
+
+        .card.table-card .table-wrap{ overflow-x:auto }
+        .details-cell{ background:#fafafa }
+        .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
+        .actions{ display:flex; gap:8px; flex-wrap:wrap }
+        .actions .danger{ color:#c00; border-color:#c00 }
+
+        .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
+
+        /* Modal */
+        .ivx-modal{
+          position: fixed; inset: 0; background: rgba(0,0,0,.4);
+          display: flex; align-items: flex-start; justify-content: center;
+          padding: 16px; z-index: 50;
+        }
+        .ivx-modal-box{
+          width: min(980px, 100%);
+          margin-top: 24px;
+          background:#fff; border:1px solid #eee; border-radius:14px;
+          max-height: calc(100vh - 48px);
+          overflow-y: auto;           /* vertikal scrollen */
+          overflow-x: hidden;         /* kein horizontales Scrolling fürs Fenster */
+        }
+        .ivx-modal-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding: 14px 16px; border-bottom: 1px solid #eee;
+          position: sticky; top: 0; background:#fff; z-index: 1;
+        }
+        .ivx-modal-actions{
+          display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
+          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+        }
+
+        .surface.section{ padding: 12px 16px; }
+
+        /* Kopf-Felder: wie im Rechnungsmodul – kompakt & ohne Überlappungen */
+        .head-rows{ display:flex; flex-direction:column; gap:10px; }
+        .row{ display:flex; flex-wrap:wrap; gap:12px; }
+        .cell{ display:block; flex: 1 1 auto; }
+        .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
+        .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
+
+        /* feste Max-Breiten (überlappen nicht, wrappen sauber) */
+        .w-no    { flex: 0 1 220px; max-width: 260px; }
+        .w-date  { flex: 0 1 180px; max-width: 220px; }
+        .w-money { flex: 0 1 200px; max-width: 240px; }
+
+        /* Positions-Card: H-Scroll nur hier */
+        .positions .table-wrap{ overflow-x:auto }
+        .positions .table{ min-width:720px }
+
+        .btn{ padding:10px 12px; border-radius:12px; background:var(--color-primary,#0aa); color:#fff; border:1px solid transparent; cursor:pointer }
+        .btn-ghost{ padding:10px 12px; border-radius:12px; background:#fff; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
+
+        @media (max-width: 720px){
+          .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px }
+        }
+      `}</style>
     </main>
   );
 }
-
-/* Styles (lokal) */
-const lbl = { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 };
-const inp = {
-  width: "100%", display: "block", background: "#fff",
-  border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "10px 12px",
-  outline: "none", boxShadow: "0 1px 1px rgba(0,0,0,.03) inset",
-};
