@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+/* -------- Utils -------- */
 async function safeGet(url, fallback) {
   try {
     const r = await fetch(url, { cache: "no-store" });
@@ -14,74 +15,99 @@ async function safeGet(url, fallback) {
     return fallback;
   }
 }
+function toDate(input) {
+  if (input instanceof Date) return input;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}/.test(input)) {
+    const [y, m, d] = input.slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0, 0);
+  }
+  const t = new Date(input || Date.now());
+  return isNaN(t) ? new Date() : t;
+}
+function formatDateDE(input) {
+  const d = toDate(input);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
 
+/* -------- Page -------- */
 export default function HomePage() {
   const [stats, setStats] = useState({
-    today: 0,
-    last7: 0,
-    last30: 0,
-    customers: 0,
-    products: 0,
-    invoices: 0,
-    receipts: 0,
+    today: 0, last7: 0, last30: 0,
+    customers: 0, products: 0, invoices: 0, receipts: 0,
   });
+
   const [latestReceipts, setLatestReceipts] = useState([]);
   const [latestInvoices, setLatestInvoices] = useState([]);
   const [nextAppointments, setNextAppointments] = useState([]);
 
   useEffect(() => {
     (async () => {
-      // Dashboard-API (falls vorhanden)
+      // Dashboard-API (wenn vorhanden)
       const dash = await safeGet("/api/dashboard", { ok: true, data: {} });
       const d = dash?.data || {};
 
-      // Einzel-APIs defensiv laden (500 -> leere Daten)
+      // Fallbacks (wenn einzelne Endpunkte existieren)
       const receipts = await safeGet("/api/receipts?limit=5", { ok: true, data: [] });
       const invoices = await safeGet("/api/invoices?limit=5", { ok: true, data: [] });
-      const appts = await safeGet("/api/appointments?upcoming=3", []); // akzeptiert Array
+      const appts    = await safeGet("/api/appointments?upcoming=3", []); // akzeptiert Array
 
-      // Produkte/Kunden-Zahl ggf. separat ermitteln (falls /api/dashboard sie nicht liefert)
+      // Counts: erst aus Dashboard, sonst Fallback zählen
       const customers = await safeGet("/api/customers?count=1", { ok: true, data: [] });
-      const products = await safeGet("/api/products?count=1", { ok: true, data: [] });
+      const products  = await safeGet("/api/products?count=1", { ok: true, data: [] });
+
+      const totals = d.totals || {};
+      const counts = d.counts || {};
 
       setStats({
-        today: Number(d.today || 0),
-        last7: Number(d.last7 || 0),
-        last30: Number(d.last30 || 0),
-        customers: Number(d.customers ?? (Array.isArray(customers?.data) ? customers.data.length : 0)),
-        products: Number(d.products ?? (Array.isArray(products?.data) ? products.data.length : 0)),
-        invoices: Number(d.invoices || 0),
-        receipts: Number(d.receipts || 0),
+        today: Number(totals.today || 0),
+        last7: Number(totals.last7 || 0),
+        last30: Number(totals.last30 || 0),
+        customers: Number(counts.customers ?? (Array.isArray(customers?.data) ? customers.data.length : 0)),
+        products: Number(counts.products ?? (Array.isArray(products?.data) ? products.data.length : 0)),
+        invoices: Number(counts.invoices || 0),
+        receipts: Number(counts.receipts || 0),
       });
 
-      setLatestReceipts(Array.isArray(receipts?.data) ? receipts.data : []);
-      setLatestInvoices(Array.isArray(invoices?.data) ? invoices.data : []);
-      setNextAppointments(Array.isArray(appts) ? appts : Array.isArray(appts?.data) ? appts.data : []);
+      // Neueste aus Dashboard bevorzugen (hat garantierte Feldnamen),
+      // sonst Fallback aus Einzel-APIs
+      setLatestReceipts(
+        Array.isArray(d.recentReceipts) && d.recentReceipts.length
+          ? d.recentReceipts
+          : (Array.isArray(receipts?.data) ? receipts.data : [])
+      );
+      setLatestInvoices(
+        Array.isArray(d.recentInvoices) && d.recentInvoices.length
+          ? d.recentInvoices
+          : (Array.isArray(invoices?.data) ? invoices.data : [])
+      );
+
+      setNextAppointments(
+        Array.isArray(appts) ? appts :
+        Array.isArray(appts?.data) ? appts.data : []
+      );
     })();
   }, []);
 
   return (
     <>
-      {/* Header */}
+      {/* Header – Schnellzugriffe entfernt */}
       <div
         className="surface"
         style={{
           padding: 16,
           display: "grid",
-          gridTemplateColumns: "1fr auto",
+          gridTemplateColumns: "1fr",
           alignItems: "center",
           gap: 12,
         }}
       >
         <h1 className="page-title" style={{ margin: 0 }}>Dashboard</h1>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href="/termine" className="btn-ghost" prefetch={false}>Termine</Link>
-          <Link href="/kunden" className="btn-ghost" prefetch={false}>Kunden</Link>
-          <Link href="/produkte" className="btn-ghost" prefetch={false}>Produkte</Link>
-        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPIs */}
       <div
         className="surface"
         style={{
@@ -100,7 +126,7 @@ export default function HomePage() {
         <Kpi title="Belege" value={stats.receipts} />
       </div>
 
-      {/* Drei Spalten – mobil automatisch untereinander */}
+      {/* Drei Spalten – mobil untereinander */}
       <div
         style={{
           display: "grid",
@@ -108,33 +134,62 @@ export default function HomePage() {
           gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
         }}
       >
-        {/* Neuste Belege */}
+        {/* Neueste Belege */}
         <div className="surface">
           <SectionTitle>Neueste Belege</SectionTitle>
           <List
             items={latestReceipts}
             empty="Keine Belege vorhanden."
-            mapItem={(r) => ({
-              icon: "🧾",
-              title: r.no || r.number || "(ohne Nummer)",
-              meta: [r.date?.slice(0, 10), r.vendor || r.title].filter(Boolean).join(" · "),
-              href: r.no ? `/belege?no=${encodeURIComponent(r.no)}` : "/belege",
-            })}
+            mapItem={(r) => {
+              // Beleg-Nummer verlässlich lesen
+              const no =
+                r.receiptNo ?? r.no ?? r.number ?? r.title ?? "(ohne Nummer)";
+              const dateStr =
+                r.date ? formatDateDE(r.date)
+                : r.createdAt ? formatDateDE(r.createdAt)
+                : "";
+              const vendor =
+                r.vendor ?? r.supplier ?? r.supplierName ?? r.title ?? "";
+              const href =
+                r.receiptNo ? `/belege?no=${encodeURIComponent(r.receiptNo)}`
+                : r.no ? `/belege?no=${encodeURIComponent(r.no)}`
+                : "/belege";
+              return {
+                icon: "🧾",
+                title: no,
+                meta: [dateStr, vendor].filter(Boolean).join(" · "),
+                href,
+              };
+            }}
           />
         </div>
 
-        {/* Neuste Rechnungen */}
+        {/* Neueste Rechnungen */}
         <div className="surface">
           <SectionTitle>Neueste Rechnungen</SectionTitle>
           <List
             items={latestInvoices}
             empty="Keine Rechnungen vorhanden."
-            mapItem={(r) => ({
-              icon: "📄",
-              title: r.no || r.number || "(ohne Nummer)",
-              meta: [r.date?.slice(0, 10), r.customerName].filter(Boolean).join(" · "),
-              href: r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}` : "/rechnungen",
-            })}
+            mapItem={(r) => {
+              // Rechnungsnummer verlässlich lesen
+              const no =
+                r.invoiceNo ?? r.no ?? r.number ?? "(ohne Nummer)";
+              const dateStr =
+                r.issueDate ? formatDateDE(r.issueDate)
+                : r.date ? formatDateDE(r.date)
+                : r.createdAt ? formatDateDE(r.createdAt)
+                : "";
+              const href =
+                r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
+                : r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}`
+                : "/rechnungen";
+              return {
+                icon: "📄",
+                title: no,
+                meta: [dateStr, r.customerName].filter(Boolean).join(" · "),
+                href,
+              };
+            }}
           />
         </div>
 
@@ -157,7 +212,7 @@ export default function HomePage() {
   );
 }
 
-/* ========== Helpers ========== */
+/* ========== Subcomponents ========== */
 function Kpi({ title, value }) {
   return (
     <div className="surface" style={{ padding: 12, display: "grid", gap: 6 }}>
@@ -166,11 +221,9 @@ function Kpi({ title, value }) {
     </div>
   );
 }
-
 function SectionTitle({ children }) {
   return <div className="section-title" style={{ marginBottom: 8 }}>{children}</div>;
 }
-
 function List({ items, empty, mapItem }) {
   if (!Array.isArray(items) || items.length === 0) {
     return <div style={{ color: "#6b7280" }}>{empty}</div>;
@@ -184,6 +237,7 @@ function List({ items, empty, mapItem }) {
             key={idx}
             href={m.href || "#"}
             prefetch={false}
+            onClick={() => document.dispatchEvent(new Event("app:nav"))}
             className="surface"
             style={{
               display: "grid",
@@ -218,21 +272,4 @@ function List({ items, empty, mapItem }) {
       })}
     </div>
   );
-}
-
-function formatDateDE(input) {
-  const d = toDate(input);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
-}
-function toDate(input) {
-  if (input instanceof Date) return input;
-  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}/.test(input)) {
-    const [y, m, d] = input.slice(0, 10).split("-").map(Number);
-    return new Date(y, m - 1, d, 12, 0, 0, 0);
-  }
-  const t = new Date(input || Date.now());
-  return isNaN(t) ? new Date() : t;
 }
