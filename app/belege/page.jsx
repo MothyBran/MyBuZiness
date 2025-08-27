@@ -31,6 +31,7 @@ function unpack(resp){
   if (Array.isArray(resp?.data?.rows)) return resp.data.rows;
   return [];
 }
+function pad2(n){ return String(n).padStart(2,"0"); }
 
 /* ───────── Page ───────── */
 export default function ReceiptsPage(){
@@ -41,6 +42,14 @@ export default function ReceiptsPage(){
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({}); // {id:{loading, err, data}}
 
+  // Produkte laden für Positions-Dropdown
+  const [products, setProducts] = useState([]);
+
+  // Settings: Currency + Kleinunternehmer (USt-befreit)
+  const [settings, setSettings] = useState(null);
+  const currency = settings?.currency || "EUR";
+  const vatExemptDefault = typeof settings?.kleinunternehmer === "boolean" ? settings.kleinunternehmer : true;
+
   // Modal Edit/New
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
@@ -50,18 +59,25 @@ export default function ReceiptsPage(){
   const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("0");
   const [note, setNote] = useState("");
-  const [vatExempt, setVatExempt] = useState(true);
-  const [items, setItems] = useState([{ id: crypto?.randomUUID?.() || String(Math.random()), name:"", quantity:1, unitPriceCents:0 }]);
+  // USt nicht mehr per Checkbox – wir nehmen immer settings.kleinunternehmer:
+  const vatExempt = vatExemptDefault;
 
-  const currency = "EUR"; // Fallback/Anzeige – ggf. aus /api/settings laden, wenn gewünscht
+  const [items, setItems] = useState([
+    { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }
+  ]);
 
   useEffect(()=>{ load(); },[]);
   async function load(){
     setLoading(true); setErr("");
     try{
-      const listRes = await safeGet("/api/receipts?limit=500", []);
-      const list = unpack(listRes);
-      setRows(Array.isArray(list) ? list : []);
+      const [listRes, prodRes, setRes] = await Promise.all([
+        safeGet("/api/receipts?limit=500", []),
+        safeGet("/api/products", []),
+        safeGet("/api/settings", {})
+      ]);
+      setRows(unpack(listRes));
+      setProducts(unpack(prodRes));
+      setSettings(setRes?.data || setRes || null);
     }catch(e){ setErr(String(e?.message||e)); setRows([]); }
     finally{ setLoading(false); }
   }
@@ -91,13 +107,32 @@ export default function ReceiptsPage(){
     setExpandedId(p => p===id ? null : p);
   }
 
+  function onPickProduct(rowId, productId){
+    const p = products.find(x => String(x.id)===String(productId));
+    if(!p){
+      patchItem(rowId, { productId:"", name:"", unitPriceCents:0 });
+      return;
+    }
+    // Preisableitung – robust für verschiedene Produktarten
+    const kind = p.kind || "product";
+    let unit = 0;
+    if(kind==="service"){
+      unit = toInt(p.hourlyRateCents || p.priceCents || 0);
+    }else if(kind==="travel"){
+      unit = toInt(p.travelPerKmCents || 0);
+    }else{
+      unit = toInt(p.priceCents || 0);
+    }
+    patchItem(rowId, { productId:p.id, name:p.name, unitPriceCents:unit });
+  }
+
   function openEdit(row){
     setEditRow(row);
     setReceiptNo(row.receiptNo || "");
     setDate(row.date ? String(row.date).slice(0,10) : new Date().toISOString().slice(0,10));
     setDiscount(String((toInt(row.discountCents||0)/100).toFixed(2)).replace(".", ","));
     setNote(row.note || "");
-    setVatExempt(!!row.vatExempt);
+
     // Details (Positionen) laden, falls noch nicht vorhanden:
     const det = details[row.id]?.data;
     const src = Array.isArray(det?.items) ? det.items : [];
@@ -105,24 +140,25 @@ export default function ReceiptsPage(){
       src.length
         ? src.map(it => ({
             id: crypto?.randomUUID?.() || String(Math.random()),
+            productId: it.productId || "",
             name: it.name || "",
             quantity: toInt(it.quantity||1),
             unitPriceCents: toInt(it.unitPriceCents||0),
           }))
-        : [{ id: crypto?.randomUUID?.() || String(Math.random()), name:"", quantity:1, unitPriceCents:0 }]
+        : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]
     );
     setIsOpen(true);
   }
   function openNew(){
     setEditRow(null);
-    const yy = String(new Date().getFullYear()).slice(-2);
-    const mm = String(new Date().getMonth()+1).padStart(2,"0");
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = pad2(now.getMonth()+1);
     setReceiptNo(`BN-${yy}${mm}-001`);
-    setDate(new Date().toISOString().slice(0,10));
+    setDate(now.toISOString().slice(0,10));
     setDiscount("0");
     setNote("");
-    setVatExempt(true);
-    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), name:"", quantity:1, unitPriceCents:0 }]);
+    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]);
     setIsOpen(true);
   }
 
@@ -138,13 +174,14 @@ export default function ReceiptsPage(){
   function patchItem(id, patch){
     setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
   }
-  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), name:"", quantity:1, unitPriceCents:0 }]); }
+  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]); }
   function removeLast(){ setItems(prev => prev.length<=1 ? prev : prev.slice(0,-1)); }
 
   async function onSave(e){
     e?.preventDefault?.();
     const clean = items
       .map(it => ({
+        productId: it.productId || null,
         name: (it.name||"").trim() || "Position",
         quantity: toInt(it.quantity||0),
         unitPriceCents: toInt(it.unitPriceCents||0),
@@ -157,7 +194,7 @@ export default function ReceiptsPage(){
       receiptNo: receiptNo || undefined,
       date,
       currency,
-      vatExempt: !!vatExempt,
+      vatExempt: !!vatExempt,                // aus Settings
       discountCents: totals.disc,
       note,
       items: clean
@@ -186,6 +223,7 @@ export default function ReceiptsPage(){
 
   return (
     <main className="ivx-page">
+      {/* Kopf */}
       <div className="card">
         <div className="ivx-head">
           <h1 className="page-title" style={{ margin:0 }}>Belege</h1>
@@ -235,7 +273,7 @@ export default function ReceiptsPage(){
                               {!!r.note && <div className="muted">Notiz: <strong>{r.note}</strong></div>}
                             </div>
                             <div className="actions">
-                              {/* 🔽 Druckansicht sichtbar */}
+                              {/* Druckansicht */}
                               <a className="btn-ghost" href={`/belege/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
                               <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); openEdit(r); }}>✏️ Bearbeiten</button>
                               <button className="btn-ghost danger" onClick={(e)=>{ e.stopPropagation(); onDelete(r.id); }}>❌ Löschen</button>
@@ -300,34 +338,33 @@ export default function ReceiptsPage(){
             </div>
 
             <form onSubmit={onSave}>
+              {/* Kopf-Felder in schmaler Spalte */}
               <div className="surface section">
-                <div className="row">
-                  <div className="cell w-no">
-                    <label className="lbl">Beleg-Nr.</label>
-                    <input className="inp" type="text" value={receiptNo} onChange={(e)=>setReceiptNo(e.target.value)} />
+                <div className="form-narrow">
+                  <div className="row">
+                    <div className="cell w-no">
+                      <label className="lbl">Beleg-Nr.</label>
+                      <input className="inp" type="text" value={receiptNo} onChange={(e)=>setReceiptNo(e.target.value)} />
+                    </div>
+                    <div className="cell w-date">
+                      <label className="lbl">Datum</label>
+                      <input className="inp" type="date" value={date} onChange={(e)=>setDate(e.target.value)} />
+                    </div>
                   </div>
-                  <div className="cell w-date">
-                    <label className="lbl">Datum</label>
-                    <input className="inp" type="date" value={date} onChange={(e)=>setDate(e.target.value)} />
+
+                  <div className="row">
+                    <div className="cell w-money">
+                      <label className="lbl">Rabatt gesamt (€)</label>
+                      <input className="inp" type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} />
+                    </div>
+                    <div className="cell" />
                   </div>
-                </div>
-                <div className="row">
-                  <div className="cell w-money">
-                    <label className="lbl">Rabatt gesamt (€)</label>
-                    <input className="inp" type="text" inputMode="decimal" placeholder="0,00" value={discount} onChange={(e)=>setDiscount(e.target.value)} />
-                  </div>
-                  <div className="cell w-date" style={{ display:"flex", alignItems:"flex-end" }}>
-                    <label className="lbl" style={{display:"block"}}>USt befreit (§19)</label>
-                    <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <input type="checkbox" checked={vatExempt} onChange={(e)=>setVatExempt(e.target.checked)} />
-                      <span>Ja</span>
-                    </label>
-                  </div>
-                </div>
-                <div className="row">
-                  <div className="cell" style={{ maxWidth:560 }}>
-                    <label className="lbl">Notiz (optional)</label>
-                    <textarea className="inp" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} />
+
+                  <div className="row">
+                    <div className="cell w-wide">
+                      <label className="lbl">Notiz (optional)</label>
+                      <textarea className="inp" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -338,7 +375,7 @@ export default function ReceiptsPage(){
                   <table className="table table-fixed">
                     <thead>
                       <tr>
-                        <th style={{ width:"52%" }}>Bezeichnung</th>
+                        <th style={{ width:"52%" }}>Produkt/Dienstleistung</th>
                         <th style={{ width:"12%" }}>Menge</th>
                         <th style={{ width:"18%" }}>Einzelpreis</th>
                         <th style={{ width:"18%" }}>Summe</th>
@@ -351,14 +388,31 @@ export default function ReceiptsPage(){
                         const line = qty * unit;
                         return (
                           <tr key={r.id}>
-                            <td><input className="inp" type="text" value={r.name} onChange={(e)=>patchItem(r.id,{ name:e.target.value })} /></td>
                             <td>
-                              <select className="inp" value={String(qty)} onChange={(e)=>patchItem(r.id,{ quantity: toInt(e.target.value) })}>
+                              <select
+                                className="inp"
+                                value={r.productId}
+                                onChange={(e)=> onPickProduct(r.id, e.target.value) }
+                                style={{ width:"100%" }}
+                              >
+                                <option value="">— Produkt/Dienstleistung wählen —</option>
+                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                className="inp"
+                                value={String(qty)}
+                                onChange={(e)=>patchItem(r.id,{ quantity: toInt(e.target.value) })}
+                              >
                                 {Array.from({length:20}).map((_,i)=> <option key={i+1} value={i+1}>{i+1}</option>)}
                               </select>
                             </td>
                             <td>
-                              <input className="inp" type="number" inputMode="numeric"
+                              <input
+                                className="inp"
+                                type="number"
+                                inputMode="numeric"
                                 value={Math.round(unit)}
                                 onChange={(e)=>patchItem(r.id,{ unitPriceCents: toInt(e.target.value) })}
                                 style={{ textAlign:"right" }}
@@ -447,14 +501,18 @@ export default function ReceiptsPage(){
         }
 
         .surface.section{ padding: 12px 16px; }
+
+        /* Kopf-Formular bewusst schmal halten, damit Notiz NICHT bis Kartenrand geht */
+        .form-narrow{ max-width:560px; }
         .row{ display:flex; flex-wrap:wrap; gap:12px; }
         .cell{ display:block; flex: 1 1 auto; }
-        .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
-        .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
-
         .w-no    { flex: 0 1 220px; max-width: 260px; }
         .w-date  { flex: 0 1 180px; max-width: 220px; }
         .w-money { flex: 0 1 200px; max-width: 240px; }
+        .w-wide  { flex: 1 1 100%; max-width: 560px; }
+
+        .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
+        .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
 
         .positions .table-wrap{ overflow-x:auto }
         .positions .table{ min-width:720px }
@@ -463,7 +521,7 @@ export default function ReceiptsPage(){
         .btn-ghost{ padding:10px 12px; border-radius:12px; background:#fff; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
 
         @media (max-width: 720px){
-          .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px }
+          .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px } .w-wide{ max-width:560px }
         }
       `}</style>
     </main>
