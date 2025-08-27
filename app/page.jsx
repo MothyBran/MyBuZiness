@@ -31,6 +31,21 @@ function formatDateDE(input) {
   const yyyy = d.getFullYear();
   return `${dd}.${mm}.${yyyy}`;
 }
+/** Cent -> formatiert mit Währungssymbol (z. B. €) */
+function moneyFromCents(cents, currency = "EUR") {
+  const eur = Number(cents || 0) / 100;
+  try {
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(eur);
+  } catch {
+    // Fallback, falls unbekannte Currency
+    return `${eur.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  }
+}
 
 /* -------- Page -------- */
 export default function HomePage() {
@@ -38,6 +53,7 @@ export default function HomePage() {
     today: 0, last7: 0, last30: 0,
     customers: 0, products: 0, invoices: 0, receipts: 0,
   });
+  const [currency, setCurrency] = useState("EUR");
 
   const [latestReceipts, setLatestReceipts] = useState([]);
   const [latestInvoices, setLatestInvoices] = useState([]);
@@ -45,6 +61,11 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
+      // Settings (Währung)
+      const settings = await safeGet("/api/settings", { ok: true, data: {} });
+      const cfg = settings?.data || settings || {};
+      setCurrency(cfg.currency || "EUR");
+
       // Dashboard-API (wenn vorhanden)
       const dash = await safeGet("/api/dashboard", { ok: true, data: {} });
       const d = dash?.data || {};
@@ -61,6 +82,7 @@ export default function HomePage() {
       const totals = d.totals || {};
       const counts = d.counts || {};
 
+      // Annahme: totals.* kommen in CENTS (wie im restlichen System)
       setStats({
         today: Number(totals.today || 0),
         last7: Number(totals.last7 || 0),
@@ -117,13 +139,13 @@ export default function HomePage() {
           gap: 12,
         }}
       >
-        <Kpi title="Heute" value={stats.today} />
-        <Kpi title="Letzte 7 Tage" value={stats.last7} />
-        <Kpi title="Letzte 30 Tage" value={stats.last30} />
-        <Kpi title="Kunden" value={stats.customers} />
-        <Kpi title="Produkte" value={stats.products} />
-        <Kpi title="Rechnungen" value={stats.invoices} />
-        <Kpi title="Belege" value={stats.receipts} />
+        <Kpi title="Heute" value={moneyFromCents(stats.today, currency)} />
+        <Kpi title="Letzte 7 Tage" value={moneyFromCents(stats.last7, currency)} />
+        <Kpi title="Letzte 30 Tage" value={moneyFromCents(stats.last30, currency)} />
+        <Kpi title="Kunden" value={stats.customers ?? 0} />
+        <Kpi title="Produkte" value={stats.products ?? 0} />
+        <Kpi title="Rechnungen" value={stats.invoices ?? 0} />
+        <Kpi title="Belege" value={stats.receipts ?? 0} />
       </div>
 
       {/* Drei Spalten – mobil untereinander */}
