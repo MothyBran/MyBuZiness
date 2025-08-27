@@ -42,13 +42,14 @@ export default function ReceiptsPage(){
   const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({}); // {id:{loading, err, data}}
 
-  // Produkte laden für Positions-Dropdown
+  // Produkte für Positions-Dropdown
   const [products, setProducts] = useState([]);
 
-  // Settings: Currency + Kleinunternehmer (USt-befreit)
+  // Settings (Currency + Kleinunternehmer)
   const [settings, setSettings] = useState(null);
   const currency = settings?.currency || "EUR";
   const vatExemptDefault = typeof settings?.kleinunternehmer === "boolean" ? settings.kleinunternehmer : true;
+  const vatExempt = vatExemptDefault;
 
   // Modal Edit/New
   const [isOpen, setIsOpen] = useState(false);
@@ -59,8 +60,6 @@ export default function ReceiptsPage(){
   const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10));
   const [discount, setDiscount] = useState("0");
   const [note, setNote] = useState("");
-  // USt nicht mehr per Checkbox – wir nehmen immer settings.kleinunternehmer:
-  const vatExempt = vatExemptDefault;
 
   const [items, setItems] = useState([
     { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }
@@ -113,7 +112,6 @@ export default function ReceiptsPage(){
       patchItem(rowId, { productId:"", name:"", unitPriceCents:0 });
       return;
     }
-    // Preisableitung – robust für verschiedene Produktarten
     const kind = p.kind || "product";
     let unit = 0;
     if(kind==="service"){
@@ -133,7 +131,6 @@ export default function ReceiptsPage(){
     setDiscount(String((toInt(row.discountCents||0)/100).toFixed(2)).replace(".", ","));
     setNote(row.note || "");
 
-    // Details (Positionen) laden, falls noch nicht vorhanden:
     const det = details[row.id]?.data;
     const src = Array.isArray(det?.items) ? det.items : [];
     setItems(
@@ -194,7 +191,7 @@ export default function ReceiptsPage(){
       receiptNo: receiptNo || undefined,
       date,
       currency,
-      vatExempt: !!vatExempt,                // aus Settings
+      vatExempt: !!vatExempt,
       discountCents: totals.disc,
       note,
       items: clean
@@ -273,14 +270,12 @@ export default function ReceiptsPage(){
                               {!!r.note && <div className="muted">Notiz: <strong>{r.note}</strong></div>}
                             </div>
                             <div className="actions">
-                              {/* Druckansicht */}
                               <a className="btn-ghost" href={`/belege/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
                               <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); openEdit(r); }}>✏️ Bearbeiten</button>
                               <button className="btn-ghost danger" onClick={(e)=>{ e.stopPropagation(); onDelete(r.id); }}>❌ Löschen</button>
                             </div>
                           </div>
 
-                          {/* (optionale) Items aus Details */}
                           {details[r.id]?.loading && <div className="muted" style={{padding:"6px 0"}}>Details laden…</div>}
                           {details[r.id]?.err && !details[r.id].loading && <div style={{ color:"#b91c1c" }}>Fehler: {details[r.id].err}</div>}
 
@@ -338,9 +333,9 @@ export default function ReceiptsPage(){
             </div>
 
             <form onSubmit={onSave}>
-              {/* Kopf-Felder in schmaler Spalte */}
+              {/* Kopf-Felder in *extra schmaler* Spalte, damit Notiz NICHT bis zum Card-Rand läuft */}
               <div className="surface section">
-                <div className="form-narrow">
+                <div className="form-narrow form-narrow--tight">
                   <div className="row">
                     <div className="cell w-no">
                       <label className="lbl">Beleg-Nr.</label>
@@ -361,7 +356,7 @@ export default function ReceiptsPage(){
                   </div>
 
                   <div className="row">
-                    <div className="cell w-wide">
+                    <div className="cell w-note">
                       <label className="lbl">Notiz (optional)</label>
                       <textarea className="inp" rows={3} value={note} onChange={(e)=>setNote(e.target.value)} />
                     </div>
@@ -502,14 +497,15 @@ export default function ReceiptsPage(){
 
         .surface.section{ padding: 12px 16px; }
 
-        /* Kopf-Formular bewusst schmal halten, damit Notiz NICHT bis Kartenrand geht */
+        /* Kopf-Formular bewusst *extra* schmal halten */
         .form-narrow{ max-width:560px; }
+        .form-narrow--tight{ max-width: 520px; }     /* <— noch enger: verhindert, dass Notiz bis an den Rand geht */
         .row{ display:flex; flex-wrap:wrap; gap:12px; }
         .cell{ display:block; flex: 1 1 auto; }
         .w-no    { flex: 0 1 220px; max-width: 260px; }
         .w-date  { flex: 0 1 180px; max-width: 220px; }
         .w-money { flex: 0 1 200px; max-width: 240px; }
-        .w-wide  { flex: 1 1 100%; max-width: 560px; }
+        .w-note  { flex: 1 1 100%; max-width: 520px; }  /* <— Notiz *fix* auf die schmale Spalte begrenzt */
 
         .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
         .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
@@ -521,7 +517,7 @@ export default function ReceiptsPage(){
         .btn-ghost{ padding:10px 12px; border-radius:12px; background:#fff; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
 
         @media (max-width: 720px){
-          .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px } .w-wide{ max-width:560px }
+          .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px } .w-note{ max-width:520px }
         }
       `}</style>
     </main>
