@@ -1,11 +1,42 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import ModuleLauncher from "./ModuleLauncher";
 
 export default function HeaderTop() {
   const [openModules, setOpenModules] = useState(false);
+  const pathname = usePathname();
+
+  // 1) Bei jedem Routenwechsel Menü schließen
+  useEffect(() => {
+    setOpenModules(false);
+  }, [pathname]);
+
+  // 2) Globales Nav-Event (z. B. aus Dashboard-Links) schließt das Menü
+  useEffect(() => {
+    const close = () => setOpenModules(false);
+    document.addEventListener("app:nav", close);
+    return () => document.removeEventListener("app:nav", close);
+  }, []);
+
+  // 3) Klick-Delegation im Modul-Panel: Klick auf <a> oder [data-nav] schließt Menü
+  useEffect(() => {
+    if (!openModules) return;
+    const el = document.getElementById("module-panel");
+    if (!el) return;
+    const onClick = (e) => {
+      const trigger = e.target.closest("a, [data-nav]");
+      if (trigger) {
+        setOpenModules(false);
+        // optional: Event feuern, falls andere Komponenten lauschen
+        document.dispatchEvent(new Event("app:nav"));
+      }
+    };
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, [openModules]);
 
   return (
     <header className="hero" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
@@ -37,7 +68,17 @@ export default function HeaderTop() {
           </button>
 
           {/* Login rechts */}
-          <a href="/login" className="btn header-btn">Login</a>
+          <a
+            href="/login"
+            className="btn header-btn"
+            onClick={() => {
+              // sofort schließen, ohne auf Route-Change zu warten
+              setOpenModules(false);
+              document.dispatchEvent(new Event("app:nav"));
+            }}
+          >
+            Login
+          </a>
         </div>
 
         {/* Modul-Panel */}
