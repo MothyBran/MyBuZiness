@@ -4,9 +4,7 @@ import { q } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Hilfsfunktionen für Perioden
- */
+/* ---------- Perioden-Bounds ---------- */
 function periodBounds(kind) {
   const today = new Date();
   today.setHours(0,0,0,0);
@@ -21,19 +19,15 @@ function periodBounds(kind) {
   } else if (kind === "mtd") {
     start.setDate(1);
   } else if (kind === "today") {
-    // already set
+    // bleibt
   } else {
-    // fallback: everything
     start.setFullYear(1970, 0, 1);
   }
-
   const toYMD = (d) => d.toISOString().slice(0,10);
   return { from: toYMD(start), to: toYMD(end) };
 }
 
-/**
- * Summiert Einnahmen/Ausgaben (gross/net) aus FinanceTransaction für eine Periode.
- */
+/* ---------- Summen FinanceTransaction (Periode) ---------- */
 async function sumFinanceTx(from, to) {
   const sql = `
     SELECT
@@ -48,12 +42,8 @@ async function sumFinanceTx(from, to) {
   return rows[0] || { inc_gross:0, exp_gross:0, inc_net:0, exp_net:0 };
 }
 
-/**
- * Summiert Einnahmen aus Belegen (Receipt) für eine Periode.
- * Annahme: Belege = direkte Einnahmen (Kassen-/Sofortumsatz).
- */
+/* ---------- Summen Receipts (Periode) ---------- */
 async function sumReceipts(from, to) {
-  // Belege haben "date" (Datum), i. d. R. sofort bezahlt; USt kann (je nach Einstellung) 0% sein.
   const sql = `
     SELECT
       COALESCE(SUM("grossCents"),0)::int AS rec_gross,
@@ -69,11 +59,7 @@ async function sumReceipts(from, to) {
   }
 }
 
-/**
- * Summiert Einnahmen aus bezahlten/abgeschlossenen Rechnungen (Invoice) für eine Periode.
- * Bevorzugt wird das Zahlungsdatum "paidAt"; falls leer, nehmen wir bei status ∈ {paid, done}
- * ersatzweise das Ausstellungsdatum "issueDate".
- */
+/* ---------- Summen bezahlte/abgeschlossene Invoices (Periode) ---------- */
 async function sumPaidInvoices(from, to) {
   const sql = `
     SELECT
@@ -94,9 +80,7 @@ async function sumPaidInvoices(from, to) {
   }
 }
 
-/**
- * Settings (für Kleinunternehmerregelung)
- */
+/* ---------- Settings ---------- */
 async function getSettings() {
   try {
     const { rows } = await q(`SELECT "kleinunternehmer" FROM "Settings" WHERE "id"='singleton'`);
@@ -106,11 +90,7 @@ async function getSettings() {
   }
 }
 
-/**
- * USt-Aufschlüsselung (nur aus FinanceTransaction, weil dort "vatRate" je Buchung vorliegt).
- * In "Invoice"/"Receipt" liegen keine 7%/19%-Split-Informationen je Zeile/Position vor,
- * daher zählen wir diese Belege/Rechnungen nur in die Einnahmen (oben) ein – nicht in den USt-Split.
- */
+/* ---------- USt (nur FinanceTx, weil vatRate dort gepflegt) ---------- */
 async function ustMtdFromFinanceTx() {
   const sql = `
     SELECT
@@ -128,13 +108,8 @@ async function ustMtdFromFinanceTx() {
   return { ...r, zahllast: (r.u19_vat + r.u07_vat) - (r.v19_vat + r.v07_vat) };
 }
 
-/**
- * EÜR fürs laufende Jahr:
- * Netto-Einnahmen/Ausgaben aus FinanceTransaction
- * + Netto aus (Belegen + bezahlten/abgeschlossenen Rechnungen) auf der Einnahmenseite.
- */
+/* ---------- EÜR (laufendes Jahr) inkl. Receipts+Invoices auf Einnahmenseite ---------- */
 async function euerYearWithDocs() {
-  // Jahresgrenzen
   const y = new Date().getFullYear();
   const from = `${y}-01-01`, to = `${y+1}-01-01`;
 
@@ -146,12 +121,12 @@ async function euerYearWithDocs() {
       FROM "FinanceTransaction"
       WHERE "bookedOn" >= $1 AND "bookedOn" < $2
     `,[from,to]).then(r=>r.rows[0]||{inc_net:0,exp_net:0}),
-    sumReceipts(from, to),     // rec_net
-    sumPaidInvoices(from, to)  // inv_net
+    sumReceipts(from, to),
+    sumPaidInvoices(from, to)
   ]);
 
   const incomeNet = (tx.inc_net || 0) + (rec.rec_net || 0) + (inv.inv_net || 0);
-  const expenseNet = (tx.exp_net || 0); // Ausgaben kommen nur aus FinanceTransaction
+  const expenseNet = (tx.exp_net || 0);
   return { incomeNet, expenseNet };
 }
 
@@ -159,7 +134,7 @@ export async function GET() {
   try {
     const settings = await getSettings();
 
-    // Perioden
+    // Perioden, die die Kacheln nutzen
     const P = {
       today:  periodBounds("today"),
       last7:  periodBounds("last7"),
@@ -167,8 +142,7 @@ export async function GET() {
       mtd:    periodBounds("mtd"),
     };
 
-    // Für jede Periode: FinanceTx + Receipts + paid Invoices zusammensetzen (Einnahmen),
-    // Ausgaben bleiben aus FinanceTx.
+    // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts + paid Invoices; Ausgaben = FinanceTx(expense)
     async function buildPeriod({ from, to }) {
       const [tx, rec, inv] = await Promise.all([
         sumFinanceTx(from, to),
@@ -176,28 +150,56 @@ export async function GET() {
         sumPaidInvoices(from, to),
       ]);
       const incomeCents = (tx.inc_gross || 0) + (rec.rec_gross || 0) + (inv.inv_gross || 0);
-      const expenseCents = (tx.exp_gross || 0); // Ausgaben werden nur aus FinanceTx gezählt
-      return { incomeCents, expenseCents };
+      const expenseCents = (tx.exp_gross || 0);
+      return {
+        incomeCents,
+        expenseCents,
+        adds: { receiptsGross: rec.rec_gross || 0, invoicesGross: inv.inv_gross || 0 }
+      };
     }
 
     const [pToday, p7, p30, pMtd] = await Promise.all([
       buildPeriod(P.today), buildPeriod(P.last7), buildPeriod(P.last30), buildPeriod(P.mtd)
     ]);
 
-    // USt nur aus FinanceTx (siehe Begründung oben)
+    // Zusätze für das Tabellenjahr (für Hinweiszeile unter der Liste)
+    const year = new Date().getFullYear();
+    const yearFrom = `${year}-01-01`, yearTo = `${year+1}-01-01`;
+    const [yearRec, yearInv] = await Promise.all([
+      sumReceipts(yearFrom, yearTo),
+      sumPaidInvoices(yearFrom, yearTo),
+    ]);
+    const additions = {
+      year: {
+        year,
+        receiptsGross: yearRec.rec_gross || 0,
+        invoicesGross: yearInv.inv_gross || 0,
+        receiptsNet: yearRec.rec_net || 0,
+        invoicesNet: yearInv.inv_net || 0
+      }
+    };
+
+    // USt (nur FinanceTx)
     const ust_mtd = settings.kleinunternehmer ? null : await ustMtdFromFinanceTx();
 
-    // EÜR (laufendes Jahr) inkl. Belege & bezahlte Rechnungen auf der Einnahmenseite
+    // EÜR (Jahr)
     const euer = await euerYearWithDocs();
 
     return NextResponse.json({
       ok: true,
       settings,
       periods: {
-        today:  pToday,
-        last7:  p7,
-        last30: p30,
-        mtd:    pMtd,
+        today:  { incomeCents: pToday.incomeCents,  expenseCents: pToday.expenseCents },
+        last7:  { incomeCents: p7.incomeCents,      expenseCents: p7.expenseCents },
+        last30: { incomeCents: p30.incomeCents,     expenseCents: p30.expenseCents },
+        mtd:    { incomeCents: pMtd.incomeCents,    expenseCents: pMtd.expenseCents },
+      },
+      adds: {
+        today:  pToday.adds,
+        last7:  p7.adds,
+        last30: p30.adds,
+        mtd:    pMtd.adds,
+        ...additions
       },
       ust: { mtd: ust_mtd || { u19_net:0,u19_vat:0,u07_net:0,u07_vat:0,v19_vat:0,v07_vat:0,zahllast:0 } },
       euer: { year: euer }
