@@ -1,6 +1,7 @@
 import "./globals.css";
 import HeaderTop from "./components/HeaderTop";
 import InfoStripe from "./components/InfoStripe";
+import InstallPrompt from "./components/InstallPrompt";
 
 export const metadata = {
   title: "BuZiness",
@@ -40,6 +41,9 @@ export default function RootLayout({ children }) {
             Kleinunternehmerregelung gem. § 19 UStG: Es erfolgt kein Ausweis der Umsatzsteuer.
           </div>
         </footer>
+
+        {/* Installations-Popup (PWA „Zum Startbildschirm hinzufügen“) */}
+        <InstallPrompt />
       </body>
     </html>
   );
