@@ -1,4 +1,4 @@
-ste// app/components/ModuleLauncher.jsx
+// app/components/ModuleLauncher.jsx
 "use client";
 
 import Link from "next/link";
@@ -22,14 +22,14 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
   }
 
   const LINKS = [
-    { href:"/",            icon:"🏠", label:"Dashboard" },
-    { href:"/termine",     icon:"📆", label:"Termine" },
-    { href:"/kunden",      icon:"👤", label:"Kunden" },
-    { href:"/produkte",    icon:"📦", label:"Produkte" },
-    { href:"/rechnungen",  icon:"📄", label:"Rechnungen" },
-    { href:"/belege",      icon:"🧾", label:"Belege" },
-    { href:"/finanzen",    icon:"💶", label:"Finanzen" },
-    { href:"/einstellungen",    icon:"⚙️", label:"Einstellungen" },
+    { href:"/",              icon:"🏠", label:"Dashboard" },
+    { href:"/termine",       icon:"📆", label:"Termine" },
+    { href:"/kunden",        icon:"👤", label:"Kunden" },
+    { href:"/produkte",      icon:"📦", label:"Produkte" },
+    { href:"/rechnungen",    icon:"📄", label:"Rechnungen" },
+    { href:"/belege",        icon:"🧾", label:"Belege" },
+    { href:"/finanzen",      icon:"💶", label:"Finanzen" },
+    { href:"/einstellungen", icon:"⚙️", label:"Einstellungen" }, // <-- korrigiert
   ];
 
   function isActive(href) {
