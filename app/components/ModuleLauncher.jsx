@@ -1,3 +1,4 @@
+// app/components/ModuleLauncher.jsx
 "use client";
 
 import Link from "next/link";
@@ -47,6 +48,7 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
             { href:"/produkte",    icon:"📦", label:"Produkte" },
             { href:"/rechnungen",  icon:"📄", label:"Rechnungen" },
             { href:"/belege",      icon:"🧾", label:"Belege" },
+            { href:"/finanzen",    icon:"💶", label:"Finanzen" },
             { href:"/settings",    icon:"⚙️", label:"Einstellungen" },
           ].map((m)=>(
             <Link
@@ -67,7 +69,7 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
         /* Hintergrund (über der Seite, Seite verschiebt sich NICHT) */
         .ml-scrim{
           position: fixed; inset: 0;
-          background: rgba(17,24,39,.3);   /* dezent dunkel */
+          background: rgba(17,24,39,.3);
           backdrop-filter: blur(1px);
           opacity: 0; pointer-events: none;
           transition: opacity .18s ease;
