@@ -1,4 +1,4 @@
-// app/components/ModuleLauncher.jsx
+ste// app/components/ModuleLauncher.jsx
 "use client";
 
 import Link from "next/link";
@@ -29,7 +29,7 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
     { href:"/rechnungen",  icon:"📄", label:"Rechnungen" },
     { href:"/belege",      icon:"🧾", label:"Belege" },
     { href:"/finanzen",    icon:"💶", label:"Finanzen" },
-    { href:"/settings",    icon:"⚙️", label:"Einstellungen" },
+    { href:"/einstellungen",    icon:"⚙️", label:"Einstellungen" },
   ];
 
   function isActive(href) {
