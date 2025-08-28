@@ -1,3 +1,4 @@
+// app/components/HeaderTop.jsx
 "use client";
 
 import Image from "next/image";
@@ -21,6 +22,7 @@ export default function HeaderTop() {
     <>
       <header className="hero" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
         <div className="container" style={{ paddingTop: 10, paddingBottom: 10 }}>
+          
           {/* Logo + Überschrift */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <Image src="/logo.png" alt="BuZiness Logo" width={80} height={80} priority style={{ borderRadius: 4 }} />
@@ -30,9 +32,19 @@ export default function HeaderTop() {
             </div>
           </div>
 
-          {/* Rechts: Login (ohne Hamburger im Header) */}
+          {/* Menü links – Login rechts (gleiche Button-Optik) */}
           <div className="header-row">
-            <span aria-hidden />
+            <button
+              type="button"
+              className="btn header-btn"
+              aria-label={openModules ? "Module schließen" : "Module öffnen"}
+              aria-expanded={openModules ? "true" : "false"}
+              aria-controls="module-panel"
+              onClick={() => setOpenModules(v => !v)}
+            >
+              ≡ Menü
+            </button>
+
             <a
               href="/login"
               className="btn header-btn"
@@ -44,47 +56,22 @@ export default function HeaderTop() {
         </div>
       </header>
 
-      {/* Linker, dezenter Reiter (öffnet Overlay) */}
-      <button
-        type="button"
-        className="edge-tab"
-        aria-label={openModules ? "Module schließen" : "Module öffnen"}
-        aria-expanded={openModules ? "true" : "false"}
-        aria-controls="module-panel"
-        onClick={() => setOpenModules(v => !v)}
-      >
-        <span className="edge-icon" aria-hidden>≡</span>
-        <span className="edge-text">Menü</span>
-      </button>
-
-      {/* Modul-Panel als Overlay, schwebt über der Seite */}
+      {/* Modul-Panel als Overlay (schwebt über der Seite, verschiebt nichts) */}
       <ModuleLauncher open={openModules} id="module-panel" onClose={() => setOpenModules(false)} />
 
       <style jsx>{`
         .header-row{
-          display:flex; justify-content:space-between; align-items:center;
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:8px;
         }
-        /* Linker Reiter */
-        .edge-tab{
-          position: fixed;
-          left: 0; top: 50%;
-          transform: translateY(-50%);
-          z-index: 60;
-          display: flex; align-items: center; gap: 8px;
-          padding: 10px 10px 10px 8px;
-          border: 1px solid #e5e7eb;
-          border-left: none;
-          background: #ffffff;
-          color: #111827;
-          border-radius: 0 12px 12px 0;
-          box-shadow: 0 4px 24px rgba(0,0,0,.08);
-          cursor: pointer;
-        }
-        .edge-icon{ font-size: 16px; line-height: 1 }
-        .edge-text{ font-size: 14px }
-        @media (max-width: 720px){
-          .edge-text{ display:none; }          /* mobil nur Icon */
-          .edge-tab{ padding: 10px 10px 10px 6px; }
+        /* Optional: gleiche Mindesthöhe für beide Buttons sicherstellen */
+        :global(.btn.header-btn){
+          min-height: 40px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
         }
       `}</style>
     </>
