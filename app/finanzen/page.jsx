@@ -31,17 +31,17 @@ export default function FinanzenPage(){
   const [capNote, setCapNote] = useState("");
 
   async function loadSummary(){
-    const r = await fetch("/api/finanzen/summary", { cache: "no-store" });
+    const r = await fetch("/api/finances/summary", { cache: "no-store" });
     const j = await r.json(); if (j.ok) setSummary(j);
   }
   async function loadRows(){
     setLoading(true);
-    const r = await fetch(`/api/finanzen/transactions?year=${THIS_YEAR}&limit=1000`, { cache:"no-store" });
+    const r = await fetch(`/api/finances/transactions?year=${THIS_YEAR}&limit=1000`, { cache:"no-store" });
     const j = await r.json(); if (j.ok) setRows(j.rows || []);
     setLoading(false);
   }
   async function loadCats(){
-    const r = await fetch("/api/finanzen/categories", { cache:"no-store" });
+    const r = await fetch("/api/finances/categories", { cache:"no-store" });
     const j = await r.json(); setCats(j.data || []);
   }
 
@@ -60,7 +60,7 @@ export default function FinanzenPage(){
       note: form.note || null,
       paymentMethod: form.paymentMethod || null,
     };
-    const r = await fetch("/api/finanzen/transactions", {
+    const r = await fetch("/api/finances/transactions", {
       method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify(payload)
     });
     const j = await r.json();
@@ -71,7 +71,7 @@ export default function FinanzenPage(){
 
   async function removeRow(id){
     if(!confirm("Eintrag wirklich löschen?")) return;
-    const r = await fetch(`/api/finanzen/transactions/${id}`, { method:"DELETE" });
+    const r = await fetch(`/api/finances/transactions/${id}`, { method:"DELETE" });
     const j = await r.json(); if(!j.ok) return alert(j.error || "Löschen fehlgeschlagen.");
     await Promise.all([loadSummary(), loadRows()]);
   }
@@ -87,7 +87,7 @@ export default function FinanzenPage(){
     if(!gross) return;
     const grossCents = Math.round(parseFloat(String(gross).replace(",", ".")) * 100);
     if(!Number.isFinite(grossCents) || grossCents<=0) return alert("Betrag ungültig.");
-    const tx = await fetch("/api/finanzen/transactions", {
+    const tx = await fetch("/api/finances/transactions", {
       method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         kind:"expense",
@@ -156,9 +156,9 @@ export default function FinanzenPage(){
       <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:8, alignItems:"center"}}>
         <a className="btn-ghost" href="/api/export/invoices">Rechnungen CSV</a>
         <a className="btn-ghost" href="/api/export/receipts">Belege CSV</a>
-        <a className="btn" href={`/api/export/finanzen/transactions?year=${THIS_YEAR}`}>Transaktionen CSV ({THIS_YEAR})</a>
-        <a className="btn-ghost" href={`/api/export/finanzen/ustva?month=${THIS_MONTH}`}>USt-VA CSV ({THIS_MONTH})</a>
-        <a className="btn-ghost" href={`/api/export/finanzen/euer?year=${THIS_YEAR}`}>EÜR CSV ({THIS_YEAR})</a>
+        <a className="btn" href={`/api/export/finances/transactions?year=${THIS_YEAR}`}>Transaktionen CSV ({THIS_YEAR})</a>
+        <a className="btn-ghost" href={`/api/export/finances/ustva?month=${THIS_MONTH}`}>USt-VA CSV ({THIS_MONTH})</a>
+        <a className="btn-ghost" href={`/api/export/finances/euer?year=${THIS_YEAR}`}>EÜR CSV ({THIS_YEAR})</a>
         <Link className="btn-ghost" href="/rechnungen">Zu Rechnungen →</Link>
         <Link className="btn-ghost" href="/belege">Zu Belegen →</Link>
       </div>
