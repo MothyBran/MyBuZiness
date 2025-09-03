@@ -1,285 +1,385 @@
-/* ==========================================================================
-   1) Design-Variablen
-   ========================================================================== */
-:root{
-  --radius: 12px;
-  --color-primary: #2563eb;
-  --color-muted: #6b7280;
-  --color-border: rgba(0,0,0,.12);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
-  --shadow-md: 0 4px 10px rgba(0,0,0,.08);
-  --danger: #dc2626;
+/* ======= Reset & Base ======= */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden; /* WICHTIG: Seite selbst nie seitlich scrollen */
 }
 
-/* ==========================================================================
-   2) Layout / Container / Grid-Utilities
-   ========================================================================== */
-.container{
-  max-width: 1100px;
+:root {
+  /* Farben / Tokens */
+  --brand: #14b8a6;         /* Türkis */
+  --brand-600: #0d9488;
+  --brand-700: #0f766e;
+  --bg: #0b0f14;            /* dunkles, neutrales BG */
+  --panel: #0f141b;         /* Oberflächen */
+  --panel-2: #111821;
+  --border: #1f2a37;
+  --muted: #8aa0b2;
+  --text: #e6edf3;
+  --text-weak: #c8d2db;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --info: #3b82f6;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --shadow-1: 0 2px 12px rgba(0,0,0,.25);
+  --shadow-2: 0 10px 30px rgba(0,0,0,.35);
+
+  --focus: 0 0 0 3px rgba(20,184,166,.35);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7fafc;
+    --panel: #ffffff;
+    --panel-2: #f9fafb;
+    --border: #e5e7eb;
+    --text: #0b1220;
+    --text-weak: #3a4a5b;
+    --shadow-1: 0 2px 10px rgba(0,0,0,.08);
+    --shadow-2: 0 20px 40px rgba(0,0,0,.12);
+  }
+}
+
+body {
+  background: radial-gradient(1200px 600px at 10% -20%, rgba(20,184,166,.08), transparent 60%),
+              radial-gradient(1600px 800px at 110% -30%, rgba(59,130,246,.07), transparent 65%),
+              var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.45;
+}
+
+/* ======= Layout Container ======= */
+.page {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 12px;
-  display: grid;
+  padding: 18px clamp(14px, 2.2vw, 28px);
+}
+
+.page__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
   gap: 16px;
-}
-.grid-gap-16{ display:grid; gap:16px; }
-
-@media (min-width: 768px){
-  .grid-2{ grid-template-columns: 1fr 1fr; }
-  .grid-3{ grid-template-columns: repeat(3, 1fr); }
+  margin-bottom: 18px;
+  flex-wrap: wrap;
 }
 
-.header-row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  flex-wrap:wrap;
+.page__title {
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 700;
+  letter-spacing: .2px;
 }
 
-.subtle{ color: var(--color-muted); }
-
-.hamburger{
-  display:inline-flex; flex-direction:column; gap:4px;
-}
-.hamburger > span{
-  display:block; width:18px; height:2px; background:#fff; border-radius:2px;
+.page__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-/* ==========================================================================
-   3) Oberflächen / Typo
-   ========================================================================== */
-.surface {
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 14px;
-  box-shadow: var(--shadow-sm);
+/* Grid für Seiteninhalte */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.page-title{ font-size: 18px; font-weight: 800; letter-spacing: .2px; }
-.section-title{ font-weight: 700; font-size: 14px; color: #111; }
-
-/* ==========================================================================
-   4) Buttons
-   ========================================================================== */
-.btn{
-  display:inline-flex; align-items:center; justify-content:center;
-  padding: 8px 12px; border-radius: 10px;
-  background: var(--color-primary); color:#fff; border:1px solid var(--color-primary);
-  text-decoration:none; cursor:pointer; font-weight:600;
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(6, 1fr); }
 }
-.btn:hover{ filter: brightness(0.98); }
-
-.btn-ghost{
-  display:inline-flex; align-items:center; justify-content:center;
-  padding: 8px 12px; border-radius: 10px;
-  background:#fff; color: var(--color-primary); border:1px solid var(--color-primary);
-  text-decoration:none; cursor:pointer; font-weight:600;
+@media (max-width: 720px) {
+  .grid { grid-template-columns: repeat(4, 1fr); }
 }
 
-.btn-xxs{
-  font-size: 12px; padding: 4px 8px; border-radius: 8px;
-  background: #fff; border: 1px solid var(--color-border);
+/* ======= Card ======= */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.btn-danger{
-  border-color:#b91c1c; color:#b91c1c; background:#fff;
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, var(--panel-2), transparent);
+  border-bottom: 1px solid var(--border);
+}
+.card__title {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: .2px;
+}
+.card__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.card__body {
+  padding: 14px 16px;
+  overflow: hidden; /* damit nur Innenbereiche scrollen */
 }
 
-/* ==========================================================================
-   5) Formulare
-   ========================================================================== */
-.form{ display:grid; gap:12px; }
-.field{ display:grid; gap:6px; }
-.label{ font-size:12px; color: var(--color-muted); }
-
-.input, .select, .textarea{
-  width:100%; background:#fff; border:1px solid var(--color-border);
-  border-radius: 10px; padding: 10px 12px; outline:none;
-}
-.textarea{ min-height: 88px; resize: vertical; }
-
-/* ==========================================================================
-   6) Status-Badges (Label-Variante)
-   ========================================================================== */
-.status-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  padding: 4px 10px; border-radius: 999px; font-size: 12px;
-  border: 1px solid var(--color-border); background:#fff; text-transform: lowercase;
-}
-.status-badge.offen{ background:#EFF6FF; border-color:#BFDBFE; }
-.status-badge.abgesagt{ background:#FEF2F2; border-color:#FECACA; }
-.status-badge.abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
-
-/* ==========================================================================
-   7) Listen / Karten
-   ========================================================================== */
-.list{ display:grid; gap:10px; }
-
-.list-item{
-  display:grid; grid-template-columns: 40px 1fr auto; gap:12px;
-  align-items:center; padding:12px; background:#fff; border:1px solid var(--color-border);
-  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+.card--scrollx .card__body {
+  overflow-x: auto; /* horizontales Scrollen nur innerhalb der Card */
 }
 
-.item-icon{
-  width:32px; height:32px; border-radius:999px;
-  display:flex; align-items:center; justify-content:center;
-  box-shadow: var(--shadow-sm); background:#DBEAFE; font-size:16px;
+/* ======= Buttons ======= */
+.btn {
+  --btn-bg: var(--panel-2);
+  --btn-bd: var(--border);
+  --btn-tx: var(--text);
+  --btn-bg-h: #1a2330;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--btn-bd);
+  background: var(--btn-bg);
+  color: var(--btn-tx);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform .04s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+  white-space: nowrap;
+  user-select: none;
 }
-.item-icon.accent{ background:#FDE68A; }
+.btn:hover { background: var(--btn-bg-h); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus); }
 
-.item-title{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.item-meta{ font-size:13px; color:#374151; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.item-actions{ display:flex; align-items:center; gap:8px; }
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-/* ==========================================================================
-   8) Detail-Layout
-   ========================================================================== */
-.detail{ display:grid; gap: 14px; }
-@media (min-width: 768px){
-  .detail{ grid-template-columns: 220px 1fr; align-items:start; }
+.btn--primary {
+  --btn-bg: var(--brand);
+  --btn-bg-h: var(--brand-600);
+  --btn-bd: transparent;
+  color: white;
 }
-.detail .row{ display:contents; }
-.detail .label{ font-weight:700; opacity:.85; }
-.detail .value{ min-width:0; }
+.btn--danger  { --btn-bg: #dc2626; --btn-bg-h: #b91c1c; color: #fff; border-color: transparent; }
+.btn--ghost   { --btn-bg: transparent; --btn-bg-h: rgba(255,255,255,.06); }
+.btn--subtle  { --btn-bg: var(--panel-2); }
 
-/* ==========================================================================
-   9) (ALT) cal-* – kann bleiben, wird aber im Termine‑Modul nicht mehr genutzt
-   ========================================================================== */
-.cal-grid{ display:grid; gap:8px; grid-template-columns: repeat(7, 1fr); }
-.cal-head{ font-size:12px; color: var(--color-muted); text-align:center; }
-.cal-cell{
-  border:1px solid var(--color-border); border-radius: 12px; min-height: 100px;
-  padding: 10px 8px; display:flex; flex-direction:column; justify-content:space-between;
-  text-decoration:none; color: inherit; background:#fff;
+/* Icon-Button */
+.btn--icon {
+  padding: 9px 10px;
+  border-radius: 10px;
+  min-width: 38px;
+  justify-content: center;
 }
-.cal-daynum-wrap{ display:flex; }
-.cal-daynum{ width: 30px; height: 30px; border-radius: 999px; display:flex; align-items:center; justify-content:center; font-weight:700; }
-.cal-cell.today .cal-daynum{ outline:2px solid var(--color-primary); }
-.cal-cell.muted{ opacity:.5; }
-.cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height: 10px; align-items:center; }
-.cal-dot{ width:8px; height:8px; border-radius:999px; background:#93C5FD; }
-.cal-dot-accent{ background:#FBBF24; }
-.cal-dot-info{ background:#60A5FA; }
-.cal-dot-more{ width:auto; padding:0 6px; height:18px; border-radius:999px; font-size:11px; background:#eee; color:#333; display:flex; align-items:center; }
 
-/* ==========================================================================
-   10) NEU: appt-* – Styles für Termine‑Modul (Monatsansicht)
-   ========================================================================== */
-.appt{ padding:14px; }
-.appt-cal{
-  display:grid;
-  grid-template-columns: repeat(7, 1fr);
+/* ======= Form / Fields ======= */
+.form {
+  display: grid;
+  gap: 12px;
+}
+.form--grid {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .form--grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+.field {
+  display: grid;
   gap: 8px;
 }
-.appt-cal-head{
-  text-align:center;
-  font-size:12px;
-  color: var(--color-muted);
+.field--col-3 { grid-column: span 3; }
+.field--col-4 { grid-column: span 4; }
+.field--col-6 { grid-column: span 6; }
+.field--col-12 { grid-column: 1 / -1; }
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-weak);
 }
-.appt-cal-cell{
-  border:1px solid var(--color-border);
-  border-radius: 12px;
-  min-height: 112px;
-  padding: 10px 8px;
-  display:flex; flex-direction:column; justify-content:space-between;
-  text-decoration:none; color: inherit; background:#fff;
-  transition: box-shadow .12s ease, transform .12s ease;
+.label .req { color: var(--brand); }
+
+.input, .select, .textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
 }
-.appt-cal-cell:hover{ box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.appt-cal-cell.is-muted{ opacity:.5; }
-.appt-cal-daynum-wrap{ display:flex; }
-.appt-cal-daynum{
-  width: 30px; height: 30px; border-radius: 999px;
-  display:flex; align-items:center; justify-content:center; font-weight:700;
+.input:focus, .select:focus, .textarea:focus {
+  border-color: var(--brand);
+  box-shadow: var(--focus);
 }
-/* Heute rot eingerahmt */
-.appt-cal-cell.is-today .appt-cal-daynum{
-  outline: 2px solid var(--danger);
-  color: var(--danger);
+.textarea { min-height: 90px; resize: vertical; }
+
+.input--right { text-align: right; }
+
+/* Input groups (z.B. Währung) */
+.input-group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-2);
 }
-.appt-cal-markers{ display:flex; gap:4px; flex-wrap:wrap; min-height: 10px; align-items:center; }
-.appt-cal-dot{
-  width:8px; height:8px; border-radius:999px; background:#60A5FA;
+.input-group .addon {
+  padding: 10px 12px;
+  color: var(--text-weak);
+  border-right: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
 }
-.appt-cal-dot--order{ background:#F59E0B; } /* Aufträge anders färben */
-.appt-cal-more{
-  width:auto; padding:0 6px; height:18px; border-radius:999px;
-  font-size:11px; background:#eee; color:#333; display:flex; align-items:center;
+.input-group .control {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  padding: 10px 12px;
+}
+.input-group:focus-within {
+  border-color: var(--brand);
+  box-shadow: var(--focus);
 }
 
-/* Listen unter dem Kalender */
-.appt-list{ display:grid; gap:10px; }
-.appt-item{
-  display:grid; grid-template-columns: 40px 1fr auto; gap:12px; align-items:center;
-  border:1px solid var(--color-border); border-radius:12px; padding:10px; background:#fff;
+/* Hinweise & Fehler */
+.help {
+  font-size: 12px;
+  color: var(--muted);
 }
-.appt-icon{
-  width: 32px; height:32px; border-radius:999px; display:flex; align-items:center; justify-content:center;
-  background:#DBEAFE; box-shadow: var(--shadow-sm);
-}
-.appt-icon--order{ background:#FDE68A; }
-.appt-title{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.appt-meta{ font-size:13px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.appt-actions{ display:flex; align-items:center; gap:8px; }
-
-/* Status als reines Label (kein Button) */
-.appt-badge{
-  pointer-events:none;
-  text-transform: lowercase;
-  border-radius:999px;
-  padding: 4px 10px;
-  font-size:12px;
-  border: 1px solid var(--color-border);
-  background:#fff;
-}
-.appt-badge.is-offen{ background:#EFF6FF; border-color:#BFDBFE; }
-.appt-badge.is-abgesagt{ background:#FEF2F2; border-color:#FECACA; }
-.appt-badge.is-abgeschlossen{ background:#F0FDF4; border-color:#BBF7D0; }
-
-/* ==========================================================================
-   11) Tagesansicht (Stundenraster + Events über Zeitspanne)
-   ========================================================================== */
-.day-wrap{ display:grid; gap:12px; }
-.day-toolbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-.day-grid{ display:grid; grid-template-columns: 80px 1fr; gap:8px; }
-.day-hour{ font-size:12px; color:var(--color-muted); display:flex; align-items:flex-start; padding-top:2px; }
-.day-block{
-  position:relative; border:1px dashed var(--color-border); border-radius:10px; background:#F8FAFC;
-  min-height: 44px; /* 30-Minuten-Höhe * 2 = Stunde */
-}
-.day-block-inner{ position:relative; height: 44px; } /* 1 Stunde */
-
-.day-event{
-  position:absolute; left:6px; right:6px;
-  border-radius:10px; padding:8px 10px; background:#DBEAFE; border:1px solid #bfdbfe;
-  box-shadow: var(--shadow-sm); cursor:pointer; display:flex; align-items:center; gap:8px;
-}
-.day-event.order{ background:#FEF3C7; border-color:#fde68a; }
-.day-event:hover{ filter: brightness(0.98); }
-
-/* ==========================================================================
-   12) Responsive
-   ========================================================================== */
-@media (max-width: 639px){
-  .list-item{ grid-template-columns: 36px 1fr; }
-  .item-actions{ grid-column: 1 / -1; justify-content:flex-start; }
-  .appt-cal-cell{ min-height: 90px; padding: 8px 6px; }
+.error {
+  font-size: 12px;
+  color: var(--error);
 }
 
-/* ==========================================================================
-   13) Zeit-Eingaben (Time Picker) – sanfte Optik, 5-Minuten-Raster
-   ========================================================================== */
-.time-input{
-  font-variant-numeric: tabular-nums;
-  letter-spacing: .3px;
+/* ======= Badges / Status ======= */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
 }
-input[type="time"].time-input::-webkit-calendar-picker-indicator{
-  opacity:.8;
+.badge--success { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.25); color: #22c55e; }
+.badge--warning { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.25); color: #f59e0b; }
+.badge--danger  { background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.25);  color: #ef4444; }
+.badge--info    { background: rgba(59,130,246,.15); border-color: rgba(59,130,246,.25); color: #3b82f6; }
+.badge--muted   { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.28); color: #9aa8b7; }
+
+/* ======= Table ======= */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;        /* horizontales Scrollen nur hier */
+  overflow-y: hidden;
 }
-input[type="time"].time-input{
-  /* iOS/Android zeigen Rad/Wheel nativ; Desktop bekommt saubere Inputs */
-  min-height: 42px;
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 720px;        /* sorgt für scrollbare Cards mobil */
+}
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  text-align: left;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-weak);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tr-hover tbody tr:hover td { background: rgba(255,255,255,.03); }
+.table .tx-right { text-align: right; }
+
+/* Tabellen-Toolbar */
+.tablebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0 12px 0;
+  flex-wrap: wrap;
+}
+
+/* ======= Modal ======= */
+.modal {
+  position: fixed; inset: 0; z-index: 70;
+  display: grid; place-items: center;
+  background: rgba(3, 7, 18, .6);
+  animation: fadeIn .16s ease-out;
+}
+.modal__panel {
+  width: min(720px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.modal__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--panel-2), transparent);
+}
+.modal__title { font-weight: 700; }
+.modal__body { padding: 16px; }
+.modal__footer {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 10px;
+}
+
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+/* ======= Scrollbar (dezent) ======= */
+.table-wrap::-webkit-scrollbar,
+.card__body::-webkit-scrollbar { height: 10px; width: 10px; }
+.table-wrap::-webkit-scrollbar-thumb,
+.card__body::-webkit-scrollbar-thumb {
+  background: rgba(148,163,184,.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* ======= Utilities ======= */
+.mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.muted { color: var(--muted); }
+.hide-mobile { display: block; }
+.show-mobile { display: none; }
+
+@media (max-width: 900px) {
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: block !important; }
 }
