@@ -3,10 +3,24 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Page, PageHeader, PageGrid, Col, Card, Button, Badge, StatusPill
+} from "../components/UI";
 
 /* Date Utils */
-function toDate(input){ if (input instanceof Date) return input; if (typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input)){ const [y,m,d]=input.split("-").map(Number); return new Date(y, m-1, d, 12,0,0,0);} const d=new Date(input||Date.now()); return isNaN(d)?new Date():d; }
-function formatDateDE(input){ const d=toDate(input); return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`; }
+function toDate(input){
+  if (input instanceof Date) return input;
+  if (typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input)){
+    const [y,m,d]=input.split("-").map(Number);
+    return new Date(y, m-1, d, 12,0,0,0);
+  }
+  const d=new Date(input||Date.now());
+  return isNaN(d)?new Date():d;
+}
+function formatDateDE(input){
+  const d=toDate(input);
+  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+}
 function startOfMonth(d){ const x=toDate(d); x.setDate(1); x.setHours(12,0,0,0); return x; }
 function addMonths(d,m){ const x=toDate(d); x.setMonth(x.getMonth()+m); return x; }
 function toYMD(d){ const z=toDate(d); z.setHours(12,0,0,0); return z.toISOString().slice(0,10); }
@@ -57,91 +71,115 @@ export default function TerminePage(){
     return map;
   },[events]);
 
-  function MonthCalendar(){
-    return (
-      <div className="surface appt">
-        <div className="header-row" style={{marginBottom:10}}>
-          <h2 className="page-title" style={{margin:0}}>
-            Kalender – {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
-          </h2>
-          <div style={{display:"flex",gap:8}}>
-            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</button>
-            <button className="btn-ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</button>
-          </div>
-        </div>
-
-        <div className="appt-cal">
-          {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=><div key={h} className="appt-cal-head">{h}</div>)}
-          {days.map((d,i)=>{
-            const inMonth = d.getMonth()===cursor.getMonth();
-            const key = toYMD(d);
-            const list = byDate[key]||[];
-            const isToday = key===TODAY_YMD;
-            return (
-              <Link key={i} href={`/termine/${key}`} className={`appt-cal-cell ${inMonth?"":"is-muted"} ${isToday?"is-today":""}`}>
-                <div className="appt-cal-daynum-wrap"><span className="appt-cal-daynum">{d.getDate()}</span></div>
-                <div className="appt-cal-markers">
-                  {list.slice(0,4).map(x=><span key={x.id} className={`appt-cal-dot ${x.kind==='order'?'appt-cal-dot--order':''}`} />)}
-                  {list.length>4 && <span className="appt-cal-more" title={`+${list.length-4} weitere`}>+{list.length-4}</span>}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {loading && <p className="subtle" style={{marginTop:8}}>Lade Termine…</p>}
-        {error && !loading && <p style={{color:"#b91c1c", marginTop:8}}>{error}</p>}
-      </div>
-    );
-  }
-
-  function MonthList(){
-    return (
-      <div className="surface appt">
-        <h2 className="page-title" style={{margin:0, marginBottom:10}}>Termine / Aufträge – Übersicht</h2>
-
-        {(!loading && !error && events.length===0) && (
-          <div className="surface" style={{borderStyle:"dashed", textAlign:"center"}}>Keine Einträge im ausgewählten Monat.</div>
-        )}
-
-        <div className="appt-list">
-          {events.map(ev=>{
-            const displayStatus = computeDisplayStatus(ev);
-            return (
-              <div key={ev.id} className="appt-item">
-                <div className={`appt-icon ${ev.kind==='order'?'appt-icon--order':''}`} title={ev.kind==='order'?'Auftrag':'Termin'}>
-                  {ev.kind==='order' ? "🧾" : "📅"}
-                </div>
-                <div style={{minWidth:0}}>
-                  <div className="appt-title">
-                    <Link href={`/termine/eintrag/${ev.id}`} style={{color:"inherit", textDecoration:"none"}}>{ev.title || "(ohne Titel)"}</Link>
-                  </div>
-                  <div className="appt-meta">
-                    <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{color:"inherit", textDecoration:"none"}}>
-                      {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
-                    </Link>
-                    {ev.customerName && <> · {ev.customerName}</>}
-                  </div>
-                </div>
-                <div className="appt-actions">
-                  {/* Status nur als Label, nicht klickbar */}
-                  <span className={`appt-badge ${
-                    displayStatus==="offen" ? "is-offen" :
-                    displayStatus==="abgesagt" ? "is-abgesagt" : "is-abgeschlossen"
-                  }`}>{displayStatus}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="container">
-      <MonthCalendar />
-      <MonthList />
-    </div>
+    <Page>
+      <PageHeader
+        title="Termine – Monatsansicht"
+        actions={
+          <>
+            <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</Button>
+            <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</Button>
+          </>
+        }
+      />
+
+      <PageGrid>
+        {/* Monatskalender */}
+        <Col span={12}>
+          <Card title="Kalender">
+            <div className="form" style={{ marginBottom: 8 }}>
+              <div className="muted">
+                {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
+              </div>
+            </div>
+
+            <div className="grid" style={{ gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
+              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=>(
+                <div key={h} className="muted" style={{ fontWeight:700, padding:"6px 4px" }}>{h}</div>
+              ))}
+              {days.map((d,i)=>{
+                const inMonth = d.getMonth()===cursor.getMonth();
+                const key = toYMD(d);
+                const list = byDate[key]||[];
+                const isToday = key===TODAY_YMD;
+                return (
+                  <Link
+                    key={i}
+                    href={`/termine/${key}`}
+                    className="card"
+                    style={{
+                      padding: 8, textDecoration:"none",
+                      borderStyle: isToday ? "solid" : "solid",
+                      borderColor: isToday ? "var(--brand)" : "var(--border)",
+                      background: "var(--panel-2)"
+                    }}
+                  >
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                      <div className="muted">Tag</div>
+                      <div style={{ fontWeight:700 }}>{d.getDate()}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                      {list.slice(0,4).map(x=>(
+                        <Badge key={x.id} tone={x.kind==='order'?'warning':'info'}>
+                          {x.kind==='order'?'Auftrag':'Termin'}
+                        </Badge>
+                      ))}
+                      {list.length>4 && <Badge tone="muted">+{list.length-4}</Badge>}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {loading && <p className="muted" style={{marginTop:10}}>Lade Termine…</p>}
+            {error && !loading && <p className="error" style={{marginTop:10}}>{error}</p>}
+          </Card>
+        </Col>
+
+        {/* Monatsliste */}
+        <Col span={12}>
+          <Card title="Termine / Aufträge – Übersicht" scrollX>
+            {(!loading && !error && events.length===0) && (
+              <div className="card" style={{borderStyle:"dashed", padding:16, textAlign:"center"}}>
+                Keine Einträge im ausgewählten Monat.
+              </div>
+            )}
+
+            <div style={{ display:"grid", gap:8 }}>
+              {events.map(ev=>{
+                const displayStatus = computeDisplayStatus(ev);
+                return (
+                  <div
+                    key={ev.id}
+                    className="card"
+                    style={{ padding: 10, display:"grid", gridTemplateColumns:"auto 1fr auto", gap:10, alignItems:"center" }}
+                  >
+                    <div style={{ fontSize:20 }} title={ev.kind==='order'?'Auftrag':'Termin'}>
+                      {ev.kind==='order' ? "🧾" : "📅"}
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                        <Link href={`/termine/eintrag/${ev.id}`} style={{ color:"inherit", textDecoration:"none" }}>
+                          {ev.title || "(ohne Titel)"}
+                        </Link>
+                      </div>
+                      <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                        <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{ color:"inherit", textDecoration:"none" }}>
+                          {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                        </Link>
+                        {ev.customerName && <> · {ev.customerName}</>}
+                      </div>
+                    </div>
+                    <div>
+                      <StatusPill status={displayStatus} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </Col>
+      </PageGrid>
+    </Page>
   );
 }
