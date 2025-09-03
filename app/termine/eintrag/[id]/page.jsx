@@ -4,7 +4,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Modal from "@/app/components/Modal";
+import {
+  Page, PageHeader, PageGrid, Col, Card, Button, Modal, StatusPill, Badge
+} from "../../../components/UI";
 import AppointmentForm from "@/app/components/AppointmentForm";
 
 function fmtDateDE(input){
@@ -14,7 +16,6 @@ function fmtDateDE(input){
       return new Intl.DateTimeFormat("de-DE", { day:"2-digit", month:"2-digit", year:"numeric", weekday:"long" }).format(d);
     }
   }catch{}
-  // Fallback für YYYY-MM-DD
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}/.test(input)) {
     const [y,m,d] = input.slice(0,10).split("-").map(Number);
     return new Intl.DateTimeFormat("de-DE", { day:"2-digit", month:"2-digit", year:"numeric", weekday:"long" }).format(new Date(y, m-1, d));
@@ -69,8 +70,9 @@ export default function EntryDetailPage({ params }){
       alert("Löschen fehlgeschlagen.");
       return;
     }
-    // Nach dem Löschen zurück zur Tagesansicht (falls Datum bekannt), sonst Monatsübersicht
-    const target = data?.date ? `/termine/${(typeof data.date === "string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}` : "/termine";
+    const target = data?.date
+      ? `/termine/${(typeof data.date === "string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}`
+      : "/termine";
     router.push(target);
   }
 
@@ -79,72 +81,91 @@ export default function EntryDetailPage({ params }){
     load();
   }
 
+  const statusLabel = data
+    ? (data.status === "cancelled" ? "abgesagt" : data.status === "done" ? "abgeschlossen" : "offen")
+    : "";
+
   return (
-    <div className="container">
-      <div className="surface" style={{display:"grid", gap:12}}>
-        {/* Header */}
-        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap"}}>
-          <h2 className="page-title" style={{margin:0}}>Eintrag · Details</h2>
-          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+    <Page>
+      <PageHeader
+        title="Eintrag · Details"
+        actions={
+          <>
             {data?.date ? (
-              <Link href={`/termine/${(typeof data.date==="string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}`} className="btn-ghost">
-                ← Zur Tagesansicht
+              <Link href={`/termine/${(typeof data.date==="string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10))}`} className="btn btn--ghost">
+                ← Tagesansicht
               </Link>
             ) : (
-              <Link href="/termine" className="btn-ghost">← Zur Kalenderansicht</Link>
+              <Link href="/termine" className="btn btn--ghost">← Kalender</Link>
             )}
-            <button className="btn" onClick={()=>setEditOpen(true)}>Bearbeiten</button>
-            <button className="btn btn-danger" onClick={onDelete}>Löschen</button>
-          </div>
-        </div>
+            <Button onClick={()=>setEditOpen(true)}>Bearbeiten</Button>
+            <Button variant="danger" onClick={onDelete}>Löschen</Button>
+          </>
+        }
+      />
 
-        {/* Content */}
-        {loading && <div className="subtle">Lade…</div>}
-        {!loading && error && <div style={{color:"#b91c1c"}}>{error}</div>}
+      <PageGrid>
+        <Col span={12}>
+          <Card title="Zusammenfassung">
+            {loading && <div className="muted">Lade…</div>}
+            {!loading && error && <div className="error">{error}</div>}
 
-        {!loading && !error && data && (
-          <div className="surface" style={{display:"grid", gap:12}}>
-            <div className="section-title">Zusammenfassung</div>
-            <div className="detail">
-              <div className="row">
-                <div className="label">Art</div>
-                <div className="value">{data.kind === "order" ? "Auftrag" : "Termin"}</div>
-              </div>
-              <div className="row">
-                <div className="label">Bezeichnung</div>
-                <div className="value">{data.title || "—"}</div>
-              </div>
-              <div className="row">
-                <div className="label">Datum</div>
-                <div className="value">{fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}</div>
-              </div>
-              <div className="row">
-                <div className="label">Zeit</div>
-                <div className="value">
-                  {data.startAt?.slice(0,5)}{data.endAt ? ` – ${data.endAt.slice(0,5)}` : ""}
+            {!loading && !error && data && (
+              <div style={{ display:"grid", gap:12 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <div className="card" style={{ padding:12 }}>
+                    <div className="muted">Art</div>
+                    <div style={{ fontWeight:700, marginTop:4 }}>
+                      {data.kind === "order" ? "Auftrag" : "Termin"}
+                    </div>
+                  </div>
+                  <div className="card" style={{ padding:12 }}>
+                    <div className="muted">Status</div>
+                    <div style={{ marginTop:4 }}><StatusPill status={statusLabel} /></div>
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding:12 }}>
+                  <div className="muted">Bezeichnung</div>
+                  <div style={{ fontWeight:700, marginTop:4 }}>{data.title || "—"}</div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                  <div className="card" style={{ padding:12 }}>
+                    <div className="muted">Datum</div>
+                    <div style={{ fontWeight:700, marginTop:4 }}>
+                      {fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}
+                    </div>
+                  </div>
+                  <div className="card" style={{ padding:12 }}>
+                    <div className="muted">Zeit</div>
+                    <div style={{ fontWeight:700, marginTop:4 }}>
+                      {data.startAt?.slice(0,5)}{data.endAt ? ` – ${data.endAt.slice(0,5)}` : ""}
+                    </div>
+                  </div>
+                  <div className="card" style={{ padding:12 }}>
+                    <div className="muted">Kunde</div>
+                    <div style={{ fontWeight:700, marginTop:4 }}>{data.customerName || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding:12 }}>
+                  <div className="muted">Notiz</div>
+                  <div style={{ marginTop:4, whiteSpace:"pre-wrap" }}>{data.note || "—"}</div>
                 </div>
               </div>
-              <div className="row">
-                <div className="label">Kunde</div>
-                <div className="value">{data.customerName || "—"}</div>
-              </div>
-              <div className="row">
-                <div className="label">Status</div>
-                <div className="value">
-                  {data.status === "cancelled" ? "abgesagt" : data.status === "done" ? "abgeschlossen" : "offen"}
-                </div>
-              </div>
-              <div className="row">
-                <div className="label">Notiz</div>
-                <div className="value" style={{whiteSpace:"pre-wrap"}}>{data.note || "—"}</div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+            )}
+          </Card>
+        </Col>
+      </PageGrid>
 
       {/* Modal: Bearbeiten */}
-      <Modal open={editOpen} onClose={()=>setEditOpen(false)} title="Eintrag bearbeiten" maxWidth={640}>
+      <Modal
+        open={editOpen}
+        onClose={()=>setEditOpen(false)}
+        title="Eintrag bearbeiten"
+        footer={null}
+      >
         {data && (
           <AppointmentForm
             initial={{
@@ -165,6 +186,6 @@ export default function EntryDetailPage({ params }){
           />
         )}
       </Modal>
-    </div>
+    </Page>
   );
 }
