@@ -36,7 +36,7 @@ export default function HeaderTop() {
           <div className="header-row">
             <button
               type="button"
-              className="btn header-btn"
+              className="btn header-btn show-mobile"
               aria-label={openModules ? "Module schließen" : "Module öffnen"}
               aria-expanded={openModules ? "true" : "false"}
               aria-controls="module-panel"

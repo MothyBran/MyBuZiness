@@ -1,11 +1,9 @@
 import "./globals.css";
 import React from "react";
-
-/* Falls du eigene Komponenten schon hast, importiere sie hier.
-   Wenn nicht vorhanden, die Imports einfach entfernen oder anpassen. */
 import HeaderTop from "./components/HeaderTop";
 import AppFooter from "./components/AppFooter";
 import InstallPrompt from "./components/InstallPrompt";
+import Sidebar from "./components/Sidebar";
 
 export const metadata = {
   title: "My BuZiness",
@@ -15,15 +13,21 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="de">
-      <body style={{ overflowX: "hidden" }}>
-        {/* Optionaler Header */}
-        {HeaderTop ? <HeaderTop /> : null}
+      <body>
+        {/* Desktop Sidebar (Fixed) */}
+        <Sidebar />
 
-        {/* Hauptinhalt – alle Seiten nutzen <div className="page"> via UI.Page */}
-        <main>{children}</main>
+        {/* Main Content Wrapper */}
+        <div className="app-shell">
+          {/* Optionaler Header */}
+          {HeaderTop ? <HeaderTop /> : null}
 
-        {/* Optionaler Footer */}
-        {AppFooter ? <AppFooter /> : null}
+          {/* Hauptinhalt – alle Seiten nutzen <div className="page"> via UI.Page */}
+          <main className="main-content">{children}</main>
+
+          {/* Optionaler Footer */}
+          {AppFooter ? <AppFooter /> : null}
+        </div>
 
         {/* PWA-Installations-Hinweis (falls PWA) */}
         {InstallPrompt ? <InstallPrompt /> : null}
