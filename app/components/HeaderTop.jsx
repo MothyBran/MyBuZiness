@@ -1,4 +1,3 @@
-// app/components/HeaderTop.jsx
 "use client";
 
 import Image from "next/image";
