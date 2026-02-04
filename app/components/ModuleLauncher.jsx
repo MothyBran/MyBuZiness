@@ -81,8 +81,8 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
         /* Hintergrund (über der Seite, Seite verschiebt sich NICHT) */
         .ml-scrim{
           position: fixed; inset: 0;
-          background: rgba(17,24,39,.3);
-          backdrop-filter: blur(1px);
+          background: rgba(0,0,0,.5);
+          backdrop-filter: blur(2px);
           opacity: 0; pointer-events: none;
           transition: opacity .18s ease;
           z-index: 59;
@@ -94,26 +94,28 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
           position: fixed; top: 0; left: 0; bottom: 0;
           width: min(300px, 86vw);
           transform: translateX(-102%);
-          background: #fff; border-right: 1px solid #e5e7eb;
+          background: var(--panel);
+          border-right: 1px solid var(--border);
           box-shadow: 0 10px 40px rgba(0,0,0,.18);
           transition: transform .22s ease;
           z-index: 60;
           display: grid; grid-template-rows: auto 1fr;
+          color: var(--text);
         }
         .ml-drawer.is-open{ transform: translateX(0); }
 
         .ml-head{
           display:flex; align-items:center; justify-content:space-between;
-          padding: 12px 14px; border-bottom: 1px solid #e5e7eb;
+          padding: 12px 14px; border-bottom: 1px solid var(--border);
         }
         .ml-title{ font-weight: 800; }
         .ml-close{
           width: 32px; height: 32px; border-radius: 8px;
-          border: 1px solid #e5e7eb; background:#fff; cursor:pointer;
-          line-height: 1; font-size: 18px;
+          border: 1px solid var(--border); background: var(--panel-2); cursor:pointer;
+          line-height: 1; font-size: 18px; color: var(--text);
           transition: background .12s ease, border-color .12s ease;
         }
-        .ml-close:hover{ background:#f9fafb; border-color:#d1d5db; }
+        .ml-close:hover{ background: var(--border); }
 
         /* Liste: Panel scrollbar wenn zu lang */
         .ml-list{
@@ -128,49 +130,49 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
           align-items:center;
           gap: 10px;
           padding: 12px 14px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid var(--border);
           border-radius: 12px;
-          background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+          background: var(--panel);
           text-decoration: none;
-          color: #111827;
-          box-shadow: 0 1px 2px rgba(0,0,0,.02);
+          color: var(--text);
+          box-shadow: var(--shadow-sm);
           transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
           position: relative;
           overflow: hidden;
         }
         .ml-item:hover{
-          border-color:#d1d5db;
-          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-          box-shadow: 0 6px 16px rgba(0,0,0,.06);
+          border-color: var(--border);
+          background: var(--panel-2);
+          box-shadow: var(--shadow-1);
           transform: translateY(-1px);
         }
         .ml-item:focus-visible{
-          outline: 2px solid var(--color-primary, #06a);
+          outline: 2px solid var(--brand);
           outline-offset: 2px;
         }
 
         /* Active-Zustand mit Akzent links */
         .ml-item.is-active{
-          border-color: var(--color-primary, #06a);
-          background: linear-gradient(180deg, #f0f9ff 0%, #ecfeff 100%);
-          box-shadow: 0 6px 18px rgba(8,145,178,.12);
+          border-color: var(--brand);
+          background: rgba(20,184,166,0.05);
+          box-shadow: var(--shadow-1);
         }
         .ml-item.is-active::before{
           content:"";
           position:absolute; left:0; top:0; bottom:0;
           width: 4px; border-radius: 4px 0 0 4px;
-          background: var(--color-primary, #06a);
+          background: var(--brand);
         }
 
         .ml-ico{
           width: 36px; height: 36px;
           display:flex; align-items:center; justify-content:center;
           border-radius: 10px;
-          background: #f3f4f6;
+          background: var(--panel-2);
           font-size: 18px;
           transition: transform .12s ease, background .12s ease;
         }
-        .ml-item:hover .ml-ico{ transform: scale(1.04); background:#eef2f7; }
+        .ml-item:hover .ml-ico{ transform: scale(1.04); background: var(--border); }
 
         .ml-txt{
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -178,10 +180,10 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
         }
 
         .ml-chevron{
-          color:#9ca3af; font-size:18px; line-height:1;
+          color: var(--muted); font-size:18px; line-height:1;
           transition: transform .12s ease, color .12s ease;
         }
-        .ml-item:hover .ml-chevron{ transform: translateX(2px); color:#6b7280; }
+        .ml-item:hover .ml-chevron{ transform: translateX(2px); color: var(--text-weak); }
 
         @media (max-width: 420px){
           .ml-drawer{ width: min(88vw, 320px); }

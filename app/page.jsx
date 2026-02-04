@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Page, PageHeader, Card, PageGrid, Col, Icon } from "./components/UI";
 
 /* -------- Utils -------- */
 async function safeGet(url, fallback) {
@@ -31,7 +32,6 @@ function formatDateDE(input) {
   const yyyy = d.getFullYear();
   return `${dd}.${mm}.${yyyy}`;
 }
-/** Cent -> formatiert mit Währungssymbol (z. B. €) */
 function moneyFromCents(cents, currency = "EUR") {
   const eur = Number(cents || 0) / 100;
   try {
@@ -42,7 +42,6 @@ function moneyFromCents(cents, currency = "EUR") {
       maximumFractionDigits: 2,
     }).format(eur);
   } catch {
-    // Fallback, falls unbekannte Currency
     return `${eur.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
   }
 }
@@ -61,28 +60,27 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      // Settings (Währung)
+      // Settings
       const settings = await safeGet("/api/settings", { ok: true, data: {} });
       const cfg = settings?.data || settings || {};
       setCurrency(cfg.currency || "EUR");
 
-      // Dashboard-API (wenn vorhanden)
+      // Dashboard
       const dash = await safeGet("/api/dashboard", { ok: true, data: {} });
       const d = dash?.data || {};
 
-      // Fallbacks (wenn einzelne Endpunkte existieren)
+      // Fallbacks
       const receipts = await safeGet("/api/receipts?limit=5", { ok: true, data: [] });
       const invoices = await safeGet("/api/invoices?limit=5", { ok: true, data: [] });
-      const appts    = await safeGet("/api/appointments?upcoming=3", []); // akzeptiert Array
+      const appts    = await safeGet("/api/appointments?upcoming=3", []);
 
-      // Counts: erst aus Dashboard, sonst Fallback zählen
+      // Counts
       const customers = await safeGet("/api/customers?count=1", { ok: true, data: [] });
       const products  = await safeGet("/api/products?count=1", { ok: true, data: [] });
 
       const totals = d.totals || {};
       const counts = d.counts || {};
 
-      // Annahme: totals.* kommen in CENTS (wie im restlichen System)
       setStats({
         today: Number(totals.today || 0),
         last7: Number(totals.last7 || 0),
@@ -93,8 +91,6 @@ export default function HomePage() {
         receipts: Number(counts.receipts || 0),
       });
 
-      // Neueste aus Dashboard bevorzugen (hat garantierte Feldnamen),
-      // sonst Fallback aus Einzel-APIs
       setLatestReceipts(
         Array.isArray(d.recentReceipts) && d.recentReceipts.length
           ? d.recentReceipts
@@ -114,144 +110,130 @@ export default function HomePage() {
   }, []);
 
   return (
-    <>
-      {/* Header – Schnellzugriffe entfernt */}
-      <div
-        className="surface"
-        style={{
-          padding: 16,
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <h1 className="page-title" style={{ margin: 0 }}>Dashboard</h1>
+    <Page>
+      <PageHeader title="Dashboard" />
+
+      <div className="kpi-grid mb-6">
+        <KpiCard title="Heute" value={moneyFromCents(stats.today, currency)} icon="euro" tone="brand" />
+        <KpiCard title="Letzte 7 Tage" value={moneyFromCents(stats.last7, currency)} />
+        <KpiCard title="Letzte 30 Tage" value={moneyFromCents(stats.last30, currency)} />
+        <KpiCard title="Kunden" value={stats.customers} icon="user" />
+        <KpiCard title="Produkte" value={stats.products} icon="box" />
+        <KpiCard title="Rechnungen" value={stats.invoices} icon="file-text" />
+        <KpiCard title="Belege" value={stats.receipts} icon="receipt" />
       </div>
 
-      {/* KPIs */}
-      <div
-        className="surface"
-        style={{
-          padding: 16,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 12,
-        }}
-      >
-        <Kpi title="Heute" value={moneyFromCents(stats.today, currency)} />
-        <Kpi title="Letzte 7 Tage" value={moneyFromCents(stats.last7, currency)} />
-        <Kpi title="Letzte 30 Tage" value={moneyFromCents(stats.last30, currency)} />
-        <Kpi title="Kunden" value={stats.customers ?? 0} />
-        <Kpi title="Produkte" value={stats.products ?? 0} />
-        <Kpi title="Rechnungen" value={stats.invoices ?? 0} />
-        <Kpi title="Belege" value={stats.receipts ?? 0} />
-      </div>
-
-      {/* Drei Spalten – mobil untereinander */}
-      <div
-        style={{
-          display: "grid",
-          gap: 12,
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-        }}
-      >
+      <PageGrid>
         {/* Neueste Belege */}
-        <div className="surface">
-          <SectionTitle>Neueste Belege</SectionTitle>
-          <List
-            items={latestReceipts}
-            empty="Keine Belege vorhanden."
-            mapItem={(r) => {
-              // Beleg-Nummer verlässlich lesen
-              const no =
-                r.receiptNo ?? r.no ?? r.number ?? r.title ?? "(ohne Nummer)";
-              const dateStr =
-                r.date ? formatDateDE(r.date)
-                : r.createdAt ? formatDateDE(r.createdAt)
-                : "";
-              const vendor =
-                r.vendor ?? r.supplier ?? r.supplierName ?? r.title ?? "";
-              const href =
-                r.receiptNo ? `/belege?no=${encodeURIComponent(r.receiptNo)}`
-                : r.no ? `/belege?no=${encodeURIComponent(r.no)}`
-                : "/belege";
-              return {
-                icon: "🧾",
-                title: no,
-                meta: [dateStr, vendor].filter(Boolean).join(" · "),
-                href,
-              };
-            }}
-          />
-        </div>
+        <Col span={4} className="col-span-12 md:col-span-6 lg:col-span-4">
+          <Card title="Neueste Belege">
+            <List
+              items={latestReceipts}
+              empty="Keine Belege vorhanden."
+              mapItem={(r) => {
+                const no = r.receiptNo ?? r.no ?? r.number ?? r.title ?? "(ohne Nummer)";
+                const dateStr = r.date ? formatDateDE(r.date) : r.createdAt ? formatDateDE(r.createdAt) : "";
+                const vendor = r.vendor ?? r.supplier ?? r.supplierName ?? r.title ?? "";
+                const href = r.receiptNo ? `/belege?no=${encodeURIComponent(r.receiptNo)}`
+                  : r.no ? `/belege?no=${encodeURIComponent(r.no)}`
+                  : "/belege";
+                return {
+                  icon: "🧾",
+                  title: no,
+                  meta: [dateStr, vendor].filter(Boolean).join(" · "),
+                  href,
+                };
+              }}
+            />
+          </Card>
+        </Col>
 
         {/* Neueste Rechnungen */}
-        <div className="surface">
-          <SectionTitle>Neueste Rechnungen</SectionTitle>
-          <List
-            items={latestInvoices}
-            empty="Keine Rechnungen vorhanden."
-            mapItem={(r) => {
-              // Rechnungsnummer verlässlich lesen
-              const no =
-                r.invoiceNo ?? r.no ?? r.number ?? "(ohne Nummer)";
-              const dateStr =
-                r.issueDate ? formatDateDE(r.issueDate)
-                : r.date ? formatDateDE(r.date)
-                : r.createdAt ? formatDateDE(r.createdAt)
-                : "";
-              const href =
-                r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
-                : r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}`
-                : "/rechnungen";
-              return {
-                icon: "📄",
-                title: no,
-                meta: [dateStr, r.customerName].filter(Boolean).join(" · "),
-                href,
-              };
-            }}
-          />
-        </div>
+        <Col span={4} className="col-span-12 md:col-span-6 lg:col-span-4">
+          <Card title="Neueste Rechnungen">
+            <List
+              items={latestInvoices}
+              empty="Keine Rechnungen vorhanden."
+              mapItem={(r) => {
+                const no = r.invoiceNo ?? r.no ?? r.number ?? "(ohne Nummer)";
+                const dateStr = r.issueDate ? formatDateDE(r.issueDate) : r.date ? formatDateDE(r.date) : r.createdAt ? formatDateDE(r.createdAt) : "";
+                const href = r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
+                  : r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}`
+                  : "/rechnungen";
+                return {
+                  icon: "📄",
+                  title: no,
+                  meta: [dateStr, r.customerName].filter(Boolean).join(" · "),
+                  href,
+                };
+              }}
+            />
+          </Card>
+        </Col>
 
-        {/* Nächste 3 Termine */}
-        <div className="surface">
-          <SectionTitle>Nächste Termine</SectionTitle>
-          <List
-            items={nextAppointments}
-            empty="Keine anstehenden Einträge."
-            mapItem={(e) => ({
-              icon: e.kind === "order" ? "🗂️" : "📅",
-              title: e.title || "(ohne Titel)",
-              meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
-              href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
-            })}
-          />
-        </div>
-      </div>
-    </>
+        {/* Nächste Termine */}
+        <Col span={4} className="col-span-12 md:col-span-12 lg:col-span-4">
+          <Card title="Nächste Termine">
+            <List
+              items={nextAppointments}
+              empty="Keine anstehenden Einträge."
+              mapItem={(e) => ({
+                icon: e.kind === "order" ? "🗂️" : "📅",
+                title: e.title || "(ohne Titel)",
+                meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
+                href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
+              })}
+            />
+          </Card>
+        </Col>
+      </PageGrid>
+
+      <style jsx>{`
+        .kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+        .mb-6 { margin-bottom: 1.5rem; }
+      `}</style>
+    </Page>
   );
 }
 
 /* ========== Subcomponents ========== */
-function Kpi({ title, value }) {
+function KpiCard({ title, value, tone, icon }) {
   return (
-    <div className="surface" style={{ padding: 12, display: "grid", gap: 6 }}>
-      <div style={{ fontSize: 12, color: "var(--color-muted)" }}>{title}</div>
-      <div style={{ fontWeight: 800, fontSize: 22 }}>{value ?? 0}</div>
+    <div className="card" style={{ padding: "1.25rem", position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div className="kpi-title">{title}</div>
+          <div className="kpi-value" style={{ color: tone === "brand" ? "var(--brand)" : "inherit" }}>
+            {value ?? 0}
+          </div>
+        </div>
+        {icon && (
+          <div className="kpi-icon">
+             {/* Using a simple placeholder if UI.Icon is not available or mapped */}
+             <Icon name={icon} />
+          </div>
+        )}
+      </div>
+      <style jsx>{`
+        .kpi-title { font-size: 0.875rem; color: var(--muted); margin-bottom: 0.25rem; font-weight: 500; }
+        .kpi-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
+        .kpi-icon { color: var(--brand); opacity: 0.15; transform: scale(1.5); transform-origin: top right; }
+      `}</style>
     </div>
   );
 }
-function SectionTitle({ children }) {
-  return <div className="section-title" style={{ marginBottom: 8 }}>{children}</div>;
-}
+
 function List({ items, empty, mapItem }) {
   if (!Array.isArray(items) || items.length === 0) {
-    return <div style={{ color: "#6b7280" }}>{empty}</div>;
+    return <div style={{ padding: "1rem", color: "var(--muted)", fontStyle: "italic" }}>{empty}</div>;
   }
   return (
-    <div style={{ display: "grid", gap: 8 }}>
+    <div className="list">
       {items.map((it, idx) => {
         const m = mapItem(it, idx);
         return (
@@ -260,38 +242,46 @@ function List({ items, empty, mapItem }) {
             href={m.href || "#"}
             prefetch={false}
             onClick={() => document.dispatchEvent(new Event("app:nav"))}
-            className="surface"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "32px 1fr",
-              gap: 10,
-              alignItems: "center",
-              padding: 10,
-              textDecoration: "none",
-            }}
+            className="list-item"
           >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 999,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "var(--shadow-sm)",
-                background: "#F3F4F6",
-                fontSize: 16,
-              }}
-            >
+            <div className="list-icon">
               {m.icon}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div className="ellipsis" style={{ fontWeight: 700 }}>{m.title}</div>
-              <div className="ellipsis" style={{ fontSize: 13, color: "#374151", opacity: 0.85 }}>{m.meta}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="ellipsis" style={{ fontWeight: 600, fontSize: "0.93rem" }}>{m.title}</div>
+              <div className="ellipsis" style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{m.meta}</div>
             </div>
           </Link>
         );
       })}
+      <style jsx>{`
+        .list { display: flex; flex-direction: column; }
+        .list-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 0;
+          border-bottom: 1px solid var(--border);
+          text-decoration: none;
+          color: inherit;
+          transition: background 0.1s;
+        }
+        .list-item:last-child { border-bottom: none; }
+        .list-item:hover {
+            background-color: var(--panel-2);
+            margin-left: -1.25rem; margin-right: -1.25rem;
+            padding-left: 1.25rem; padding-right: 1.25rem;
+        }
+
+        .list-icon {
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          background: var(--panel-2);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem;
+          color: var(--text-weak);
+        }
+      `}</style>
     </div>
   );
 }
