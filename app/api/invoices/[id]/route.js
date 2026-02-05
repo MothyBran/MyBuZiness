@@ -1,5 +1,6 @@
 // app/api/invoices/[id]/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 /** Hilfsfunktionen */
 const toInt = (v) => {
@@ -26,6 +27,7 @@ function computeBaseAndUnit(p) {
 
 export async function GET(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
     const inv = (await q(
@@ -35,8 +37,8 @@ export async function GET(_req, { params }) {
               c."city" AS "customerCity"
          FROM "Invoice" i
          JOIN "Customer" c ON c."id" = i."customerId"
-        WHERE i."id"=$1 LIMIT 1`,
-      [id]
+        WHERE i."id"=$1 AND i."userId"=$2 LIMIT 1`,
+      [id, userId]
     )).rows[0];
     if (!inv) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
     const items = (await q(
@@ -47,18 +49,23 @@ export async function GET(_req, { params }) {
     )).rows;
     return Response.json({ ok:true, data: { ...inv, items } });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
 export async function PATCH(req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
     const body = await req.json().catch(()=> ({}));
 
+    // Verify ownership first to be safe
+    const existing = (await q(`SELECT id FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
+    if (!existing) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
+
     // Einstellungen für Steuer & Währung
-    const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
+    const settings = (await q(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
@@ -90,8 +97,8 @@ export async function PATCH(req, { params }) {
                   COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
                   COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
              FROM "Product"
-            WHERE "id"::text = ANY($1::text[])`,
-          [prodIds]
+            WHERE "id"::text = ANY($1::text[]) AND "userId"=$2`,
+          [prodIds, userId]
         )).rows;
         productMap = new Map(prows.map(p => [p.id, p]));
       }
@@ -146,10 +153,10 @@ export async function PATCH(req, { params }) {
                "taxRate"=$${keys.length+4},
                "currency"=$${keys.length+5},
                "updatedAt"=now()
-         WHERE "id"=$${keys.length+6}
+         WHERE "id"=$${keys.length+6} AND "userId"=$${keys.length+7}
       `;
-      const res = await q(sqlUpdate, [...vals, netAfterDiscount, taxCents, grossCents, taxRate, currency, id]);
-      if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
+      const res = await q(sqlUpdate, [...vals, netAfterDiscount, taxCents, grossCents, taxRate, currency, id, userId]);
+      if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden oder Fehler beim Update." }), { status:404 });
 
       // Items ersetzen
       await q(`DELETE FROM "InvoiceItem" WHERE "invoiceId"=$1`, [id]);
@@ -172,8 +179,8 @@ export async function PATCH(req, { params }) {
       const sets = keys.map((k, i) => `"${k}"=$${i+1}`).join(", ");
       const vals = keys.map(k => patch[k]);
       const res = await q(
-        `UPDATE "Invoice" SET ${sets}, "updatedAt"=now() WHERE "id"=$${keys.length+1}`,
-        [...vals, id]
+        `UPDATE "Invoice" SET ${sets}, "updatedAt"=now() WHERE "id"=$${keys.length+1} AND "userId"=$${keys.length+2}`,
+        [...vals, id, userId]
       );
       if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
     }
@@ -186,10 +193,11 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
-    await q(`DELETE FROM "InvoiceItem" WHERE "invoiceId"=$1`, [id]);
-    const res = await q(`DELETE FROM "Invoice" WHERE "id"=$1`, [id]);
+    // rely on CASCADE for items
+    const res = await q(`DELETE FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
     return Response.json({ ok:true });
   } catch (e) {

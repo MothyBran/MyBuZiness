@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 
-export default function Sidebar() {
+export default function Sidebar({ user }) {
   const pathname = usePathname();
 
   const LINKS = [
@@ -21,6 +21,11 @@ export default function Sidebar() {
   function isActive(href) {
     if (href === "/") return pathname === "/";
     return pathname?.startsWith(href);
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
   }
 
   return (
@@ -51,7 +56,21 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar__footer">
-         {/* Optional footer items */}
+        {user && (
+          <div className="sidebar__item" title={user.name || "User"} style={{ cursor: "default", background: "transparent", border: "none" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase" }}>
+              {(user.name || "U").substring(0, 2)}
+            </span>
+          </div>
+        )}
+        <button
+          onClick={handleLogout}
+          className="sidebar__item"
+          title="Abmelden"
+          style={{ cursor: "pointer", background: "transparent", border: "none", color: "var(--error)" }}
+        >
+          <span className="sidebar__icon">🚪</span>
+        </button>
       </div>
 
       <style jsx>{`
@@ -80,6 +99,16 @@ export default function Sidebar() {
           gap: 0.75rem;
           width: 100%;
           align-items: center;
+          flex: 1;
+        }
+
+        .sidebar__footer {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            width: 100%;
+            align-items: center;
+            margin-bottom: 1rem;
         }
 
         .sidebar__item {

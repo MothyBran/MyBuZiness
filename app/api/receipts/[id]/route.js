@@ -1,5 +1,6 @@
 // app/api/receipts/[id]/route.js
 import { initDb, q } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 const toInt = (v) => {
@@ -10,6 +11,7 @@ const toInt = (v) => {
 /** Kopf + Items laden */
 export async function GET(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
 
@@ -27,9 +29,9 @@ export async function GET(_req, { params }) {
          COALESCE("vatExempt",false)            AS "vatExempt",
          "createdAt","updatedAt"
        FROM "Receipt"
-       WHERE "id"=$1
+       WHERE "id"=$1 AND "userId"=$2
        LIMIT 1`,
-      [id]
+      [id, userId]
     )).rows[0];
 
     if (!head) {
@@ -53,45 +55,42 @@ export async function GET(_req, { params }) {
 
     return Response.json({ ok:true, data: { ...head, items } }, { headers: { "cache-control":"no-store" } });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
-/** Löschen: zuerst Positionen, dann Kopf */
+/** Löschen */
 export async function DELETE(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
-    await q(`DELETE FROM "ReceiptItem" WHERE "receiptId"=$1`, [id]);
-    const res = await q(`DELETE FROM "Receipt" WHERE "id"=$1`, [id]);
+    // rely on CASCADE for items
+    const res = await q(`DELETE FROM "Receipt" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) {
       return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     }
     return Response.json({ ok:true });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
   }
 }
 
 /**
- * Bearbeiten (PUT):
- *  - Wenn body.items vorhanden & nicht leer → Positionen ersetzen und Summen neu berechnen.
- *  - Wenn body.items fehlt/leer → Positionen bleiben und Summen werden anhand vorhandener Positionen neu berechnet,
- *    falls Rabatt/USt geändert wurden (damit bleibt alles konsistent).
- *  Body-Felder (alle optional):
- *  { receiptNo, date, currency, vatExempt, discountCents, note, items?: [{name, quantity, unitPriceCents, productId?}] }
+ * Bearbeiten (PUT)
  */
 export async function PUT(req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const id = params.id;
     const body = await req.json().catch(()=> ({}));
 
-    // Vorhandene Kopf-/Items holen (für Defaults & Summen)
+    // Vorhandene Kopf-/Items holen (für Defaults & Summen) & Ownership Check
     const head = (await q(
       `SELECT "vatExempt","currency","discountCents"
-       FROM "Receipt" WHERE "id"=$1 LIMIT 1`,
-      [id]
+       FROM "Receipt" WHERE "id"=$1 AND "userId"=$2 LIMIT 1`,
+      [id, userId]
     )).rows[0];
     if (!head) {
       return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
@@ -145,7 +144,7 @@ export async function PUT(req, { params }) {
          "grossCents"    = $8,
          "note"          = COALESCE($9,"note"),
          "updatedAt"     = now()
-       WHERE "id"=$10`,
+       WHERE "id"=$10 AND "userId"=$11`,
       [
         body.receiptNo ?? null,
         body.date ?? null,
@@ -156,7 +155,8 @@ export async function PUT(req, { params }) {
         taxCents,
         grossCents,
         body.note ?? null,
-        id
+        id,
+        userId
       ]
     );
 
@@ -188,6 +188,6 @@ export async function PUT(req, { params }) {
     return Response.json({ ok:true, data:{ id } });
   } catch (e) {
     try { await q("ROLLBACK"); } catch {}
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
   }
 }
