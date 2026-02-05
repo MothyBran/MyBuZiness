@@ -12,5 +12,5 @@ jobs:
       - uses: bervProject/railway-deploy@main
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        # with:
-        #   service: "mybuziness" # Optional, only if needed
+        with:
+          service: "MyBuZiness"
