@@ -9,7 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: railwayapp/cli-action@v1
+      - uses: railwayapp/action@master
         with:
           railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          args: "up --service MyBuZiness --detach"
+          service: "MyBuZiness"
+          detach: true
