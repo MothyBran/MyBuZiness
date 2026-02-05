@@ -40,7 +40,7 @@ function TimePickerField({
   // Fallback-Wheel
   const [openWheel, setOpenWheel] = useState(false);
   const hours    = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
-  const minutes5 = useMemo(()=>Array.from({length:12},(_,i)=>i*5),[]);
+  const minutes15 = useMemo(()=>[0,15,30,45],[]);
   const OPT_H = 36;
   const hRef = useRef(null);
   const mRef = useRef(null);
@@ -48,12 +48,12 @@ function TimePickerField({
 
   const vMin = typeof value === "string" && value ? minutesFromTime(value) : null;
   const [tmpH, setTmpH] = useState(()=> (vMin!=null ? Math.floor(vMin/60) : 9));
-  const [tmpM, setTmpM] = useState(()=> (vMin!=null ? Math.round((vMin%60)/5)*5 : 0));
+  const [tmpM, setTmpM] = useState(()=> (vMin!=null ? Math.round((vMin%60)/15)*15 : 0));
 
   useEffect(()=>{
     if (vMin!=null){
       setTmpH(Math.floor(vMin/60));
-      setTmpM(Math.round((vMin%60)/5)*5);
+      setTmpM(Math.round((vMin%60)/15)*15);
     }
   },[vMin]);
 
@@ -104,11 +104,11 @@ function TimePickerField({
         const slot       = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
         const currentTop = el.scrollTop;
         const approxIdx  = Math.round((currentTop + OPT_H*(slot-1)) / OPT_H);
-        const maxIdx     = (which==='h') ? 23 : 11;
+        const maxIdx     = (which==='h') ? 23 : 3;
         const idx        = Math.max(0, Math.min(maxIdx, approxIdx));
         const targetTop  = idx*OPT_H - OPT_H*(slot-1);
         el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-        if (which==='h') setTmpH(idx); else setTmpM(idx*5);
+        if (which==='h') setTmpH(idx); else setTmpM(idx*15);
       }, 80);
     };
   }
@@ -116,7 +116,7 @@ function TimePickerField({
   useEffect(()=>{
     if(!openWheel) return;
     centerTo(hRef.current, tmpH);
-    centerTo(mRef.current, Math.round(tmpM/5));
+    centerTo(mRef.current, Math.round(tmpM/15));
     function onDoc(e){
       if (!e.target.closest?.('.af-time-pop')) setOpenWheel(false);
     }
@@ -208,13 +208,13 @@ function TimePickerField({
                 role="listbox"
                 aria-label="Minuten"
               >
-                {minutes5.map(m=>(
+                {minutes15.map(m=>(
                   <button
                     key={m}
                     type="button"
                     className={`af-opt ${tmpM===m?"is-active":""}`}
                     onClick={()=>{
-                      setTmpM(m); snapToIndex(mRef.current, Math.round(m/5));
+                      setTmpM(m); snapToIndex(mRef.current, Math.round(m/15));
                     }}
                   >{String(m).padStart(2,"0")}</button>
                 ))}
@@ -534,16 +534,16 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top: 4px;
         }
 
-        /* Sehr kleine Geräte: Status unter die Zeit-Felder umbrechen */
-        @media (max-width: 360px){
-          .af-form{ --time-col-w: 120px; }
-        }
-        @media (max-width: 330px){
-          .af-row3{
-            grid-template-columns: 1fr 1fr;
+        /* Mobile: Felder untereinander anordnen */
+        @media (max-width: 480px){
+          .af-row2 {
+            grid-template-columns: 1fr;
           }
-          .af-row3 > .field:last-child{
-            grid-column: 1 / -1;
+          .af-row3 {
+            grid-template-columns: 1fr;
+          }
+          .af-row3 :global(.af-time-native) {
+             max-width: 100%;
           }
         }
       `}</style>

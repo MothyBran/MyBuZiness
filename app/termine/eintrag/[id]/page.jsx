@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   Page, PageHeader, PageGrid, Col, Card, Button, Modal, StatusPill, Badge
@@ -24,7 +24,7 @@ function fmtDateDE(input){
 }
 
 export default function EntryDetailPage({ params }){
-  const id = params?.id;
+  const { id } = use(params);
   const router = useRouter();
 
   const [data,setData] = useState(null);

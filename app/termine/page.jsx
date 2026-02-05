@@ -114,9 +114,8 @@ export default function TerminePage(){
                       background: "var(--panel-2)"
                     }}
                   >
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                      <div className="muted">Tag</div>
-                      <div style={{ fontWeight:700 }}>{d.getDate()}</div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4 }}>
+                      <div style={{ fontWeight:700, fontSize:"1.2em" }}>{d.getDate()}</div>
                     </div>
                     <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                       {list.slice(0,4).map(x=>(
