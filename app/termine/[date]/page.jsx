@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
 import {
   Page, PageHeader, PageGrid, Col, Card, Button, Modal, StatusPill, Badge
 } from "../../components/UI";
@@ -65,7 +65,8 @@ function placeInLanes(list){
 }
 
 export default function DayPage({ params }){
-  const ymd = toYMD(params?.date || new Date());
+  const unwrappedParams = use(params);
+  const ymd = toYMD(unwrappedParams?.date || new Date());
   const dateObj = toDate(ymd);
 
   const [events, setEvents]   = useState([]);
@@ -155,7 +156,8 @@ export default function DayPage({ params }){
                   key={h}
                   style={{
                     position:"absolute", left:0, right:0, top: h*ROW_H, height: ROW_H,
-                    borderBottom: "1px solid var(--border)"
+                    borderTop: "1px solid var(--border)",
+                    borderBottom: h===23 ? "1px solid var(--border)" : undefined
                   }}
                   title={`${pad2(h)}:00`}
                 >
@@ -172,9 +174,7 @@ export default function DayPage({ params }){
                     </div>
 
                     {/* Hilfslinien */}
-                    <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.25, borderTop:"1px dashed rgba(148,163,184,.35)" }} />
-                    <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.50, borderTop:"1px dashed rgba(148,163,184,.35)" }} />
-                    <div style={{ position:"absolute", left:0, right:0, top: ROW_H*0.75, borderTop:"1px dashed rgba(148,163,184,.35)" }} />
+                    <div style={{ position:"absolute", left:0, right:0, top: "50%", borderTop:"1px dashed rgba(148,163,184,.35)" }} />
 
                     {/* Klickfläche (volle Stunde) */}
                     <button
