@@ -1,5 +1,6 @@
 // app/api/invoices/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 /** Helpers */
 const toInt = (v) => {
@@ -27,13 +28,14 @@ function computeBaseAndUnit(p) {
 
 export async function GET(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const { searchParams } = new URL(request.url);
     const qs = (searchParams.get("q") || "").trim().toLowerCase();
     const no = (searchParams.get("no") || "").trim();
 
-    const where = [];
-    const params = [];
+    const where = [`i."userId" = $1`];
+    const params = [userId];
     if (qs) { params.push(`%${qs}%`); where.push(`(lower(i."invoiceNo") LIKE $${params.length} OR lower(c."name") LIKE $${params.length})`); }
     if (no) { params.push(no); where.push(`i."invoiceNo" = $${params.length}`); }
 
@@ -84,8 +86,8 @@ export async function GET(request) {
                 COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
                 COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
            FROM "Product"
-          WHERE "id"::text = ANY($1::text[])`,
-        [productIds]
+          WHERE "id"::text = ANY($1::text[]) AND "userId" = $2`,
+        [productIds, userId]
       )).rows;
       productMap = new Map(prows.map(p => [p.id, p]));
     }
@@ -108,7 +110,7 @@ export async function GET(request) {
     });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
+      status: e.message === "Unauthorized" ? 401 : 500,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
@@ -116,6 +118,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const body = await request.json().catch(() => ({}));
     const items = Array.isArray(body.items) ? body.items : [];
@@ -129,7 +132,7 @@ export async function POST(request) {
     }
 
     // Einstellungen
-    const settings = (await q(`SELECT * FROM "Settings" ORDER BY "createdAt" ASC LIMIT 1`)).rows[0] || {};
+    const settings = (await q(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
@@ -146,8 +149,8 @@ export async function POST(request) {
       const row = (await q(
         `SELECT COALESCE(MAX( (regexp_match("invoiceNo", $1))[1]::int ), 0) AS last
            FROM "Invoice"
-          WHERE "invoiceNo" ~ $1`,
-        [pattern]
+          WHERE "userId"=$2 AND "invoiceNo" ~ $1`,
+        [pattern, userId]
       )).rows[0];
       const next = Number(row?.last || 0) + 1;
       invoiceNo = `RN-${yymm}-${String(next).padStart(3, "0")}`;
@@ -168,8 +171,8 @@ export async function POST(request) {
                 COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
                 COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
            FROM "Product"
-          WHERE "id"::text = ANY($1::text[])`,
-        [prodIds]
+          WHERE "id"::text = ANY($1::text[]) AND "userId"=$2`,
+        [prodIds, userId]
       )).rows;
       productMap = new Map(prows.map(p => [p.id, p]));
     }
@@ -213,10 +216,10 @@ export async function POST(request) {
 
     await q(
       `INSERT INTO "Invoice"
-         ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt")
+         ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt","userId")
        VALUES
-         ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now())`,
-      [id, invoiceNo, customerId, body.issueDate || null, body.dueDate || null, currency, netAfterDiscount, taxCents, grossCents, taxRate]
+         ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now(),$11)`,
+      [id, invoiceNo, customerId, body.issueDate || null, body.dueDate || null, currency, netAfterDiscount, taxCents, grossCents, taxRate, userId]
     );
 
     for (const it of prepared) {
@@ -235,7 +238,7 @@ export async function POST(request) {
     });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 400,
+      status: e.message === "Unauthorized" ? 401 : 400,
       headers: { "content-type": "application/json" },
     });
   }

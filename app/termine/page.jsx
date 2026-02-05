@@ -1,11 +1,11 @@
-// app/termine/page.jsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Page, PageHeader, PageGrid, Col, Card, Button, Badge, StatusPill
+  Page, PageHeader, PageGrid, Col, Card, Button, Badge, StatusPill, Modal
 } from "../components/UI";
+import AppointmentForm from "../components/AppointmentForm";
 
 /* Date Utils */
 function toDate(input){
@@ -40,11 +40,16 @@ function computeDisplayStatus(e){
 }
 
 export default function TerminePage(){
+  const [viewMode, setViewMode] = useState("calendar");
   const [cursor,setCursor]=useState(()=>startOfMonth(new Date()));
   const [events,setEvents]=useState([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const monthString = useMemo(()=>ym(cursor),[cursor]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [customers, setCustomers] = useState([]);
 
   useEffect(()=>{
     let alive = true;
@@ -55,7 +60,11 @@ export default function TerminePage(){
       .catch(err=>{ if(alive){ console.error(err); setError("Konnte Termine nicht laden."); setEvents([]);} })
       .finally(()=> alive && setLoading(false));
     return ()=>{ alive=false; };
-  },[monthString]);
+  },[monthString, refreshKey]);
+
+  useEffect(()=>{
+    fetch("/api/customers").then(r=>r.json()).then(d=>setCustomers(d.data||[])).catch(()=>{});
+  },[]);
 
   const days = useMemo(()=>{
     const first = startOfMonth(cursor);
@@ -74,111 +83,160 @@ export default function TerminePage(){
   return (
     <Page>
       <PageHeader
-        title="Termine – Monatsansicht"
+        title="Termine"
         actions={
-          <>
-            <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</Button>
-            <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</Button>
-          </>
+          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+            <div className="segmented-control" style={{ display: "flex", background: "var(--panel-2)", padding: 4, borderRadius: 8 }}>
+              <button
+                onClick={() => setViewMode("calendar")}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  background: viewMode === "calendar" ? "var(--panel)" : "transparent",
+                  boxShadow: viewMode === "calendar" ? "var(--shadow-sm)" : "none",
+                  border: "none",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  color: "var(--text)"
+                }}
+              >
+                Kalender
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  background: viewMode === "list" ? "var(--panel)" : "transparent",
+                  boxShadow: viewMode === "list" ? "var(--shadow-sm)" : "none",
+                  border: "none",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  color: "var(--text)"
+                }}
+              >
+                Liste
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</Button>
+              <div style={{ fontWeight: 600, minWidth: 140, textAlign: "center" }}>
+                {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
+              </div>
+              <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</Button>
+            </div>
+
+            <Button variant="primary" icon="plus" onClick={()=>setCreateOpen(true)}>Neu</Button>
+          </div>
         }
       />
 
       <PageGrid>
         {/* Monatskalender */}
-        <Col span={12}>
-          <Card title="Kalender">
-            <div className="form" style={{ marginBottom: 8 }}>
-              <div className="muted">
-                {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
+        {viewMode === "calendar" && (
+          <Col span={12}>
+            <Card title="Monatsansicht">
+              <div className="grid" style={{ gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
+                {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=>(
+                  <div key={h} className="muted" style={{ fontWeight:700, padding:"6px 4px" }}>{h}</div>
+                ))}
+                {days.map((d,i)=>{
+                  const inMonth = d.getMonth()===cursor.getMonth();
+                  const key = toYMD(d);
+                  const list = byDate[key]||[];
+                  const isToday = key===TODAY_YMD;
+                  return (
+                    <Link
+                      key={i}
+                      href={`/termine/${key}`}
+                      className="card"
+                      style={{
+                        padding: 8, textDecoration:"none",
+                        borderStyle: isToday ? "solid" : "solid",
+                        borderColor: isToday ? "var(--brand)" : "var(--border)",
+                        background: inMonth ? "var(--panel)" : "var(--panel-2)",
+                        opacity: inMonth ? 1 : 0.6,
+                        minHeight: 80
+                      }}
+                    >
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                        <div style={{ fontWeight:700, fontSize:"1.1em" }}>{d.getDate()}</div>
+                        {isToday && <div style={{ fontSize: "0.7em", color: "var(--brand)", fontWeight: 700 }}>HEUTE</div>}
+                      </div>
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                        {list.slice(0,4).map(x=>(
+                          <Badge key={x.id} tone={x.kind==='order'?'warning':'info'}>
+                            {x.startAt ? x.startAt.slice(0,5) : "•"}
+                          </Badge>
+                        ))}
+                        {list.length>4 && <Badge tone="muted">+{list.length-4}</Badge>}
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
-            </div>
 
-            <div className="grid" style={{ gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(h=>(
-                <div key={h} className="muted" style={{ fontWeight:700, padding:"6px 4px" }}>{h}</div>
-              ))}
-              {days.map((d,i)=>{
-                const inMonth = d.getMonth()===cursor.getMonth();
-                const key = toYMD(d);
-                const list = byDate[key]||[];
-                const isToday = key===TODAY_YMD;
-                return (
-                  <Link
-                    key={i}
-                    href={`/termine/${key}`}
-                    className="card"
-                    style={{
-                      padding: 8, textDecoration:"none",
-                      borderStyle: isToday ? "solid" : "solid",
-                      borderColor: isToday ? "var(--brand)" : "var(--border)",
-                      background: "var(--panel-2)"
-                    }}
-                  >
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4 }}>
-                      <div style={{ fontWeight:700, fontSize:"1.2em" }}>{d.getDate()}</div>
-                    </div>
-                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                      {list.slice(0,4).map(x=>(
-                        <Badge key={x.id} tone={x.kind==='order'?'warning':'info'}>
-                          {x.kind==='order'?'Auftrag':'Termin'}
-                        </Badge>
-                      ))}
-                      {list.length>4 && <Badge tone="muted">+{list.length-4}</Badge>}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-
-            {loading && <p className="muted" style={{marginTop:10}}>Lade Termine…</p>}
-            {error && !loading && <p className="error" style={{marginTop:10}}>{error}</p>}
-          </Card>
-        </Col>
+              {loading && <p className="muted" style={{marginTop:10}}>Lade Termine…</p>}
+              {error && !loading && <p className="error" style={{marginTop:10}}>{error}</p>}
+            </Card>
+          </Col>
+        )}
 
         {/* Monatsliste */}
-        <Col span={12}>
-          <Card title="Termine / Aufträge – Übersicht" scrollX>
-            {(!loading && !error && events.length===0) && (
-              <div className="card" style={{borderStyle:"dashed", padding:16, textAlign:"center"}}>
-                Keine Einträge im ausgewählten Monat.
-              </div>
-            )}
+        {viewMode === "list" && (
+          <Col span={12}>
+            <Card title="Übersicht">
+              {(!loading && !error && events.length===0) && (
+                <div className="card" style={{borderStyle:"dashed", padding:16, textAlign:"center"}}>
+                  Keine Einträge im ausgewählten Monat.
+                </div>
+              )}
 
-            <div style={{ display:"grid", gap:8 }}>
-              {events.map(ev=>{
-                const displayStatus = computeDisplayStatus(ev);
-                return (
-                  <div
-                    key={ev.id}
-                    className="card"
-                    style={{ padding: 10, display:"grid", gridTemplateColumns:"auto 1fr auto", gap:10, alignItems:"center" }}
-                  >
-                    <div style={{ fontSize:20 }} title={ev.kind==='order'?'Auftrag':'Termin'}>
-                      {ev.kind==='order' ? "🧾" : "📅"}
-                    </div>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        <Link href={`/termine/eintrag/${ev.id}`} style={{ color:"inherit", textDecoration:"none" }}>
-                          {ev.title || "(ohne Titel)"}
-                        </Link>
+              <div style={{ display:"grid", gap:8 }}>
+                {events.map(ev=>{
+                  const displayStatus = computeDisplayStatus(ev);
+                  return (
+                    <div
+                      key={ev.id}
+                      className="card"
+                      style={{ padding: 10, display:"grid", gridTemplateColumns:"auto 1fr auto", gap:10, alignItems:"center" }}
+                    >
+                      <div style={{ fontSize:20 }} title={ev.kind==='order'?'Auftrag':'Termin'}>
+                        {ev.kind==='order' ? "🧾" : "📅"}
                       </div>
-                      <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{ color:"inherit", textDecoration:"none" }}>
-                          {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
-                        </Link>
-                        {ev.customerName && <> · {ev.customerName}</>}
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          <Link href={`/termine/eintrag/${ev.id}`} style={{ color:"inherit", textDecoration:"none" }}>
+                            {ev.title || "(ohne Titel)"}
+                          </Link>
+                        </div>
+                        <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{ color:"inherit", textDecoration:"none" }}>
+                            {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                          </Link>
+                          {ev.customerName && <> · {ev.customerName}</>}
+                        </div>
+                      </div>
+                      <div>
+                        <StatusPill status={displayStatus} />
                       </div>
                     </div>
-                    <div>
-                      <StatusPill status={displayStatus} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </Col>
+                  );
+                })}
+              </div>
+            </Card>
+          </Col>
+        )}
       </PageGrid>
+
+      <Modal open={createOpen} onClose={()=>setCreateOpen(false)} title="Neuer Eintrag">
+        <AppointmentForm
+          customers={customers}
+          onSaved={()=>{ setCreateOpen(false); setRefreshKey(k=>k+1); }}
+          onCancel={()=>setCreateOpen(false)}
+        />
+      </Modal>
     </Page>
   );
 }

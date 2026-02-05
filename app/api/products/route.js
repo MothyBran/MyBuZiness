@@ -1,8 +1,10 @@
 // app/api/products/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const userId = await requireUser();
     await initDb();
     const rows = (await q(
       `SELECT
@@ -13,16 +15,19 @@ export async function GET() {
          COALESCE("travelPerKmCents",0)    AS "travelPerKmCents",
          "createdAt","updatedAt"
        FROM "Product"
-       ORDER BY "createdAt" DESC`
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC`,
+      [userId]
     )).rows;
     return Response.json({ ok: true, data: rows });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
 export async function POST(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const body = await request.json().catch(()=> ({}));
 
@@ -40,21 +45,21 @@ export async function POST(request) {
       `INSERT INTO "Product"(
          "id","name","sku","description","categoryCode","kind",
          "priceCents","hourlyRateCents","travelBaseCents","travelPerKmCents",
-         "createdAt","updatedAt"
+         "createdAt","updatedAt","userId"
        ) VALUES (
          $1,$2,$3,$4,$5,$6,
          $7,$8,$9,$10,
-         now(),now()
+         now(),now(),$11
        )`,
       [
         id, name, body.sku || null, body.description || null, body.categoryCode || null, kind,
-        priceCents, hourlyRateCents, travelBaseCents, travelPerKmCents
+        priceCents, hourlyRateCents, travelBaseCents, travelPerKmCents, userId
       ]
     );
 
-    const row = (await q(`SELECT * FROM "Product" WHERE "id"=$1`, [id])).rows[0];
+    const row = (await q(`SELECT * FROM "Product" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
     return Response.json({ ok:true, data: row }, { status: 201 });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
   }
 }

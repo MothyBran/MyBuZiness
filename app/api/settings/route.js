@@ -1,12 +1,13 @@
 // app/api/settings/route.js
 import { initDb, q, uuid } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
 
 /**
  * Lädt genau EINEN Settings‑Datensatz (den ersten), und
  * setzt sinnvolle Defaults inkl. taxRateDefault.
  */
-async function fetchOne() {
+async function fetchOne(userId) {
   const rows = (await q(
     `SELECT
        "id",
@@ -33,25 +34,29 @@ async function fetchOne() {
        "createdAt",
        "updatedAt"
      FROM "Settings"
+     WHERE "userId" = $1
      ORDER BY "createdAt" ASC
-     LIMIT 1`
+     LIMIT 1`,
+     [userId]
   )).rows;
   return rows[0] || null;
 }
 
 export async function GET() {
   try {
+    const userId = await requireUser();
     await initDb();
-    const row = await fetchOne();
+    const row = await fetchOne(userId);
     const data = row ? { ...row, owner: row.ownerName ?? null } : {};
     return NextResponse.json({ ok: true, data });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e) }, { status: e.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
 export async function PUT(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const body = await request.json().catch(() => ({}));
 
@@ -85,7 +90,7 @@ export async function PUT(request) {
       taxRateDefault, // NEU
     };
 
-    const existing = await fetchOne();
+    const existing = await fetchOne(userId);
 
     if (!existing) {
       const id = uuid();
@@ -94,18 +99,19 @@ export async function PUT(request) {
            "id","companyName","ownerName","address1","address2","postalCode","city",
            "phone","email","website","bankAccount","vatId","kleinunternehmer","currency",
            "logoUrl","primaryColor","secondaryColor","fontFamily","textColor","taxRateDefault",
-           "createdAt","updatedAt"
+           "createdAt","updatedAt","userId"
          ) VALUES (
            $1,$2,$3,$4,$5,$6,$7,
            $8,$9,$10,$11,$12,$13,$14,
            $15,$16,$17,$18,$19,$20,
-           now(), now()
+           now(), now(), $21
          )`,
         [
           id,
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.vatId, payload.kleinunternehmer, payload.currency,
-          payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.fontFamily, payload.textColor, payload.taxRateDefault
+          payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.fontFamily, payload.textColor, payload.taxRateDefault,
+          userId
         ]
       );
     } else {
@@ -116,21 +122,22 @@ export async function PUT(request) {
            "logoUrl"=$15, "primaryColor"=$16, "secondaryColor"=$17, "fontFamily"=$18, "textColor"=$19,
            "taxRateDefault"=$20,
            "updatedAt"=now()
-         WHERE "id" = $1`,
+         WHERE "id" = $1 AND "userId" = $21`,
         [
           existing.id,
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.fontFamily, payload.textColor,
-          payload.taxRateDefault
+          payload.taxRateDefault,
+          userId
         ]
       );
     }
 
-    const fresh = await fetchOne();
+    const fresh = await fetchOne(userId);
     const data = fresh ? { ...fresh, owner: fresh.ownerName ?? null } : {};
     return NextResponse.json({ ok: true, data });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 400 });
+    return NextResponse.json({ ok: false, error: String(e) }, { status: e.message === "Unauthorized" ? 401 : 400 });
   }
 }

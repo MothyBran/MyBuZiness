@@ -1,35 +1,37 @@
 // app/api/export/receipts/route.js
 import { NextResponse } from "next/server";
-import { q } from "@/lib/db";
+import { q, initDb } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
  * CSV Export: Belege / Quittungen
- * Erwartete Felder in "receipts": id, number, customer_name, issued_on, total_cents, paid
  */
 export async function GET() {
   try {
+    const userId = await requireUser();
+    await initDb();
     const { rows } = await q(`
-      SELECT id, number, customer_name, issued_on, total_cents, paid
-      FROM receipts
-      ORDER BY issued_on DESC, created_at DESC NULLS LAST
-    `);
+      SELECT "id", "receiptNo", "date", "grossCents", "note"
+      FROM "Receipt"
+      WHERE "userId"=$1
+      ORDER BY "date" DESC, "createdAt" DESC NULLS LAST
+    `, [userId]);
 
     const header = [
-      "ID","Nummer","Kunde","Datum","Betrag (€)","Bezahlt"
+      "ID","Nummer","Kunde/Info","Datum","Betrag (€)"
     ];
     const lines = [header.join(";")];
 
     for (const r of rows) {
-      const eur = (Number(r.total_cents || 0) / 100).toFixed(2).replace(".", ",");
+      const eur = (Number(r.grossCents || 0) / 100).toFixed(2).replace(".", ",");
       lines.push([
         r.id,
-        r.number ?? "",
-        (r.customer_name ?? "").replace(/;/g, ","),
-        r.issued_on ?? "",
-        eur,
-        r.paid ? "ja" : "nein",
+        r.receiptNo ?? "",
+        (r.note ?? "").replace(/;/g, ","),
+        r.date ? new Date(r.date).toISOString().slice(0,10) : "",
+        eur
       ].join(";"));
     }
 
@@ -43,6 +45,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ ok:false, error: "Export fehlgeschlagen (Belege)." }, { status: 500 });
+    return NextResponse.json({ ok:false, error: "Export fehlgeschlagen (Belege)." }, { status: err.message === "Unauthorized" ? 401 : 500 });
   }
 }

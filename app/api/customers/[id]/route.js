@@ -1,20 +1,23 @@
 // app/api/customers/[id]/route.js
 import { initDb, q } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 export async function GET(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const { id } = params;
-    const row = (await q(`SELECT * FROM "Customer" WHERE "id"=$1`, [id])).rows[0];
+    const row = (await q(`SELECT * FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
     if (!row) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     return Response.json({ ok:true, data: row });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:e.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
 export async function PUT(request, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const { id } = params;
     const body = await request.json().catch(()=> ({}));
@@ -44,9 +47,9 @@ export async function PUT(request, { params }) {
            "addressCountry"=$7,
            "note"=$8,
            "updatedAt"=CURRENT_TIMESTAMP
-       WHERE "id"=$9
+       WHERE "id"=$9 AND "userId"=$10
        RETURNING *`,
-      [name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note, id]
+      [name, email, phone, addressStreet, addressZip, addressCity, addressCountry, note, id, userId]
     );
     if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     return Response.json({ ok:true, data: res.rows[0] });
@@ -54,18 +57,19 @@ export async function PUT(request, { params }) {
     if (String(e).includes("duplicate key")) {
       return new Response(JSON.stringify({ ok:false, error:"E-Mail ist bereits vergeben." }), { status:400 });
     }
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:e.message === "Unauthorized" ? 401 : 400 });
   }
 }
 
 export async function DELETE(_req, { params }) {
   try {
+    const userId = await requireUser();
     await initDb();
     const { id } = params;
-    const res = await q(`DELETE FROM "Customer" WHERE "id"=$1`, [id]);
+    const res = await q(`DELETE FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     return Response.json({ ok:true });
   } catch (e) {
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:400 });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:e.message === "Unauthorized" ? 401 : 400 });
   }
 }

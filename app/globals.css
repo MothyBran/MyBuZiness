@@ -401,3 +401,25 @@ a:hover { color: var(--brand); }
     margin-left: 72px; /* Matches Sidebar width */
   }
 }
+
+/* ======= Print ======= */
+@media print {
+  .sidebar, .page__header .page__actions, .btn, .modal, .no-print {
+    display: none !important;
+  }
+  .app-shell {
+    margin-left: 0 !important;
+  }
+  .page {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .card {
+    border: none;
+    box-shadow: none;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}

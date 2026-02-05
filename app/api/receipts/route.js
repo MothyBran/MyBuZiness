@@ -1,5 +1,6 @@
 // app/api/receipts/route.js
 import { initDb, q, uuid } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 
 /** Integer-Helfer */
 const toInt = (v) => {
@@ -9,14 +10,15 @@ const toInt = (v) => {
 
 export async function GET(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const { searchParams } = new URL(request.url);
     const limit = Math.max(1, Math.min(500, Number(searchParams.get("limit") || 100)));
     const qstr  = (searchParams.get("q")  || "").trim().toLowerCase();
     const no    = (searchParams.get("no") || "").trim();
 
-    const where = [];
-    const params = [];
+    const where = [`"userId"=$1`];
+    const params = [userId];
     if (qstr) {
       params.push(`%${qstr}%`);
       // Suche in receiptNo ODER note – gemeinsamer Parameter, bewusst gleich
@@ -37,7 +39,7 @@ export async function GET(request) {
         COALESCE("note",'')                    AS "note",
         "createdAt","updatedAt"
       FROM "Receipt"
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      WHERE ${where.join(" AND ")}
       ORDER BY "createdAt" DESC NULLS LAST, "date" DESC NULLS LAST, "id" DESC
       LIMIT ${limit};
     `;
@@ -48,13 +50,14 @@ export async function GET(request) {
     });
   } catch (e) {
     return new Response(JSON.stringify({ ok:false, error: String(e) }), {
-      status: 500, headers: { "content-type":"application/json" }
+      status: e.message === "Unauthorized" ? 401 : 500, headers: { "content-type":"application/json" }
     });
   }
 }
 
 export async function POST(request) {
   try {
+    const userId = await requireUser();
     await initDb();
     const body = await request.json().catch(()=> ({}));
     const items = Array.isArray(body.items) ? body.items : [];
@@ -83,10 +86,10 @@ export async function POST(request) {
     await q("BEGIN");
     await q(`
       INSERT INTO "Receipt"
-        ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note")
+        ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId")
       VALUES
-        ($1,$2,COALESCE($3::date, CURRENT_DATE),$4,$5,$6,$7,$8,$9, now(), now(), COALESCE($10,''))`,
-      [id, receiptNo, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents, body.note || ""]
+        ($1,$2,COALESCE($3::date, CURRENT_DATE),$4,$5,$6,$7,$8,$9, now(), now(), COALESCE($10,''), $11)`,
+      [id, receiptNo, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents, body.note || "", userId]
     );
 
     for (const it of items) {
@@ -110,7 +113,7 @@ export async function POST(request) {
   } catch (e) {
     try { await q("ROLLBACK"); } catch {}
     return new Response(JSON.stringify({ ok:false, error: String(e) }), {
-      status: 400, headers: { "content-type":"application/json" }
+      status: e.message === "Unauthorized" ? 401 : 400, headers: { "content-type":"application/json" }
     });
   }
 }
