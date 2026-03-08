@@ -15,6 +15,20 @@ export async function POST(request) {
       );
     }
 
+    // Server-side password strength validation
+    let score = 0;
+    if (password.length >= 8) score += 1;
+    if (/[a-z]/.test(password)) score += 1;
+    if (/[A-Z]/.test(password)) score += 1;
+    if (/[0-9]/.test(password)) score += 1;
+
+    if (score < 4) {
+      return NextResponse.json(
+        { ok: false, error: "Das Passwort erfüllt nicht die Mindestanforderungen." },
+        { status: 400 }
+      );
+    }
+
     // Check if user exists
     const existing = await q(`SELECT id FROM "User" WHERE email = $1`, [email]);
     if (existing.rows.length > 0) {
@@ -48,20 +62,8 @@ export async function POST(request) {
       [settingsId, id, name ? `${name}s Business` : "Mein Unternehmen"]
     );
 
-    // Create Session
-    const token = await signToken({ id, email, name });
-
-    // Set Cookie
-    const cookieStore = await cookies();
-    cookieStore.set("session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
-
-    return NextResponse.json({ ok: true, user: { id, email, name } });
+    // Registration successful, but we don't log them in automatically.
+    return NextResponse.json({ ok: true, message: "Registration successful. Please log in." });
   } catch (e) {
     console.error(e);
     return NextResponse.json(
