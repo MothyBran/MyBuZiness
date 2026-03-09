@@ -26,324 +26,6 @@ function timeFromMinutes(min){
   return `${pad2(hh)}:${pad2(mm)}`;
 }
 
-/* ===== Zeit-Picker – Native Eingabe + Icon öffnet Picker; Fallback = Wheel ===== */
-function TimePickerField({
-  label,
-  value,
-  onChange,
-  minMinutes = null,   // z. B. Start+30 für Ende
-  allowClear = false,  // Ende darf leer sein
-  inputAriaLabel
-}){
-  const inputRef = useRef(null);
-
-  // Fallback-Wheel
-  const [openWheel, setOpenWheel] = useState(false);
-  const hours    = useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
-  const minutes15 = useMemo(()=>[0,15,30,45],[]);
-  const OPT_H = 36;
-  const hRef = useRef(null);
-  const mRef = useRef(null);
-  const snapTimer = useRef(null);
-
-  const vMin = typeof value === "string" && value ? minutesFromTime(value) : null;
-  const [tmpH, setTmpH] = useState(()=> (vMin!=null ? Math.floor(vMin/60) : 9));
-  const [tmpM, setTmpM] = useState(()=> (vMin!=null ? Math.round((vMin%60)/15)*15 : 0));
-
-  useEffect(()=>{
-    if (vMin!=null){
-      setTmpH(Math.floor(vMin/60));
-      setTmpM(Math.round((vMin%60)/15)*15);
-    }
-  },[vMin]);
-
-  function openPicker(){
-    const el = inputRef.current;
-    if (el && typeof el.showPicker === "function") {
-      el.showPicker();       // nativer Picker wie beim Datum
-    } else {
-      setOpenWheel(true);    // Fallback auf Wheel
-    }
-  }
-
-  // min-Attribut für native Eingabe
-  const minAttr = typeof minMinutes === "number"
-    ? timeFromMinutes(minMinutes).slice(0,5)
-    : undefined;
-
-  function onBlurClamp(){
-    if (typeof minMinutes !== "number") return;
-    const val = (inputRef.current?.value || "");
-    if (!/^\d{1,2}:\d{2}/.test(val)) return;
-    if (minutesFromTime(val) < minMinutes){
-      const t = timeFromMinutes(minMinutes).slice(0,5);
-      onChange(t);
-      if (inputRef.current) inputRef.current.value = t;
-    }
-  }
-
-  // ===== Wheel-Helpers (Fallback)
-  function centerTo(el, index){
-    if(!el) return;
-    const target = index * OPT_H - (el.clientHeight/2 - OPT_H/2);
-    el.scrollTo({ top: Math.max(0, target) });
-  }
-  function snapToIndex(el, index){
-    if (!el) return;
-    const visible = Math.max(1, Math.round(el.clientHeight / OPT_H));
-    const slot    = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
-    const top     = index*OPT_H - OPT_H*(slot-1);
-    el.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-  }
-  function handleWheelScroll(which){
-    return (e)=>{
-      clearTimeout(snapTimer.current);
-      const el = e.currentTarget;
-      snapTimer.current = setTimeout(()=>{
-        const visible    = Math.max(1, Math.round(el.clientHeight / OPT_H));
-        const slot       = (visible % 2 === 1) ? Math.ceil(visible/2) : (visible/2);
-        const currentTop = el.scrollTop;
-        const approxIdx  = Math.round((currentTop + OPT_H*(slot-1)) / OPT_H);
-        const maxIdx     = (which==='h') ? 23 : 3;
-        const idx        = Math.max(0, Math.min(maxIdx, approxIdx));
-        const targetTop  = idx*OPT_H - OPT_H*(slot-1);
-        el.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-        if (which==='h') setTmpH(idx); else setTmpM(idx*15);
-      }, 80);
-    };
-  }
-
-  useEffect(()=>{
-    if(!openWheel) return;
-    centerTo(hRef.current, tmpH);
-    centerTo(mRef.current, Math.round(tmpM/15));
-    function onDoc(e){
-      if (!e.target.closest?.('.af-time-pop')) setOpenWheel(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("touchstart", onDoc, { passive:true });
-    return ()=>{
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("touchstart", onDoc);
-    };
-  },[openWheel, tmpH, tmpM]);
-
-  function applyWheel(){
-    let mm = tmpH*60 + tmpM;
-    if (typeof minMinutes === "number" && mm < minMinutes){
-      mm = minMinutes;
-    }
-    const t = timeFromMinutes(mm).slice(0,5);
-    onChange(t);
-    if (inputRef.current) inputRef.current.value = t;
-    setOpenWheel(false);
-  }
-
-  return (
-    <label className="field af-time-native">
-      <span className="label">{label}</span>
-
-      <div className={`af-time-wrap ${openWheel ? "is-open" : ""} ${allowClear ? "has-clear" : ""}`}>
-        {/* Native Eingabe (manuell) */}
-        <input
-          ref={inputRef}
-          type="time"
-          className="input time-input af-time-input"
-          step={300}
-          value={value || ""}
-          min={minAttr}
-          onChange={(e)=> onChange(e.target.value)}
-          onBlur={onBlurClamp}
-          aria-label={inputAriaLabel || label}
-        />
-
-        {/* EIN Icon – öffnet nativen Picker oder Fallback-Wheel */}
-        <button
-          type="button"
-          className="af-clock"
-          aria-label="Uhrzeit auswählen"
-          onClick={openPicker}
-          title="Uhrzeit auswählen"
-        >🕒</button>
-
-        {allowClear && value && (
-          <button
-            type="button"
-            className="af-clear"
-            onClick={()=> onChange("")}
-            aria-label="Zeit leeren"
-            title="Zeit leeren"
-          >
-            ✕
-          </button>
-        )}
-
-        {/* Fallback: kompaktes Wheel */}
-        {openWheel && (
-          <div className="af-time-pop">
-            <div className="af-wheels">
-              <div
-                className="af-wheel"
-                ref={hRef}
-                onScroll={handleWheelScroll('h')}
-                role="listbox"
-                aria-label="Stunden"
-              >
-                {hours.map(h=>(
-                  <button
-                    key={h}
-                    type="button"
-                    className={`af-opt ${tmpH===h?"is-active":""}`}
-                    onClick={()=>{
-                      setTmpH(h); snapToIndex(hRef.current, h);
-                    }}
-                  >{String(h).padStart(2,"0")}</button>
-                ))}
-              </div>
-
-              <div
-                className="af-wheel"
-                ref={mRef}
-                onScroll={handleWheelScroll('m')}
-                role="listbox"
-                aria-label="Minuten"
-              >
-                {minutes15.map(m=>(
-                  <button
-                    key={m}
-                    type="button"
-                    className={`af-opt ${tmpM===m?"is-active":""}`}
-                    onClick={()=>{
-                      setTmpM(m); snapToIndex(mRef.current, Math.round(m/15));
-                    }}
-                  >{String(m).padStart(2,"0")}</button>
-                ))}
-              </div>
-            </div>
-
-            <div className="af-center-indicator" aria-hidden />
-
-            <div className="af-time-actions">
-              {allowClear && (
-                <button type="button" className="btn-ghost" onClick={()=>setOpenWheel(false)}>Abbrechen</button>
-              )}
-              <div style={{flex:1}} />
-              <button type="button" className="btn" onClick={applyWheel}>OK</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Styles – Breite der Zeit-Felder steuerbar über --time-col-w */}
-      <style jsx>{`
-        .af-time-native { width: 100%; }
-        .af-time-wrap { position: relative; display:block; min-width:0; }
-
-        /* DOPPELTES Uhr-Icon entfernen (native WebKit-Anzeige) */
-        :global(input[type="time"].af-time-input::-webkit-calendar-picker-indicator){
-          display: none;
-        }
-
-        .af-time-input{
-          height: var(--af-field-h);
-          line-height: calc(var(--af-field-h) - 2px);
-          padding: 0 40px 0 12px;     /* Platz für EIN Icon rechts */
-          width: 100%;
-          box-sizing: border-box;     /* verhindert Überbreite */
-        }
-        .af-time-wrap.has-clear .af-time-input{
-          padding-right: 68px;        /* Uhr + Clear */
-        }
-
-        .af-clock{
-          position:absolute; top:50%; right:8px; transform: translateY(-50%);
-          border:0; background:transparent; cursor:pointer;
-          width: 24px; height: 24px; line-height: 24px; text-align:center;
-          border-radius: 12px; font-size: 16px;
-          color: #374151;
-        }
-        .af-time-wrap.has-clear .af-clock{ right: 34px; }
-        .af-clock:hover{ background: rgba(0,0,0,.06); }
-
-        .af-clear{
-          position:absolute; top:50%; right:6px; transform: translateY(-50%);
-          border:0; background:transparent; cursor:pointer;
-          width: 24px; height: 24px; line-height: 24px; text-align:center;
-          border-radius: 12px;
-          color: #6b7280;
-        }
-        .af-clear:hover{ background: rgba(0,0,0,.06); }
-
-        .af-time-wrap.is-open .af-time-input{
-          border-color: transparent !important;
-          box-shadow: none !important;
-        }
-
-        /* ==== Fallback-Wheel ==== */
-        .af-time-pop{
-          position:absolute; z-index:30; top:100%; left:0; right:0;
-          margin-top:8px; background:#fff; border:1px solid var(--color-border);
-          border-radius:12px; box-shadow: var(--shadow-md); padding:10px;
-          max-width:100%;
-          --opt-h: 36px;
-          --visible-slots: 4;             /* 4 oder 5 einstellbar */
-          --wheel-h: calc(var(--opt-h) * var(--visible-slots));
-        }
-        .af-wheels{
-          display:grid; grid-template-columns: 1fr 1fr; gap:10px;
-          position: relative;
-        }
-        .af-wheel{
-          position: relative;
-          height: var(--wheel-h);
-          overflow-y: auto;
-          scroll-snap-type: y mandatory;
-          -webkit-overflow-scrolling: touch;
-          background:
-            linear-gradient(#fafafa, rgba(250,250,250,0)) top,
-            linear-gradient(rgba(250,250,250,0), #fafafa) bottom;
-          background-size: 100% calc(var(--opt-h) * 1.2), 100% calc(var(--opt-h) * 1.2);
-          background-repeat: no-repeat;
-          background-attachment: local, local;
-          border:1px solid var(--color-border);
-          border-radius:10px;
-          padding:6px;
-          scrollbar-width: none;
-          z-index: 1;
-        }
-        .af-wheel::-webkit-scrollbar{ width:0; height:0; }
-        .af-center-indicator{
-          position:absolute;
-          left:10px; right:10px;
-          top: calc(10px + (var(--wheel-h) / var(--visible-slots)) * (Math.ceil(var(--visible-slots)/2) - 1));
-          height: var(--opt-h);
-          border-top: 1px solid rgba(37,99,235,.35);
-          border-bottom: 1px solid rgba(37,99,235,.35);
-          pointer-events:none;
-          z-index: 4;
-        }
-        .af-opt{
-          height: var(--opt-h);
-          line-height: var(--opt-h);
-          scroll-snap-align: center;
-          width:100%; text-align:center;
-          border-radius:8px; border:1px solid transparent;
-          background:#fff; margin:4px 0;
-          font-variant-numeric: tabular-nums;
-          transition: transform .12s ease, background .12s ease, border-color .12s ease;
-        }
-        .af-opt.is-active{
-          border-color:#2563eb; background:#eff6ff; font-weight:700;
-          transform: scale(1.03);
-        }
-        .af-time-actions{
-          display:flex; align-items:center; gap:8px; margin-top:10px;
-          position: relative; z-index: 2;
-        }
-      `}</style>
-    </label>
-  );
-}
 
 /* ===== Haupt-Form ===== */
 export default function AppointmentForm({ initial = null, customers = [], onSaved, onCancel }){
@@ -365,7 +47,14 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
-    if (found) setCustomerName(found.name);
+    if (found) {
+      setCustomerName(found.name);
+      if (!title.trim()) {
+        setTitle(found.name);
+      }
+    } else {
+      setCustomerName("");
+    }
   },[customerId, customers]);
 
   const endMin = useMemo(()=> minutesFromTime(startAt) + 30, [startAt]);
@@ -425,31 +114,37 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
         {/* Zeile 2: Bezeichnung */}
         <label className="field">
-          <span className="label">Bezeichnung *</span>
-          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required />
+          <span className="label">Bezeichnung {!customerId && "*"}</span>
+          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required={!customerId} />
         </label>
 
         {/* Zeile 3: Start | Ende | Status */}
         <div className="af-row3">
-          <TimePickerField
-            label="Start"
-            value={startAt}
-            onChange={(t)=>{
-              setStartAt(t);
-              if (endAt && minutesFromTime(endAt) < minutesFromTime(t)+30){
-                setEndAt(timeFromMinutes(minutesFromTime(t)+30));
-              }
-            }}
-            inputAriaLabel="Startzeit wählen"
-          />
-          <TimePickerField
-            label="Ende (optional)"
-            value={endAt}
-            onChange={setEndAt}
-            minMinutes={endMin}
-            allowClear
-            inputAriaLabel="Endzeit wählen"
-          />
+          <label className="field">
+            <span className="label">Start</span>
+            <input
+              type="time"
+              className="input af-control"
+              value={startAt}
+              onChange={(e) => {
+                const t = e.target.value;
+                setStartAt(t);
+                if (endAt && minutesFromTime(endAt) < minutesFromTime(t) + 30) {
+                  setEndAt(timeFromMinutes(minutesFromTime(t) + 30));
+                }
+              }}
+            />
+          </label>
+          <label className="field">
+            <span className="label">Ende (optional)</span>
+            <input
+              type="time"
+              className="input af-control"
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
+              min={typeof endMin === "number" ? timeFromMinutes(endMin).slice(0,5) : undefined}
+            />
+          </label>
           <label className="field">
             <span className="label">Status</span>
             <select className="select af-control" value={status} onChange={e=>setStatus(e.target.value)}>
@@ -511,10 +206,6 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           align-items:start;
           min-width: 0;
         }
-        .af-row3 :global(.af-time-native){
-          max-width: var(--time-col-w);
-          width: 100%;
-        }
 
         /* Einheitliche Controls */
         .af-control{
@@ -541,9 +232,6 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
           }
           .af-row3 {
             grid-template-columns: 1fr;
-          }
-          .af-row3 :global(.af-time-native) {
-             max-width: 100%;
           }
         }
       `}</style>

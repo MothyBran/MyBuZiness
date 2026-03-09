@@ -24,8 +24,9 @@ function fmtDateDE(input){
 }
 
 export default function EntryDetailPage({ params }){
-  const { id } = use(params);
   const router = useRouter();
+  const resolvedParams = use(params);
+  const id = resolvedParams?.id || params?.id;
 
   const [data,setData] = useState(null);
   const [loading,setLoading] = useState(true);
