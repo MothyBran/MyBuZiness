@@ -9,7 +9,8 @@ export async function GET(_req, { params }) {
   try {
     const userId = await requireUser();
     await ensureSchemaOnce();
-    const id = params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
 
     const client = await pool.connect();
     try {
@@ -32,7 +33,8 @@ export async function PUT(req, { params }) {
   try {
     const userId = await requireUser();
     await ensureSchemaOnce();
-    const id = params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
 
     const toPgTime = (s) => {
       if (!s) return null;
@@ -86,7 +88,8 @@ export async function DELETE(_req, { params }) {
   try {
     const userId = await requireUser();
     await ensureSchemaOnce();
-    const id = params.id;
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
 
     const client = await pool.connect();
     try {
