@@ -49,6 +49,8 @@ export default function TerminePage(){
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [customers, setCustomers] = useState([]);
 
   useEffect(()=>{
@@ -120,11 +122,18 @@ export default function TerminePage(){
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,-1))} aria-label="Vormonat">◀︎</Button>
-              <div style={{ fontWeight: 600, minWidth: 140, textAlign: "center" }}>
+              <Button variant="ghost" onClick={(e) => { e.preventDefault(); setCursor(addMonths(cursor,-1)); }} aria-label="Vormonat">◀︎</Button>
+              <div
+                style={{ fontWeight: 600, minWidth: 140, textAlign: "center", cursor: "pointer", userSelect: "none" }}
+                onClick={() => {
+                  setPickerYear(cursor.getFullYear());
+                  setPickerOpen(true);
+                }}
+                title="Monat/Jahr wählen"
+              >
                 {new Intl.DateTimeFormat("de-DE",{month:"long",year:"numeric"}).format(cursor)}
               </div>
-              <Button variant="ghost" onClick={()=>setCursor(addMonths(cursor,1))} aria-label="Folgemonat">▶︎</Button>
+              <Button variant="ghost" onClick={(e) => { e.preventDefault(); setCursor(addMonths(cursor,1)); }} aria-label="Folgemonat">▶︎</Button>
             </div>
 
             <Button variant="primary" icon="plus" onClick={()=>setCreateOpen(true)}>Neu</Button>
@@ -236,6 +245,32 @@ export default function TerminePage(){
           onSaved={()=>{ setCreateOpen(false); setRefreshKey(k=>k+1); }}
           onCancel={()=>setCreateOpen(false)}
         />
+      </Modal>
+
+      {/* Monat/Jahr Picker Modal */}
+      <Modal open={pickerOpen} onClose={()=>setPickerOpen(false)} title="Monat / Jahr wählen">
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Button variant="ghost" onClick={() => setPickerYear(y => y - 1)}>◀︎ {pickerYear - 1}</Button>
+            <div style={{ fontWeight: "bold", fontSize: "1.2rem" }}>{pickerYear}</div>
+            <Button variant="ghost" onClick={() => setPickerYear(y => y + 1)}>{pickerYear + 1} ▶︎</Button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"].map((m, i) => (
+              <Button
+                key={m}
+                variant={cursor.getMonth() === i && cursor.getFullYear() === pickerYear ? "primary" : "ghost"}
+                onClick={() => {
+                  const d = new Date(pickerYear, i, 1, 12, 0, 0, 0);
+                  setCursor(d);
+                  setPickerOpen(false);
+                }}
+              >
+                {m}
+              </Button>
+            ))}
+          </div>
+        </div>
       </Modal>
     </Page>
   );

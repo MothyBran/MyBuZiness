@@ -12,8 +12,8 @@ import AppointmentForm from "@/app/components/AppointmentForm";
 const ROW_H = 44;          // Höhe je Stunde (px) – :30 liegt in der Mitte
 const LABEL_W = 72;        // Breite für das Stundenlabel links
 const LANE_GAP = 1;        // % Spalt zwischen überlappenden Events
-const EVENT_WIDTH_FACTOR = 0.30; // 0..1 (0.30 = 30% der Lane-Breite)
-const EVENT_ALIGN = "center";    // "left" | "center" | "right"
+const EVENT_WIDTH_FACTOR = 0.95; // 0..1 (0.95 = 95% der Lane-Breite)
+const EVENT_ALIGN = "left";    // "left" | "center" | "right"
 
 /* ===== Datum/Zeit Utils ===== */
 const pad2 = (n) => String(n).padStart(2, "0");
