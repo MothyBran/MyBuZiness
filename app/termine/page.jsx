@@ -9,7 +9,7 @@ import AppointmentForm from "../components/AppointmentForm";
 
 /* Date Utils */
 function toDate(input){
-  if (input instanceof Date) return input;
+  if (input instanceof Date) return new Date(input.getTime());
   if (typeof input==="string" && /^\d{4}-\d{2}-\d{2}$/.test(input)){
     const [y,m,d]=input.split("-").map(Number);
     return new Date(y, m-1, d, 12,0,0,0);

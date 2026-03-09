@@ -18,7 +18,7 @@ const EVENT_ALIGN = "left";    // "left" | "center" | "right"
 /* ===== Datum/Zeit Utils ===== */
 const pad2 = (n) => String(n).padStart(2, "0");
 function toDate(x){
-  if (x instanceof Date) return x;
+  if (x instanceof Date) return new Date(x.getTime());
   if (typeof x === "string" && /^\d{4}-\d{2}-\d{2}/.test(x)){
     const [y,m,d] = x.slice(0,10).split("-").map(Number);
     return new Date(y, m-1, d, 12,0,0,0);
@@ -191,8 +191,7 @@ export default function DayPage({ params }){
               <div
                 onClick={handleOverlayClick}
                 style={{
-                  position:"absolute", inset:0,
-                  paddingLeft: LABEL_W, paddingRight: 8,
+                  position:"absolute", top:0, bottom:0, right:8, left: LABEL_W,
                   zIndex:2, cursor:"pointer"
                 }}
               >
