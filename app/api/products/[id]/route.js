@@ -2,10 +2,11 @@
 import { initDb, q } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-export async function PUT(request, { params }) {
+export async function PUT(request, props) {
   try {
     const userId = await requireUser();
     await initDb();
+    const params = await props.params;
     const id = params.id;
     const body = await request.json().catch(() => ({}));
 
@@ -59,10 +60,11 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
+export async function DELETE(_request, props) {
   try {
     const userId = await requireUser();
     await initDb();
+    const params = await props.params;
     const id = params.id;
     const res = await q(`DELETE FROM "Product" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) {

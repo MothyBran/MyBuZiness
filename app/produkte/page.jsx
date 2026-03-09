@@ -35,7 +35,7 @@ function Field({ label, children }) {
   return (
     <label style={{ display:"grid", gap:6 }}>
       <span style={{ fontSize: 12, color:"#6b7280" }}>{label}</span>
-      {children}
+      <span style={{ color: "var(--text)" }}>{children}</span>
     </label>
   );
 }
@@ -94,9 +94,9 @@ export default function ProductsPage() {
               {rows.map(r=>(
                 <>
                   <tr key={r.id} className="row-clickable" style={{ cursor:"pointer" }} onClick={()=>toggleExpand(r.id)}>
+                    <td>{r.categoryCode || "—"}</td>
                     <td className="ellipsis">{r.name}</td>
                     <td>{mapKindLabel(r.kind)}</td>
-                    <td>{r.categoryCode || "—"}</td>
                     <td>
                       {r.kind === "product" && <>{fmtMoney(r.priceCents)}</>}
                       {r.kind === "service" && <>
