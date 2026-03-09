@@ -266,15 +266,15 @@ export default function InvoicesPage() {
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
-        .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
+        .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
-        .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b }
-        .st-dot.open{ background:#f59e0b }
-        .st-dot.overdue{ background:#ef4444 }
-        .st-dot.done{ background:#10b981 }
+        .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--warning) }
+        .st-dot.open{ background:var(--warning) }
+        .st-dot.overdue{ background:var(--error) }
+        .st-dot.done{ background:var(--success) }
 
-        .details-cell{ background:#fafafa }
+        .details-cell{ background:var(--panel-2) }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
@@ -288,19 +288,19 @@ export default function InvoicesPage() {
         .ivx-modal-box{
           width: min(980px, 100%);
           margin-top: 24px;
-          background:#fff; border:1px solid #eee; border-radius:14px;
+          background:var(--panel); border:1px solid var(--border); border-radius:14px;
           max-height: calc(100vh - 48px);
           overflow-y: auto;           /* nur vertikal scrollen */
           overflow-x: hidden;         /* kein horizontales Scrolling fürs Fenster */
         }
         .ivx-modal-head{
           display:flex; align-items:center; justify-content:space-between;
-          padding: 14px 16px; border-bottom: 1px solid #eee;
-          position: sticky; top: 0; background:#fff; z-index: 1;
+          padding: 14px 16px; border-bottom: 1px solid var(--border);
+          position: sticky; top: 0; background:var(--panel); z-index: 1;
         }
         .ivx-modal-actions{
           display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
-          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+          position: sticky; bottom: 0; background:var(--panel); border-top: 1px solid var(--border);
         }
 
         .surface.section{ padding: 12px 16px; }
@@ -733,7 +733,7 @@ function PrintArea({ row, settings, currency, customer }) {
         .ph-contact{ margin-top: 10px; }
 
         .ph-table{ width:100%; border-collapse: collapse; margin-top: 16px; }
-        .ph-table th, .ph-table td{ border-bottom: 1px solid #ddd; padding: 8px; text-align:right; }
+        .ph-table th, .ph-table td{ border-bottom: 1px solid var(--border); padding: 8px; text-align:right; }
         .ph-table .ta-left{ text-align:left; }
 
         .ph-note{ margin: 14px 0; }

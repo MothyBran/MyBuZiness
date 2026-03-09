@@ -34,17 +34,17 @@ function fmtMoney(cents, currencyCode = "EUR") {
 function Field({ label, children }) {
   return (
     <label style={{ display:"grid", gap:6 }}>
-      <span style={{ fontSize: 12, color:"#6b7280" }}>{label}</span>
-      <span style={{ color: "#111827" }}>{children}</span>
+      <span style={{ fontSize: 12, color:"var(--muted)" }}>{label}</span>
+      <span style={{ color: "var(--text)" }}>{children}</span>
     </label>
   );
 }
-const input = { padding:"10px 12px", border:"1px solid #ddd", borderRadius:8, width:"100%" };
-const btnPrimary = { padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:8, background:"#fff", color:"var(--color-primary,#0aa)", border:"1px solid var(--color-primary,#0aa)", cursor:"pointer" };
-const btnDanger = { padding:"8px 10px", borderRadius:8, background:"#fff", color:"#c00", border:"1px solid #c00", cursor:"pointer" };
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const modalWrap = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"#fff", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
+const input = { padding:"10px 12px", border:"1px solid var(--border)", borderRadius:8, width:"100%", background:"var(--panel)", color:"var(--text)" };
+const btnPrimary = { padding:"10px 12px", borderRadius:8, background:"var(--brand, #0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:8, background:"transparent", color:"var(--brand, #0aa)", border:"1px solid var(--brand, #0aa)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:8, background:"transparent", color:"var(--error, #c00)", border:"1px solid var(--error, #c00)", cursor:"pointer" };
+const card = { background:"var(--panel)", border:"1px solid var(--border)", borderRadius:14, padding:16 };
+const modalWrap = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"var(--panel)", borderRadius:14, padding:16, zIndex:1000, boxShadow:"var(--shadow-2)" };
 
 export default function ProductsPage() {
   const [rows, setRows] = useState([]);
@@ -109,7 +109,7 @@ export default function ProductsPage() {
                   </tr>
                   {expandedId === r.id && (
                     <tr key={r.id+"-d"}>
-                      <td colSpan={4} style={{ background:"#fafafa", padding:12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                      <td colSpan={4} style={{ background:"var(--panel-2)", padding:12, borderBottom:"1px solid var(--border)" }}>
                         <ProductDetails row={r} />
                         <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:12 }}>
                           <button style={btnGhost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>⚙️ Bearbeiten</button>
@@ -121,7 +121,7 @@ export default function ProductsPage() {
                 </>
               ))}
               {!rows.length && (
-                <tr><td colSpan={4} style={{ textAlign:"center", color:"#999" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
+                <tr><td colSpan={4} style={{ textAlign:"center", color:"var(--muted)" }}>{loading? "Lade…":"Keine Einträge."}</td></tr>
               )}
             </tbody>
           </table>

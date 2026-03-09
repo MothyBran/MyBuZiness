@@ -7,16 +7,16 @@ import { useEffect, useState } from "react";
 function Field({ label, children }) {
   return (
     <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
-      <span style={{ color: "var(--text, #111827)" }}>{children}</span>
+      <span style={{ fontSize: 12, color: "var(--muted)" }}>{label}</span>
+      <span style={{ color: "var(--text)" }}>{children}</span>
     </label>
   );
 }
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const input = { padding:"10px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%", color:"var(--text, #111827)" };
-const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid transparent", background:"var(--color-primary, #0aa)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"#fff", color:"var(--color-primary, #0aa)", cursor:"pointer" };
-const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
+const card = { background:"var(--panel)", border:"1px solid var(--border)", borderRadius:14, padding:16 };
+const input = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--panel)", outline:"none", width:"100%", color:"var(--text)" };
+const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid transparent", background:"var(--brand, #0aa)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--brand, #0aa)", background:"transparent", color:"var(--brand, #0aa)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid var(--error, #c00)", background:"transparent", color:"var(--error, #c00)", cursor:"pointer" };
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([]);
@@ -134,7 +134,7 @@ export default function CustomersPage() {
 
                   {expandedId === r.id && (
                     <tr key={r.id + "-details"}>
-                      <td colSpan={4} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                      <td colSpan={4} style={{ background:"var(--panel-2)", padding: 12, borderBottom:"1px solid var(--border)" }}>
                         {editId === r.id ? (
                           <CustomerEditForm
                             initial={r}
@@ -154,7 +154,7 @@ export default function CustomersPage() {
                 </>
               ))}
               {rows.length===0 && (
-                <tr><td colSpan={4} style={{ color:"#999", textAlign:"center" }}>{loading? "Lade…":"Keine Kunden vorhanden."}</td></tr>
+                <tr><td colSpan={4} style={{ color:"var(--muted)", textAlign:"center" }}>{loading? "Lade…":"Keine Kunden vorhanden."}</td></tr>
               )}
             </tbody>
           </table>
@@ -267,5 +267,5 @@ function CustomerEditForm({ initial, onCancel, onSave }) {
 /* kleines Sheet-Modal ohne Portal (für "Neu") */
 const modalWrap = {
   position:"fixed", left:"50%", top:"10%", transform:"translateX(-50%)",
-  width:"min(760px, 92vw)", maxHeight:"80vh", overflow:"auto", padding:16, zIndex:1000
+  width:"min(760px, 92vw)", maxHeight:"80vh", overflow:"auto", background:"var(--panel)", padding:16, zIndex:1000, boxShadow:"var(--shadow-2)", borderRadius: 14
 };

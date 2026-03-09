@@ -236,7 +236,7 @@ export default function FinanzenPage(){
 
       {/* Tabelle */}
       <div className="surface" style={{padding:0, overflow:"hidden"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"10px 12px", background:"#f8fafc", borderBottom:"1px solid rgba(0,0,0,.06)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"10px 12px", background:"var(--panel-2)", borderBottom:"1px solid var(--border)"}}>
           <div className="section-title" style={{margin:0}}>Transaktionen (Jahr {THIS_YEAR})</div>
           <div className="subtle">Saldo: <b>{centsToEUR(totals.net)}</b> · Einnahmen {centsToEUR(totals.inc)} · Ausgaben {centsToEUR(totals.exp)}</div>
         </div>
@@ -309,5 +309,5 @@ function StatBox({ title, data }){
   );
 }
 
-const th = { textAlign:"left", padding:"10px 10px", borderBottom:"1px solid #eee", fontSize:13, color:"#374151" };
-const td = { padding:"10px 10px", borderBottom:"1px solid #f2f2f2", fontSize:14 };
+const th = { textAlign:"left", padding:"10px 10px", borderBottom:"1px solid var(--border)", fontSize:13, color:"var(--muted)" };
+const td = { padding:"10px 10px", borderBottom:"1px solid var(--border)", fontSize:14 };

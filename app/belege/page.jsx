@@ -454,22 +454,22 @@ export default function ReceiptsPage(){
 
       <style jsx global>{`
         .ivx-page{ overflow-x:hidden; }
-        .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
+        .card{ background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px }
         .ivx-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
-        .muted{ color:#6b7280 }
+        .muted{ color:var(--muted) }
         .h5{ font-size:16px; font-weight:800 }
         .row-clickable{ cursor:pointer }
         .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
         .card.table-card .table-wrap{ overflow-x:auto }
         .table{ width:100%; border-collapse:collapse; min-width:560px }
-        .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
+        .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
-        .details-cell{ background:#fafafa }
+        .details-cell{ background:var(--panel-2) }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0 6px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
-        .actions .danger{ color:#c00; border-color:#c00 }
+        .actions .danger{ color:var(--error); border-color:var(--error) }
         .totals{ text-align:right; padding:8px 0 6px; font-weight:800 }
 
         /* Modal */
@@ -481,18 +481,18 @@ export default function ReceiptsPage(){
         .ivx-modal-box{
           width: min(980px, 100%);
           margin-top: 24px;
-          background:#fff; border:1px solid #eee; border-radius:14px;
+          background:var(--panel); border:1px solid var(--border); border-radius:14px;
           max-height: calc(100vh - 48px);
           overflow-y: auto; overflow-x: hidden;
         }
         .ivx-modal-head{
           display:flex; align-items:center; justify-content:space-between;
-          padding: 14px 16px; border-bottom: 1px solid #eee;
-          position: sticky; top: 0; background:#fff; z-index: 1;
+          padding: 14px 16px; border-bottom: 1px solid var(--border);
+          position: sticky; top: 0; background:var(--panel); z-index: 1;
         }
         .ivx-modal-actions{
           display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
-          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+          position: sticky; bottom: 0; background:var(--panel); border-top: 1px solid var(--border);
         }
 
         .surface.section{ padding: 12px 16px; }
@@ -507,14 +507,14 @@ export default function ReceiptsPage(){
         .w-money { flex: 0 1 200px; max-width: 240px; }
         .w-note  { flex: 1 1 100%; max-width: 520px; }  /* <— Notiz *fix* auf die schmale Spalte begrenzt */
 
-        .lbl{ display:block; font-size:12px; color:#6b7280; margin-bottom:6px }
-        .inp{ width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
+        .lbl{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px }
+        .inp{ width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--panel); color:var(--text); box-shadow:0 1px 1px rgba(0,0,0,.03) inset; }
 
         .positions .table-wrap{ overflow-x:auto }
         .positions .table{ min-width:720px }
 
-        .btn{ padding:10px 12px; border-radius:12px; background:var(--color-primary,#0aa); color:#fff; border:1px solid transparent; cursor:pointer }
-        .btn-ghost{ padding:10px 12px; border-radius:12px; background:#fff; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
+        .btn{ padding:10px 12px; border-radius:12px; background:var(--brand,#0aa); color:#fff; border:1px solid transparent; cursor:pointer }
+        .btn-ghost{ padding:10px 12px; border-radius:12px; background:transparent; color:var(--brand,#0aa); border:1px solid var(--brand,#0aa); cursor:pointer }
 
         @media (max-width: 720px){
           .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px } .w-note{ max-width:520px }

@@ -6,16 +6,16 @@ import { useEffect, useMemo, useState } from "react";
 function Field({ label, children, hint }) {
   return (
     <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
-      {children}
-      {hint && <span style={{ fontSize: 11, color: "#9ca3af" }}>{hint}</span>}
+      <span style={{ fontSize: 12, color: "var(--muted)" }}>{label}</span>
+      <span style={{ color: "var(--text)" }}>{children}</span>
+      {hint && <span style={{ fontSize: 11, color: "var(--muted)" }}>{hint}</span>}
     </label>
   );
 }
-const input = { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 10, width: "100%", outline: "none", background: "#fff" };
-const btnPrimary = { padding: "12px 14px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer", fontWeight: 600 };
-const btnGhost = { padding: "12px 14px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer", fontWeight: 600 };
-const card = { background: "#fff", border: "1px solid #eee", borderRadius: 16, padding: 16, boxShadow: "0 4px 24px rgba(15,23,42,0.06)" };
+const input = { padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, width: "100%", outline: "none", background: "var(--panel)", color: "var(--text)" };
+const btnPrimary = { padding: "12px 14px", borderRadius: 12, background: "var(--brand,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer", fontWeight: 600 };
+const btnGhost = { padding: "12px 14px", borderRadius: 12, background: "transparent", color: "var(--brand,#0aa)", border: "1px solid var(--brand,#0aa)", cursor: "pointer", fontWeight: 600 };
+const card = { background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 16, padding: 16, boxShadow: "var(--shadow-1)" };
 
 const currencies = ["EUR", "CHF", "USD", "GBP"];
 const fonts = [
@@ -231,11 +231,11 @@ export default function SettingsPage() {
                 <img
                   src={logoUrl}
                   alt="Logo"
-                  style={{ width:72, height:72, objectFit:"contain", border:"1px solid #eee", borderRadius:10, background:"#fff" }}
+                  style={{ width:72, height:72, objectFit:"contain", border:"1px solid var(--border)", borderRadius:10, background:"var(--panel)" }}
                   onError={(e)=>{ e.currentTarget.style.display="none"; }}
                 />
               ) : (
-                <div style={{ width:72, height:72, border:"1px dashed #ddd", borderRadius:10, display:"grid", placeItems:"center", color:"#9ca3af" }}>kein Logo</div>
+                <div style={{ width:72, height:72, border:"1px dashed var(--border)", borderRadius:10, display:"grid", placeItems:"center", color:"var(--muted)" }}>kein Logo</div>
               )}
               <input type="file" accept="image/*" onChange={e=>onUploadLogo(e.target.files?.[0])} />
               <input style={{ ...input, flex:"1 1 280px" }} value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="Logo‑URL (optional, falls kein Upload)" />
@@ -272,7 +272,7 @@ export default function SettingsPage() {
 
         {/* Live-Vorschau */}
         <div style={{ marginTop:16 }}>
-          <h3 style={{ margin:"0 0 8px 0", fontSize:16, color:"#6b7280" }}>Vorschau</h3>
+          <h3 style={{ margin:"0 0 8px 0", fontSize:16, color:"var(--muted)" }}>Vorschau</h3>
           <BrandPreview settings={{ ...samplePreview, primaryColor, secondaryColor, fontFamily, textColor }} />
         </div>
 
@@ -302,10 +302,10 @@ function BrandPreview({ settings }) {
 
   return (
     <div style={{
-      border: "1px solid #e5e7eb",
+      border: "1px solid var(--border)",
       borderRadius: 16,
       overflow: "hidden",
-      boxShadow: "0 8px 30px rgba(0,0,0,.05)"
+      boxShadow: "var(--shadow-1)"
     }}>
       <div style={{
         padding: 14,
