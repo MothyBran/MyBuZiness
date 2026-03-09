@@ -35,7 +35,7 @@ function Field({ label, children }) {
   return (
     <label style={{ display:"grid", gap:6 }}>
       <span style={{ fontSize: 12, color:"#6b7280" }}>{label}</span>
-      <span style={{ color: "var(--text)" }}>{children}</span>
+      <span style={{ color: "#111827" }}>{children}</span>
     </label>
   );
 }
