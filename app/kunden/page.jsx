@@ -6,17 +6,17 @@ import { useEffect, useState } from "react";
 /** Helpers */
 function Field({ label, children }) {
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#666" }}>{label}</span>
-      {children}
-    </div>
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
+      <span style={{ color: "var(--text, #111827)" }}>{children}</span>
+    </label>
   );
 }
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:"var(--radius)", padding:16 };
-const input = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%" };
-const btnPrimary = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"var(--color-primary)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid var(--color-primary)", background:"#fff", color:"var(--color-primary)", cursor:"pointer" };
-const btnDanger = { padding:"10px 12px", borderRadius:"var(--radius)", border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
+const card = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
+const input = { padding:"10px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%", color:"var(--text, #111827)" };
+const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid transparent", background:"var(--color-primary, #0aa)", color:"#fff", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"#fff", color:"var(--color-primary, #0aa)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([]);
@@ -166,7 +166,7 @@ export default function CustomersPage() {
         <div className="surface" style={modalWrap}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 12 }}>
             <div style={{ fontWeight: 800 }}>Neuen Kunden anlegen</div>
-            <button onClick={()=>setOpenNew(false)} className="btn-ghost" style={{ padding:"6px 10px" }}>×</button>
+            <button onClick={()=>setOpenNew(false)} style={{ ...btnGhost, padding:"6px 10px" }}>×</button>
           </div>
           <form onSubmit={createCustomer} style={{ display:"grid", gap:12 }}>
             <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
@@ -215,8 +215,8 @@ function CustomerDetails({ row, onEdit, onDelete }) {
       <Field label="Notiz"><div style={{ whiteSpace:"pre-wrap" }}>{row.note || "—"}</div></Field>
 
       <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
-        <button className="btn-ghost" onClick={onEdit}>⚙️ Bearbeiten</button>
-        <button className="btn-ghost" onClick={onDelete} style={{ borderColor:"#c00", color:"#c00" }}>❌ Löschen</button>
+        <button style={btnGhost} onClick={onEdit}>⚙️ Bearbeiten</button>
+        <button style={btnDanger} onClick={onDelete}>❌ Löschen</button>
       </div>
     </div>
   );
