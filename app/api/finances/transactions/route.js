@@ -49,7 +49,7 @@ async function ensureFinanceSchema(){
   // rudimentäre Defaults (nur falls leer)
   await q(`
     INSERT INTO "TaxCategory"("code","name","type","skr03","vatRateDefault")
-    SELECT x.code,x.name,x.type,x.skr03,x.vr FROM (VALUES
+    SELECT x.code,x.name,x.type,x.skr03,CAST(x.vr AS NUMERIC(5,2)) FROM (VALUES
       ('INC_STD','Betriebseinnahmen 19%', 'income','8400','19'),
       ('INC_RED','Betriebseinnahmen 7%',  'income','8300','7'),
       ('INC_0'  ,'Einnahmen steuerfrei', 'income','8336','0'),
