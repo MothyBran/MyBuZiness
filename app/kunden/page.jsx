@@ -13,7 +13,7 @@ function Field({ label, children }) {
   );
 }
 const card = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const input = { padding:"10px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%", color:"var(--text, #111827)" };
+const input = { padding:"10px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%", color:"#111827" };
 const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid transparent", background:"var(--color-primary, #0aa)", color:"#fff", cursor:"pointer" };
 const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"#fff", color:"var(--color-primary, #0aa)", cursor:"pointer" };
 const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
