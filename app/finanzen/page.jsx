@@ -150,7 +150,7 @@ export default function FinanzenPage(){
       </div>
 
       {/* Summary-Kacheln Top */}
-      <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", marginBottom: 24}}>
+      <div style={{display:"grid", gap: 20, gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", marginBottom: 24}}>
         <StatBox title="Heute" data={summary?.periods?.today} icon={<Activity size={18} />} />
         <StatBox title="Letzte 7 Tage" data={summary?.periods?.last7} icon={<Activity size={18} />} />
         <StatBox title="Letzte 30 Tage" data={summary?.periods?.last30} icon={<Activity size={18} />} />
@@ -158,11 +158,11 @@ export default function FinanzenPage(){
 
       {/* Selected Period Stats */}
       <div className="surface" style={{marginBottom: 24}}>
-        <div style={{fontWeight: 600, fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8}}>
+        <div style={{fontWeight: 600, fontSize: 16, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8}}>
           <Calendar size={18} className="subtle" />
           Auswertung: {new Date(0, parseInt(filterMonth)-1).toLocaleString('de', {month: 'long'})} {filterYear}
         </div>
-        <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
+        <div style={{display:"grid", gap: 20, gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
           <MiniStat title="Einnahmen" value={centsToEUR(summary?.periods?.selected?.incomeCents)} icon={<ArrowUpRight size={18} color="#065f46" />} color="#065f46" />
           <MiniStat title="Ausgaben" value={centsToEUR(summary?.periods?.selected?.expenseCents)} icon={<ArrowDownRight size={18} color="#b91c1c" />} color="#b91c1c" />
           <MiniStat title="Belege" value={summary?.periods?.selected?.receiptsCount || 0} icon={<Receipt size={18} className="subtle" />} />
@@ -171,33 +171,35 @@ export default function FinanzenPage(){
         </div>
       </div>
 
-      <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginBottom: 24}}>
+      <div style={{display:"grid", gap: 20, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginBottom: 24}}>
         {/* USt-Auswertung (Gewählter Monat) */}
         <div className="surface" style={{borderStyle:"dashed"}}>
-          <div style={{fontWeight:800, marginBottom:6}}>Umsatzsteuer ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
+          <div style={{fontWeight:800, marginBottom:10}}>Umsatzsteuer ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
           {summary?.settings?.kleinunternehmer ? (
             <div className="subtle">Kleinunternehmerregelung aktiv – keine USt/VSt.</div>
           ) : (
-            <div style={{display:"grid", gap:6}}>
+            <div style={{display:"grid", gap:10}}>
               <div>Umsatz 19%: {centsToEUR(summary?.ust?.mtd?.u19_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u19_vat)}</div>
               <div>Umsatz 7%: {centsToEUR(summary?.ust?.mtd?.u07_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u07_vat)}</div>
               <div>Vorsteuer 19%: {centsToEUR(summary?.ust?.mtd?.v19_vat)} · Vorsteuer 7%: {centsToEUR(summary?.ust?.mtd?.v07_vat)}</div>
-              <div style={{fontWeight:700}}>Zahllast (≈): {centsToEUR(summary?.ust?.mtd?.zahllast)}</div>
+              <div style={{fontWeight:700, paddingTop: 4}}>Zahllast (≈): {centsToEUR(summary?.ust?.mtd?.zahllast)}</div>
             </div>
           )}
         </div>
 
         {/* EÜR Kurz */}
         <div className="surface" style={{borderStyle:"dashed"}}>
-          <div style={{fontWeight:800, marginBottom:6}}>EÜR (Jahr {filterYear})</div>
-          <div>Einnahmen (netto): {centsToEUR(summary?.euer?.year?.incomeNet)}</div>
-          <div>Ausgaben (netto): {centsToEUR(summary?.euer?.year?.expenseNet)}</div>
-          <div style={{fontWeight:700}}>Gewinn/Verlust: {centsToEUR((summary?.euer?.year?.incomeNet||0)-(summary?.euer?.year?.expenseNet||0))}</div>
+          <div style={{fontWeight:800, marginBottom:10}}>EÜR (Jahr {filterYear})</div>
+          <div style={{display: "grid", gap: 10}}>
+            <div>Einnahmen (netto): {centsToEUR(summary?.euer?.year?.incomeNet)}</div>
+            <div>Ausgaben (netto): {centsToEUR(summary?.euer?.year?.expenseNet)}</div>
+            <div style={{fontWeight:700, paddingTop: 4}}>Gewinn/Verlust: {centsToEUR((summary?.euer?.year?.incomeNet||0)-(summary?.euer?.year?.expenseNet||0))}</div>
+          </div>
         </div>
       </div>
 
       {/* Aktionen */}
-      <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:8, alignItems:"center", marginBottom: 24}}>
+      <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:12, alignItems:"center", marginBottom: 24}}>
         <a className="btn-ghost" href="/api/export/invoices">Rechnungen CSV</a>
         <a className="btn-ghost" href="/api/export/receipts">Belege CSV</a>
         <a className="btn" href={`/api/export/finances/transactions?year=${filterYear}`}>Transaktionen CSV ({filterYear})</a>
@@ -208,9 +210,9 @@ export default function FinanzenPage(){
       </div>
 
       {/* Schnellerfassung */}
-      <div className="surface" style={{display:"grid", gap:10}}>
+      <div className="surface" style={{display:"grid", gap:16}}>
         <div className="section-title">Schnellerfassung</div>
-        <form onSubmit={saveQuick} className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))"}}>
+        <form onSubmit={saveQuick} style={{display:"grid", gap: 16, gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))"}}>
           <label className="field">
             <span className="label">Art</span>
             <select className="select" value={form.kind} onChange={e=>setForm(f=>({...f, kind:e.target.value}))}>
@@ -267,9 +269,9 @@ export default function FinanzenPage(){
       </div>
 
       {/* Beleg-Scan (Dokument + Ausgabe) */}
-      <div className="surface" style={{display:"grid", gap:10}}>
+      <div className="surface" style={{display:"grid", gap:16, marginBottom: 24}}>
         <div className="section-title">Beleg erfassen (Kamera/Upload)</div>
-        <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+        <div style={{display:"flex", gap:12, alignItems:"center", flexWrap:"wrap"}}>
           <input type="file" accept="image/*,application/pdf" capture="environment"
                  onChange={e=>setCapFile(e.target.files?.[0]||null)} />
           <input className="input" placeholder="Notiz (optional)" value={capNote} onChange={e=>setCapNote(e.target.value)}
@@ -280,7 +282,7 @@ export default function FinanzenPage(){
 
       {/* Tabelle */}
       <div className="surface" style={{padding:0, overflow:"hidden"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"10px 12px", background:"var(--panel, #f8fafc)", borderBottom:"1px solid var(--border, rgba(0,0,0,.06))"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"16px 20px", background:"var(--panel, #f8fafc)", borderBottom:"1px solid var(--border, rgba(0,0,0,.06))"}}>
           <div className="section-title" style={{margin:0}}>Transaktionen ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
           <div className="subtle">Saldo: <b>{centsToEUR(totals.net)}</b> · Einnahmen {centsToEUR(totals.inc)} · Ausgaben {centsToEUR(totals.exp)}</div>
         </div>

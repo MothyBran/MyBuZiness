@@ -110,6 +110,7 @@ a:hover { color: var(--brand); }
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-1);
   transition: box-shadow .2s ease;
+  padding: 1.25rem; /* ~20px padding to keep text off edges */
 }
 
 /* Hero Section (HeaderTop) */
