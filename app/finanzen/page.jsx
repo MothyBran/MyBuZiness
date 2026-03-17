@@ -9,11 +9,17 @@ function toISODate(d=new Date()){ const x=new Date(d); x.setHours(12,0,0,0); ret
 const THIS_YEAR = new Date().getFullYear();
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
 
+import { Calendar, Wallet, Receipt, FileText, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
+
 export default function FinanzenPage(){
   const [summary, setSummary] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [cats, setCats] = useState([]);
+
+  // Filter state
+  const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth() + 1));
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
 
   // Schnellerfassung (brutto + MwSt-Satz)
   const [form, setForm] = useState({
@@ -31,12 +37,18 @@ export default function FinanzenPage(){
   const [capNote, setCapNote] = useState("");
 
   async function loadSummary(){
-    const r = await fetch("/api/finances/summary", { cache: "no-store" });
+    const r = await fetch(`/api/finances/summary?month=${filterMonth}&year=${filterYear}`, { cache: "no-store" });
     const j = await r.json(); if (j.ok) setSummary(j);
   }
   async function loadRows(){
     setLoading(true);
-    const r = await fetch(`/api/finances/transactions?year=${THIS_YEAR}&limit=1000`, { cache:"no-store" });
+    // Erzeuge Bounds für den Filter
+    const fYear = parseInt(filterYear, 10);
+    const fMonth = parseInt(filterMonth, 10);
+    const start = new Date(fYear, fMonth - 1, 1).toISOString().slice(0, 10);
+    const end = new Date(fYear, fMonth, 1).toISOString().slice(0, 10);
+
+    const r = await fetch(`/api/finances/transactions?from=${start}&to=${end}&limit=1000`, { cache:"no-store" });
     const j = await r.json(); if (j.ok) setRows(j.rows || []);
     setLoading(false);
   }
@@ -45,7 +57,8 @@ export default function FinanzenPage(){
     const j = await r.json(); setCats(j.data || []);
   }
 
-  useEffect(()=>{ loadSummary(); loadRows(); loadCats(); }, []);
+  useEffect(()=>{ loadSummary(); loadRows(); }, [filterMonth, filterYear]);
+  useEffect(()=>{ loadCats(); }, []);
 
   async function saveQuick(e){
     e.preventDefault();
@@ -114,51 +127,82 @@ export default function FinanzenPage(){
 
   return (
     <div className="container">
-      <h1 className="page-title" style={{marginBottom:4}}>Finanzen</h1>
-      <div className="subtle">EÜR & USt-Auswertung · Export · Belegscan</div>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom: 16, flexWrap: "wrap", gap: 12}}>
+        <div>
+          <h1 className="page-title" style={{marginBottom:4}}>Finanzen</h1>
+          <div className="subtle">EÜR & USt-Auswertung · Export · Belegscan</div>
+        </div>
 
-      {/* Summary-Kacheln */}
-      <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"1fr", gap:12}}>
-        <div className="surface" style={{display:"grid", gap:12}}>
-          <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12}}>
-            <StatBox title="Heute" data={summary?.periods?.today} />
-            <StatBox title="Letzte 7 Tage" data={summary?.periods?.last7} />
-            <StatBox title="Letzte 30 Tage" data={summary?.periods?.last30} />
-            <StatBox title="Monat (MTD)" data={summary?.periods?.mtd} />
-          </div>
+        {/* Filter Dropdowns */}
+        <div style={{display: "flex", gap: 8, alignItems: "center"}}>
+          <select className="select" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+            {Array.from({length: 12}, (_, i) => (
+              <option key={i+1} value={String(i+1)}>{new Date(0, i).toLocaleString('de', {month: 'long'})}</option>
+            ))}
+          </select>
+          <select className="select" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+            {Array.from({length: 5}, (_, i) => {
+              const y = new Date().getFullYear() - i;
+              return <option key={y} value={String(y)}>{y}</option>;
+            })}
+          </select>
+        </div>
+      </div>
 
-          {/* USt-Auswertung (aktueller Monat) */}
-          <div className="surface" style={{borderStyle:"dashed"}}>
-            <div style={{fontWeight:800, marginBottom:6}}>Umsatzsteuer (Monat {THIS_MONTH})</div>
-            {summary?.settings?.kleinunternehmer ? (
-              <div className="subtle">Kleinunternehmerregelung aktiv – keine USt/VSt.</div>
-            ) : (
-              <div style={{display:"grid", gap:6}}>
-                <div>Umsatz 19%: {centsToEUR(summary?.ust?.mtd?.u19_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u19_vat)}</div>
-                <div>Umsatz 7%: {centsToEUR(summary?.ust?.mtd?.u07_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u07_vat)}</div>
-                <div>Vorsteuer 19%: {centsToEUR(summary?.ust?.mtd?.v19_vat)} · Vorsteuer 7%: {centsToEUR(summary?.ust?.mtd?.v07_vat)}</div>
-                <div style={{fontWeight:700}}>Zahllast (≈): {centsToEUR(summary?.ust?.mtd?.zahllast)}</div>
-              </div>
-            )}
-          </div>
+      {/* Summary-Kacheln Top */}
+      <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", marginBottom: 24}}>
+        <StatBox title="Heute" data={summary?.periods?.today} icon={<Activity size={18} />} />
+        <StatBox title="Letzte 7 Tage" data={summary?.periods?.last7} icon={<Activity size={18} />} />
+        <StatBox title="Letzte 30 Tage" data={summary?.periods?.last30} icon={<Activity size={18} />} />
+      </div>
 
-          {/* EÜR Kurz */}
-          <div className="surface" style={{borderStyle:"dashed"}}>
-            <div style={{fontWeight:800, marginBottom:6}}>EÜR (Jahr {THIS_YEAR})</div>
-            <div>Einnahmen (netto): {centsToEUR(summary?.euer?.year?.incomeNet)}</div>
-            <div>Ausgaben (netto): {centsToEUR(summary?.euer?.year?.expenseNet)}</div>
-            <div style={{fontWeight:700}}>Gewinn/Verlust: {centsToEUR((summary?.euer?.year?.incomeNet||0)-(summary?.euer?.year?.expenseNet||0))}</div>
-          </div>
+      {/* Selected Period Stats */}
+      <div className="surface" style={{marginBottom: 24}}>
+        <div style={{fontWeight: 600, fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8}}>
+          <Calendar size={18} className="subtle" />
+          Auswertung: {new Date(0, parseInt(filterMonth)-1).toLocaleString('de', {month: 'long'})} {filterYear}
+        </div>
+        <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
+          <MiniStat title="Einnahmen" value={centsToEUR(summary?.periods?.selected?.incomeCents)} icon={<ArrowUpRight size={18} color="#065f46" />} color="#065f46" />
+          <MiniStat title="Ausgaben" value={centsToEUR(summary?.periods?.selected?.expenseCents)} icon={<ArrowDownRight size={18} color="#b91c1c" />} color="#b91c1c" />
+          <MiniStat title="Belege" value={summary?.periods?.selected?.receiptsCount || 0} icon={<Receipt size={18} className="subtle" />} />
+          <MiniStat title="Rechnungen" value={summary?.periods?.selected?.invoicesCount || 0} icon={<FileText size={18} className="subtle" />} />
+          <MiniStat title="Arbeitstage" value={summary?.periods?.selected?.workDaysCount || 0} icon={<Wallet size={18} className="subtle" />} />
+        </div>
+      </div>
+
+      <div className="grid-gap-16" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginBottom: 24}}>
+        {/* USt-Auswertung (Gewählter Monat) */}
+        <div className="surface" style={{borderStyle:"dashed"}}>
+          <div style={{fontWeight:800, marginBottom:6}}>Umsatzsteuer ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
+          {summary?.settings?.kleinunternehmer ? (
+            <div className="subtle">Kleinunternehmerregelung aktiv – keine USt/VSt.</div>
+          ) : (
+            <div style={{display:"grid", gap:6}}>
+              <div>Umsatz 19%: {centsToEUR(summary?.ust?.mtd?.u19_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u19_vat)}</div>
+              <div>Umsatz 7%: {centsToEUR(summary?.ust?.mtd?.u07_net)} · Steuer: {centsToEUR(summary?.ust?.mtd?.u07_vat)}</div>
+              <div>Vorsteuer 19%: {centsToEUR(summary?.ust?.mtd?.v19_vat)} · Vorsteuer 7%: {centsToEUR(summary?.ust?.mtd?.v07_vat)}</div>
+              <div style={{fontWeight:700}}>Zahllast (≈): {centsToEUR(summary?.ust?.mtd?.zahllast)}</div>
+            </div>
+          )}
+        </div>
+
+        {/* EÜR Kurz */}
+        <div className="surface" style={{borderStyle:"dashed"}}>
+          <div style={{fontWeight:800, marginBottom:6}}>EÜR (Jahr {filterYear})</div>
+          <div>Einnahmen (netto): {centsToEUR(summary?.euer?.year?.incomeNet)}</div>
+          <div>Ausgaben (netto): {centsToEUR(summary?.euer?.year?.expenseNet)}</div>
+          <div style={{fontWeight:700}}>Gewinn/Verlust: {centsToEUR((summary?.euer?.year?.incomeNet||0)-(summary?.euer?.year?.expenseNet||0))}</div>
         </div>
       </div>
 
       {/* Aktionen */}
-      <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:8, alignItems:"center"}}>
+      <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:8, alignItems:"center", marginBottom: 24}}>
         <a className="btn-ghost" href="/api/export/invoices">Rechnungen CSV</a>
         <a className="btn-ghost" href="/api/export/receipts">Belege CSV</a>
-        <a className="btn" href={`/api/export/finances/transactions?year=${THIS_YEAR}`}>Transaktionen CSV ({THIS_YEAR})</a>
-        <a className="btn-ghost" href={`/api/export/finances/ustva?month=${THIS_MONTH}`}>USt-VA CSV ({THIS_MONTH})</a>
-        <a className="btn-ghost" href={`/api/export/finances/euer?year=${THIS_YEAR}`}>EÜR CSV ({THIS_YEAR})</a>
+        <a className="btn" href={`/api/export/finances/transactions?year=${filterYear}`}>Transaktionen CSV ({filterYear})</a>
+        <a className="btn-ghost" href={`/api/export/finances/ustva?month=${filterYear}-${String(filterMonth).padStart(2,'0')}`}>USt-VA CSV ({filterYear}-{String(filterMonth).padStart(2,'0')})</a>
+        <a className="btn-ghost" href={`/api/export/finances/euer?year=${filterYear}`}>EÜR CSV ({filterYear})</a>
         <Link className="btn-ghost" href="/rechnungen">Zu Rechnungen →</Link>
         <Link className="btn-ghost" href="/belege">Zu Belegen →</Link>
       </div>
@@ -236,8 +280,8 @@ export default function FinanzenPage(){
 
       {/* Tabelle */}
       <div className="surface" style={{padding:0, overflow:"hidden"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"10px 12px", background:"#f8fafc", borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-          <div className="section-title" style={{margin:0}}>Transaktionen (Jahr {THIS_YEAR})</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"10px 12px", background:"var(--panel, #f8fafc)", borderBottom:"1px solid var(--border, rgba(0,0,0,.06))"}}>
+          <div className="section-title" style={{margin:0}}>Transaktionen ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
           <div className="subtle">Saldo: <b>{centsToEUR(totals.net)}</b> · Einnahmen {centsToEUR(totals.inc)} · Ausgaben {centsToEUR(totals.exp)}</div>
         </div>
         <div style={{overflowX:"auto"}}>
@@ -294,20 +338,44 @@ function openDoc(id){
   window.location.href = `/api/uploads/${id}`;
 }
 
-function StatBox({ title, data }){
+function StatBox({ title, data, icon }){
   const net = (data?.incomeCents||0) - (data?.expenseCents||0);
   return (
-    <div className="surface">
-      <div className="subtle">{title}</div>
-      <div style={{marginTop:4, fontSize:13}}>Einnahmen</div>
-      <div style={{fontWeight:800, fontSize:18}}>{centsToEUR(data?.incomeCents||0)}</div>
-      <div style={{marginTop:8, fontSize:13}}>Ausgaben</div>
-      <div style={{fontWeight:800, fontSize:18}}>{centsToEUR(data?.expenseCents||0)}</div>
-      <div style={{marginTop:8, fontSize:13}}>Saldo</div>
-      <div style={{fontWeight:800, fontSize:18, color: net>=0? "#065f46":"#b91c1c"}}>{centsToEUR(net)}</div>
+    <div className="surface" style={{display: 'flex', flexDirection: 'column', gap: 12}}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted, #6b7280)', fontWeight: 500}}>
+        {icon} {title}
+      </div>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div>
+          <div style={{fontSize: 12, color: 'var(--muted, #6b7280)'}}>Einnahmen</div>
+          <div style={{fontWeight: 700, fontSize: 16}}>{centsToEUR(data?.incomeCents||0)}</div>
+        </div>
+        <div style={{textAlign: 'right'}}>
+          <div style={{fontSize: 12, color: 'var(--muted, #6b7280)'}}>Ausgaben</div>
+          <div style={{fontWeight: 700, fontSize: 16}}>{centsToEUR(data?.expenseCents||0)}</div>
+        </div>
+      </div>
+      <div style={{paddingTop: 12, borderTop: '1px dashed var(--border, #e5e7eb)', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <span style={{fontSize: 13, fontWeight: 500}}>Saldo</span>
+        <span style={{fontWeight: 800, fontSize: 16, color: net>=0? "#065f46":"#b91c1c"}}>{centsToEUR(net)}</span>
+      </div>
     </div>
   );
 }
 
-const th = { textAlign:"left", padding:"10px 10px", borderBottom:"1px solid #eee", fontSize:13, color:"#374151" };
-const td = { padding:"10px 10px", borderBottom:"1px solid #f2f2f2", fontSize:14 };
+function MiniStat({ title, value, icon, color }) {
+  return (
+    <div style={{display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--panel, #f9fafb)', borderRadius: 8, border: '1px solid var(--border, #e5e7eb)'}}>
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: 'var(--background, #fff)', border: '1px solid var(--border, #e5e7eb)'}}>
+        {icon}
+      </div>
+      <div>
+        <div style={{fontSize: 12, color: 'var(--muted, #6b7280)'}}>{title}</div>
+        <div style={{fontWeight: 700, fontSize: 16, color: color || 'inherit'}}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+const th = { textAlign:"left", padding:"10px 10px", borderBottom:"1px solid var(--border, #eee)", fontSize:13, color:"var(--muted, #374151)" };
+const td = { padding:"10px 10px", borderBottom:"1px solid var(--border, #f2f2f2)", fontSize:14 };
