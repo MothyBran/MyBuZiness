@@ -7,16 +7,15 @@ import { useEffect, useState } from "react";
 function Field({ label, children }) {
   return (
     <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 12, color: "#6b7280" }}>{label}</span>
-      <span style={{ color: "#111827" }}>{children}</span>
+      <span className="subtle" style={{ fontSize: 12 }}>{label}</span>
+      <span style={{ color: "var(--text, inherit)" }}>{children}</span>
     </label>
   );
 }
-const card = { background:"#fff", border:"1px solid #eee", borderRadius:14, padding:16 };
-const input = { padding:"10px 12px", borderRadius:8, border:"1px solid #ddd", background:"#fff", outline:"none", width:"100%", color:"#111827" };
+const input = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--panel)", outline:"none", width:"100%", color:"var(--text)" };
 const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid transparent", background:"var(--color-primary, #0aa)", color:"#fff", cursor:"pointer" };
-const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"#fff", color:"var(--color-primary, #0aa)", cursor:"pointer" };
-const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"#fff", color:"#c00", cursor:"pointer" };
+const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"transparent", color:"var(--color-primary, #0aa)", cursor:"pointer" };
+const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"transparent", color:"#c00", cursor:"pointer" };
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([]);
@@ -96,18 +95,21 @@ export default function CustomersPage() {
   }
 
   return (
-    <main>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-        <h1 style={{ margin:0 }}>Kunden</h1>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+    <main className="container">
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom: 16, flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h1 className="page-title" style={{ marginBottom: 4 }}>Kunden</h1>
+          <div className="subtle">Kundenverwaltung & Adressbuch</div>
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems: "center" }}>
           <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") load(); }} placeholder="Suchen (Name/E-Mail/Telefon/Ort)…" style={input} />
           <button onClick={load} style={btnGhost}>Suchen</button>
           <button onClick={()=>setOpenNew(true)} style={btnPrimary}>+ Neuer Kunde</button>
         </div>
       </div>
 
-      <div style={{ ...card, marginTop: 12 }}>
-        <div className="table-wrap">
+      <div className="surface" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="table-wrap" style={{ border: "none" }}>
           <table className="table">
             <thead>
               <tr>
@@ -134,7 +136,7 @@ export default function CustomersPage() {
 
                   {expandedId === r.id && (
                     <tr key={r.id + "-details"}>
-                      <td colSpan={4} style={{ background:"#fafafa", padding: 12, borderBottom:"1px solid rgba(0,0,0,.06)" }}>
+                      <td colSpan={4} style={{ background:"var(--panel-2)", padding: 12, borderBottom:"1px solid var(--border)" }}>
                         {editId === r.id ? (
                           <CustomerEditForm
                             initial={r}
