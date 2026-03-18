@@ -42,11 +42,11 @@ function computeStatus(row) {
   return "open";
 }
 const S = {
-  input: { width: "100%", padding: "10px 12px", border: "1px solid #ddd", borderRadius: 12, background: "#fff" },
+  input: { width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 12, background: "var(--panel)" },
   lbl:   { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 6 },
   btn:   { padding: "10px 12px", borderRadius: 12, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer" },
-  ghost: { padding: "10px 12px", borderRadius: 12, background: "#fff", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" },
-  danger:{ padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#c00", border: "1px solid #c00", cursor: "pointer" },
+  ghost: { padding: "10px 12px", borderRadius: 12, background: "transparent", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" },
+  danger:{ padding: "10px 12px", borderRadius: 12, background: "transparent", color: "#c00", border: "1px solid #c00", cursor: "pointer" },
 };
 
 /* ───────── Page ───────── */
@@ -107,18 +107,21 @@ export default function InvoicesPage() {
   }
 
   return (
-    <main className="ivx-page">
+    <main className="container">
       {/* Kopf */}
-      <div className="card">
-        <div className="ivx-head">
-          <h1 className="page-title">Rechnungen</h1>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 className="page-title" style={{ marginBottom:4 }}>Rechnungen</h1>
+          <div className="subtle">Ausgangsrechnungen & Abrechnungen</div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center" }}>
           <button style={S.btn} onClick={() => setIsOpen(true)}>+ Neue Rechnung</button>
         </div>
       </div>
 
       {/* Tabelle – NUR diese Card bekommt horizontales Scrolling */}
-      <div className="card table-card">
-        <div className="table-wrap">
+      <div className="surface" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="table-wrap" style={{ border: "none" }}>
           <table className="table table-fixed">
             <colgroup>
               <col style={{ width: "70px" }} />
@@ -250,7 +253,7 @@ export default function InvoicesPage() {
 
       <style jsx global>{`
         .ivx-page{ overflow-x:hidden; }
-        .card{ background:#fff;border:1px solid #eee;border-radius:14px;padding:16px }
+        .card{ background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px }
         .ivx-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
         .muted{ color:#6b7280 }
         .h5{ font-size:16px; font-weight:800 }
@@ -260,13 +263,13 @@ export default function InvoicesPage() {
         @media (max-width: 760px){ .hide-sm{ display:none } }
 
         /* NUR die Tabellen-Card bekommt horizontales Scrolling */
-        .card.table-card .table-wrap{ overflow-x:auto }
+        .card.table-card .table-wrap{ overflow-x:auto; border:none; }
 
         /* Detail-Positionsliste: horizontales Scrollen erlaubt, aber innerhalb der Card */
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
-        .table th,.table td{ border-bottom:1px solid #eee; padding:10px; vertical-align:middle }
+        .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
         .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b }
@@ -274,7 +277,7 @@ export default function InvoicesPage() {
         .st-dot.overdue{ background:#ef4444 }
         .st-dot.done{ background:#10b981 }
 
-        .details-cell{ background:#fafafa }
+        .details-cell{ background:var(--panel-2) }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
@@ -288,19 +291,19 @@ export default function InvoicesPage() {
         .ivx-modal-box{
           width: min(980px, 100%);
           margin-top: 24px;
-          background:#fff; border:1px solid #eee; border-radius:14px;
+          background:var(--panel); border:1px solid var(--border); border-radius:14px;
           max-height: calc(100vh - 48px);
           overflow-y: auto;           /* nur vertikal scrollen */
           overflow-x: hidden;         /* kein horizontales Scrolling fürs Fenster */
         }
         .ivx-modal-head{
           display:flex; align-items:center; justify-content:space-between;
-          padding: 14px 16px; border-bottom: 1px solid #eee;
-          position: sticky; top: 0; background:#fff; z-index: 1;
+          padding: 14px 16px; border-bottom: 1px solid var(--border);
+          position: sticky; top: 0; background:var(--panel); z-index: 1;
         }
         .ivx-modal-actions{
           display:flex; justify-content:flex-end; gap:8px; padding: 12px 16px;
-          position: sticky; bottom: 0; background:#fff; border-top: 1px solid #eee;
+          position: sticky; bottom: 0; background:var(--panel); border-top: 1px solid var(--border);
         }
 
         .surface.section{ padding: 12px 16px; }
