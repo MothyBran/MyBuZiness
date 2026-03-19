@@ -196,56 +196,39 @@ export default function HomePage() {
           margin-bottom: 1.5rem;
         }
         .mb-6 { margin-bottom: 1.5rem; }
-
-        .fab-btn {
-          position: fixed;
-          bottom: 24px;
-          right: 24px;
-          width: 56px;
-          height: 56px;
-          background-color: var(--brand);
-          color: white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 32px;
-          font-weight: 400;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-          cursor: pointer;
-          z-index: 999;
-          transition: transform 0.2s ease, background-color 0.2s ease;
-          border: none;
-          text-decoration: none;
-          line-height: 1;
-          padding-bottom: 2px; /* Visual center adjustment for the plus sign */
-        }
-
-        .fab-btn:hover {
-          background-color: var(--brand-600);
-          transform: scale(1.05);
-        }
-
-        .fab-btn:active {
-          transform: scale(0.95);
-        }
-
-        @media (max-width: 768px) {
-          .fab-btn {
-            bottom: 20px;
-            right: 20px;
-            width: 48px;
-            height: 48px;
-            font-size: 28px;
-          }
-        }
       `}</style>
+    </Page>
 
       {/* Floating Action Button for Schnellerfassung */}
-      <Link href="/schnellerfassung" className="fab-btn" title="Schnellerfassung" prefetch={false}>
+      <Link href="/schnellerfassung" title="Schnellerfassung" prefetch={false} style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        width: '56px',
+        height: '56px',
+        backgroundColor: 'var(--brand)',
+        color: 'white',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '32px',
+        fontWeight: '400',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+        cursor: 'pointer',
+        zIndex: 9999,
+        border: 'none',
+        textDecoration: 'none',
+        lineHeight: 1,
+        paddingBottom: '2px',
+        transition: 'transform 0.2s ease, background-color 0.2s ease'
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand-600)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--brand)'; e.currentTarget.style.transform = 'scale(1)'; }}
+      onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.95)'; }}
+      onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}>
         +
       </Link>
-    </Page>
     </>
   );
 }
