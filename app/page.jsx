@@ -195,7 +195,43 @@ export default function HomePage() {
           margin-bottom: 1.5rem;
         }
         .mb-6 { margin-bottom: 1.5rem; }
+
+        .fab-btn {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          width: 60px;
+          height: 60px;
+          background-color: var(--brand);
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 28px;
+          font-weight: 300;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+          cursor: pointer;
+          z-index: 50;
+          transition: transform 0.2s, background-color 0.2s;
+          border: none;
+          text-decoration: none;
+        }
+
+        .fab-btn:hover {
+          background-color: var(--brand-600);
+          transform: scale(1.05);
+        }
+
+        .fab-btn:active {
+          transform: scale(0.95);
+        }
       `}</style>
+
+      {/* Floating Action Button for Schnellerfassung */}
+      <Link href="/schnellerfassung" className="fab-btn" title="Schnellerfassung" prefetch={false}>
+        +
+      </Link>
     </Page>
   );
 }
