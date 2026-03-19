@@ -67,7 +67,7 @@ export async function POST(request) {
 
     // Kopf
     const id = uuid();
-    const receiptNo = (body.receiptNo || "").trim() || null;        // Nummer kann vom Frontend kommen (BN-jjmm-000)
+    let receiptNo = (body.receiptNo || "").trim() || null;        // Nummer kann vom Frontend kommen (BN-jjmm-000)
     const date = body.date || null;
     const currency = body.currency || "EUR";
     const vatExempt = !!body.vatExempt;
@@ -84,6 +84,24 @@ export async function POST(request) {
     const grossCents = netAfter + taxCents;
 
     await q("BEGIN");
+
+    if (!receiptNo) {
+      // Auto-generate receipt number if not provided: BN-YYMM-XXX
+      const now = date ? new Date(date) : new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const prefix = `BN-${yy}${mm}-`;
+
+      const last = await q(`SELECT "receiptNo" FROM "Receipt" WHERE "userId"=$1 AND "receiptNo" LIKE $2 ORDER BY "receiptNo" DESC LIMIT 1`, [userId, `${prefix}%`]);
+      let nextNum = 1;
+      if (last.rows.length > 0 && last.rows[0].receiptNo) {
+        const lastStr = last.rows[0].receiptNo;
+        const lastNum = parseInt(lastStr.split("-").pop() || "0", 10);
+        if (!isNaN(lastNum)) nextNum = lastNum + 1;
+      }
+      receiptNo = `${prefix}${String(nextNum).padStart(3, "0")}`;
+    }
+
     await q(`
       INSERT INTO "Receipt"
         ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId")
