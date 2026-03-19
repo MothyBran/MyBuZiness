@@ -109,6 +109,7 @@ export default function HomePage() {
   }, []);
 
   return (
+    <>
     <Page>
       <PageHeader title="Dashboard" />
 
@@ -200,22 +201,24 @@ export default function HomePage() {
           position: fixed;
           bottom: 24px;
           right: 24px;
-          width: 60px;
-          height: 60px;
+          width: 56px;
+          height: 56px;
           background-color: var(--brand);
           color: white;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 28px;
-          font-weight: 300;
+          font-size: 32px;
+          font-weight: 400;
           box-shadow: 0 4px 12px rgba(0,0,0,0.25);
           cursor: pointer;
-          z-index: 50;
-          transition: transform 0.2s, background-color 0.2s;
+          z-index: 999;
+          transition: transform 0.2s ease, background-color 0.2s ease;
           border: none;
           text-decoration: none;
+          line-height: 1;
+          padding-bottom: 2px; /* Visual center adjustment for the plus sign */
         }
 
         .fab-btn:hover {
@@ -226,6 +229,16 @@ export default function HomePage() {
         .fab-btn:active {
           transform: scale(0.95);
         }
+
+        @media (max-width: 768px) {
+          .fab-btn {
+            bottom: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            font-size: 28px;
+          }
+        }
       `}</style>
 
       {/* Floating Action Button for Schnellerfassung */}
@@ -233,6 +246,7 @@ export default function HomePage() {
         +
       </Link>
     </Page>
+    </>
   );
 }
 
