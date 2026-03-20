@@ -1,7 +1,7 @@
 // app/finanzen/page.jsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 function centsToEUR(c){ return (Number(c||0)/100).toFixed(2).replace(".", ",") + " €"; }
@@ -16,6 +16,9 @@ export default function FinanzenPage(){
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [cats, setCats] = useState([]);
+
+  // Detail View State
+  const [expandedRowId, setExpandedRowId] = useState(null);
 
   // Filter state
   const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth() + 1));
@@ -32,9 +35,7 @@ export default function FinanzenPage(){
     paymentMethod: "bank",
   });
 
-  // Beleg+Ausgabe in einem Rutsch erfassen
   const [capFile, setCapFile] = useState(null);
-  const [capNote, setCapNote] = useState("");
 
   async function loadSummary(){
     const r = await fetch(`/api/finances/summary?month=${filterMonth}&year=${filterYear}`, { cache: "no-store" });
@@ -64,6 +65,17 @@ export default function FinanzenPage(){
     e.preventDefault();
     const grossCents = Math.round(parseFloat(String(form.gross).replace(",", ".")) * 100);
     if (!Number.isFinite(grossCents) || grossCents<=0) return alert("Betrag (brutto) ungültig.");
+
+    let documentId = null;
+    if (capFile) {
+      const fd = new FormData();
+      fd.append("file", capFile);
+      if (form.note) fd.append("note", form.note);
+      const up = await fetch("/api/uploads", { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
+      if (!up.ok) return alert(up.error || "Upload fehlgeschlagen.");
+      documentId = up.file?.id || null;
+    }
+
     const payload = {
       kind: form.kind,
       grossCents,
@@ -72,6 +84,7 @@ export default function FinanzenPage(){
       categoryCode: form.categoryCode || null,
       note: form.note || null,
       paymentMethod: form.paymentMethod || null,
+      documentId: documentId,
     };
     const r = await fetch("/api/finances/transactions", {
       method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify(payload)
@@ -79,6 +92,9 @@ export default function FinanzenPage(){
     const j = await r.json();
     if(!j.ok) return alert(j.error || "Speichern fehlgeschlagen.");
     setForm({ kind:"expense", gross:"", vatRate:"19", bookedOn:toISODate(), categoryCode:"", note:"", paymentMethod:"bank" });
+    setCapFile(null);
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) fileInput.value = "";
     await Promise.all([loadSummary(), loadRows()]);
   }
 
@@ -86,37 +102,12 @@ export default function FinanzenPage(){
     if(!confirm("Eintrag wirklich löschen?")) return;
     const r = await fetch(`/api/finances/transactions/${id}`, { method:"DELETE" });
     const j = await r.json(); if(!j.ok) return alert(j.error || "Löschen fehlgeschlagen.");
+    if (expandedRowId === id) setExpandedRowId(null);
     await Promise.all([loadSummary(), loadRows()]);
   }
 
-  // Dokument + Ausgabe (1 Schritt)
-  async function captureExpense(){
-    if(!capFile) return alert("Bitte Beleg auswählen / scannen.");
-    const fd = new FormData(); fd.append("file", capFile); if(capNote) fd.append("note", capNote);
-    const up = await fetch("/api/uploads", { method:"POST", body: fd }).then(r=>r.json()).catch(()=>({ok:false}));
-    if(!up.ok) return alert(up.error || "Upload fehlgeschlagen.");
-    // kleine Ausgabe mit 19% aus Upload erzeugen (anpassbar)
-    const gross = prompt("Betrag (brutto) für diesen Beleg eingeben (z. B. 12,99):", "");
-    if(!gross) return;
-    const grossCents = Math.round(parseFloat(String(gross).replace(",", ".")) * 100);
-    if(!Number.isFinite(grossCents) || grossCents<=0) return alert("Betrag ungültig.");
-    const tx = await fetch("/api/finances/transactions", {
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        kind:"expense",
-        grossCents,
-        vatRate: 19,
-        bookedOn: toISODate(),
-        categoryCode: cats.find(c=>c.type==="expense")?.code || null,
-        note: capNote || (capFile?.name || "Dokument"),
-        documentId: up.file?.id || null,
-        paymentMethod: "bank"
-      })
-    }).then(r=>r.json()).catch(()=>({ok:false}));
-    if(!tx.ok) return alert(tx.error || "Speichern fehlgeschlagen.");
-    setCapFile(null); setCapNote("");
-    await Promise.all([loadSummary(), loadRows()]);
-    alert("Beleg erfasst und Ausgabe gespeichert.");
+  function toggleRow(id) {
+    setExpandedRowId(prev => prev === id ? null : id);
   }
 
   const totals = useMemo(()=>{
@@ -206,7 +197,6 @@ export default function FinanzenPage(){
         </div>
         <div style={{display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))"}}>
           <a className="btn-ghost" href="/api/export/invoices" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> Rechnungen CSV</a>
-          <a className="btn-ghost" href="/api/export/receipts" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> Belege CSV</a>
           <a className="btn-primary" href={`/api/export/finances/transactions?year=${filterYear}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer", textDecoration: "none"}}><Download size={16} /> Transaktionen CSV ({filterYear})</a>
           <a className="btn-ghost" href={`/api/export/finances/ustva?month=${filterYear}-${String(filterMonth).padStart(2,'0')}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> USt-VA CSV ({filterYear}-{String(filterMonth).padStart(2,'0')})</a>
           <a className="btn-ghost" href={`/api/export/finances/euer?year=${filterYear}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> EÜR CSV ({filterYear})</a>
@@ -265,6 +255,11 @@ export default function FinanzenPage(){
             </select>
           </label>
           <label className="field" style={{gridColumn:"1 / -1"}}>
+            <span className="label">Beleg (optional)</span>
+            <input type="file" className="input" accept="image/*,application/pdf" capture="environment"
+                 onChange={e=>setCapFile(e.target.files?.[0]||null)} />
+          </label>
+          <label className="field" style={{gridColumn:"1 / -1"}}>
             <span className="label">Notiz</span>
             <input className="input" value={form.note} onChange={e=>setForm(f=>({...f, note:e.target.value}))}/>
           </label>
@@ -272,18 +267,6 @@ export default function FinanzenPage(){
             <button className="btn" type="submit">Speichern</button>
           </div>
         </form>
-      </div>
-
-      {/* Beleg-Scan (Dokument + Ausgabe) */}
-      <div className="surface" style={{display:"grid", gap:16, marginBottom: 24}}>
-        <div className="section-title">Beleg erfassen (Kamera/Upload)</div>
-        <div style={{display:"flex", gap:12, alignItems:"center", flexWrap:"wrap"}}>
-          <input type="file" accept="image/*,application/pdf" capture="environment"
-                 onChange={e=>setCapFile(e.target.files?.[0]||null)} />
-          <input className="input" placeholder="Notiz (optional)" value={capNote} onChange={e=>setCapNote(e.target.value)}
-                 style={{maxWidth:320}} />
-          <button className="btn" onClick={captureExpense}>Dokument + Ausgabe speichern</button>
-        </div>
       </div>
 
       {/* Tabelle */}
@@ -312,24 +295,76 @@ export default function FinanzenPage(){
               {loading ? (
                 <tr><td style={td} colSpan={10}>Lade…</td></tr>
               ) : rows.length ? rows.map(r=>(
-                <tr key={r.id}>
-                  <td style={td}>{r.bookedOn}</td>
-                  <td style={td}>{r.kind}</td>
-                  <td style={td}>{r.categoryName || r.categoryCode || "-"}</td>
-                  <td style={td}>{(r.vatRate==null || Number.isNaN(Number(r.vatRate)))? "—" : `${Number(r.vatRate)}%`}</td>
-                  <td style={td}>{centsToEUR(r.netCents)}</td>
-                  <td style={td}>{centsToEUR(r.vatCents)}</td>
-                  <td style={td}><b>{centsToEUR(r.grossCents)}</b></td>
-                  <td style={td}>{r.paymentMethod || "-"}</td>
-                  <td style={td}>
-                    {r.invoiceId && <Link href="/rechnungen" className="btn-xxs">Rechnung</Link>}{" "}
-                    {r.receiptId && <Link href="/belege" className="btn-xxs">Beleg</Link>}{" "}
-                    {r.documentId && <span className="btn-xxs" onClick={()=>openDoc(r.documentId)} title="Dokument ansehen">Dokument</span>}
-                  </td>
-                  <td style={{...td, textAlign:"right"}}>
-                    <button className="btn-xxs btn-danger" onClick={()=>removeRow(r.id)}>Löschen</button>
-                  </td>
-                </tr>
+                <React.Fragment key={r.id}>
+                  <tr style={{cursor: "pointer", background: expandedRowId === r.id ? "var(--panel, #f8fafc)" : "transparent"}} onClick={() => toggleRow(r.id)}>
+                    <td style={td}>{r.bookedOn}</td>
+                    <td style={td}>{r.kind}</td>
+                    <td style={td}>{r.categoryName || r.categoryCode || "-"}</td>
+                    <td style={td}>{(r.vatRate==null || Number.isNaN(Number(r.vatRate)))? "—" : `${Number(r.vatRate)}%`}</td>
+                    <td style={td}>{centsToEUR(r.netCents)}</td>
+                    <td style={td}>{centsToEUR(r.vatCents)}</td>
+                    <td style={td}><b>{centsToEUR(r.grossCents)}</b></td>
+                    <td style={td}>{r.paymentMethod || "-"}</td>
+                    <td style={td} onClick={e => e.stopPropagation()}>
+                      {r.invoiceId && <Link href="/rechnungen" className="btn-xxs">Rechnung</Link>}{" "}
+                      {r.receiptId && <Link href="/belege" className="btn-xxs">Beleg</Link>}{" "}
+                      {r.documentId && <span className="btn-xxs" style={{cursor: "pointer", textDecoration: "underline"}} onClick={()=>openDoc(r.documentId)} title="Dokument ansehen">Dokument</span>}
+                    </td>
+                    <td style={{...td, textAlign:"right"}} onClick={e => e.stopPropagation()}>
+                      <button className="btn-xxs btn-danger" onClick={()=>removeRow(r.id)}>Löschen</button>
+                    </td>
+                  </tr>
+                  {expandedRowId === r.id && (
+                    <tr style={{background: "var(--panel, #f8fafc)"}}>
+                      <td colSpan={10} style={{padding: "16px 20px", borderBottom: "1px solid var(--border, #f2f2f2)"}}>
+                        <div style={{display: "flex", gap: 24, flexWrap: "wrap"}}>
+                          <div style={{flex: "1 1 300px"}}>
+                            <div style={{fontWeight: 600, marginBottom: 8}}>Details</div>
+                            <div style={{display: "grid", gap: 4, fontSize: 14}}>
+                              <div><span className="subtle">Notiz:</span> {r.note || "-"}</div>
+                              <div><span className="subtle">Erstellt am:</span> {new Date(r.createdAt).toLocaleString('de-DE')}</div>
+                              {r.invoiceId && <div><span className="subtle">Rechnung ID:</span> {r.invoiceId}</div>}
+                              {r.receiptId && <div><span className="subtle">Beleg ID:</span> {r.receiptId}</div>}
+                            </div>
+                          </div>
+                          {r.documentId && (
+                            <div style={{flex: "1 1 300px"}}>
+                              <div style={{fontWeight: 600, marginBottom: 8}}>Beleg Vorschau</div>
+                              <div
+                                style={{
+                                  border: "1px solid var(--border, #e5e7eb)",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  cursor: "pointer",
+                                  maxWidth: "100%",
+                                  maxHeight: "300px",
+                                  display: "flex",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  background: "#fff",
+                                  position: "relative"
+                                }}
+                                onClick={() => openDoc(r.documentId)}
+                                title="Klicken, um in voller Größe zu öffnen"
+                              >
+                                <iframe
+                                  src={`/api/uploads/${r.documentId}#toolbar=0&navpanes=0&scrollbar=0`}
+                                  style={{width: "100%", height: "300px", border: "none", pointerEvents: "none"}}
+                                  title="Dokument Vorschau"
+                                />
+                                {/* Overlay to catch clicks on iframe */}
+                                <div style={{position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10}} />
+                              </div>
+                              <div style={{marginTop: 8, textAlign: "right"}}>
+                                <button className="btn-xxs" onClick={() => openDoc(r.documentId)}>In neuem Tab öffnen / Herunterladen</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               )) : (
                 <tr><td style={td} colSpan={10}>Keine Einträge.</td></tr>
               )}
@@ -342,8 +377,7 @@ export default function FinanzenPage(){
 }
 
 function openDoc(id){
-  // minimalistischer Download/Preview-Endpunkt (optional nachrüsten)
-  window.location.href = `/api/uploads/${id}`;
+  window.open(`/api/uploads/${id}`, '_blank');
 }
 
 function StatBox({ title, data, icon }){
