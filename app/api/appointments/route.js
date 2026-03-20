@@ -20,6 +20,7 @@ export async function GET(req) {
     const kind       = searchParams.get("kind");       // appointment|order (optional)
     const customerId = searchParams.get("customerId"); // optional
     const upcoming   = searchParams.get("upcoming");   // "true" => kommende Termine
+    const status     = searchParams.get("status");     // e.g. "open"
     const limit      = Number(searchParams.get("limit") || 0);
 
     let sql = `SELECT * FROM "Appointment"`;
@@ -45,6 +46,11 @@ export async function GET(req) {
     if (customerId) {
       where.push(`"customerId" = $${args.length + 1}`);
       args.push(customerId);
+    }
+
+    if (status) {
+      where.push(`"status" = $${args.length + 1}`);
+      args.push(status);
     }
 
     if (where.length) sql += " WHERE " + where.join(" AND ");

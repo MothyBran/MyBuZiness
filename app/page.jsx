@@ -71,7 +71,7 @@ export default function HomePage() {
       // Fallbacks
       const receipts = await safeGet("/api/receipts?limit=5", { ok: true, data: [] });
       const invoices = await safeGet("/api/invoices?limit=5", { ok: true, data: [] });
-      const appts    = await safeGet("/api/appointments?upcoming=3", []);
+      const appts    = await safeGet("/api/appointments?upcoming=true&limit=5&status=open", []);
 
       // Counts
       const customers = await safeGet("/api/customers?count=1", { ok: true, data: [] });
@@ -124,6 +124,22 @@ export default function HomePage() {
       </div>
 
       <PageGrid>
+        {/* Nächste Termine */}
+        <Col span={4} className="col-span-12 md:col-span-12 lg:col-span-4">
+          <Card title="Nächste Termine">
+            <List
+              items={nextAppointments}
+              empty="Keine anstehenden Einträge."
+              mapItem={(e) => ({
+                icon: e.kind === "order" ? "🗂️" : "📅",
+                title: e.title || "(ohne Titel)",
+                meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
+                href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
+              })}
+            />
+          </Card>
+        </Col>
+
         {/* Neueste Belege */}
         <Col span={4} className="col-span-12 md:col-span-6 lg:col-span-4">
           <Card title="Neueste Belege">
@@ -167,22 +183,6 @@ export default function HomePage() {
                   href,
                 };
               }}
-            />
-          </Card>
-        </Col>
-
-        {/* Nächste Termine */}
-        <Col span={4} className="col-span-12 md:col-span-12 lg:col-span-4">
-          <Card title="Nächste Termine">
-            <List
-              items={nextAppointments}
-              empty="Keine anstehenden Einträge."
-              mapItem={(e) => ({
-                icon: e.kind === "order" ? "🗂️" : "📅",
-                title: e.title || "(ohne Titel)",
-                meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
-                href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
-              })}
             />
           </Card>
         </Col>
