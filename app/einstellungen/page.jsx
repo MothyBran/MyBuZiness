@@ -180,7 +180,7 @@ export default function SettingsPage() {
         <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Ansicht</h2>
         <div style={{ display:"grid", gap:12 }}>
           <Field label="Darstellung auf Mobilgeräten">
-            <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", marginTop: 8 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                 <input
                   type="radio"
@@ -201,6 +201,9 @@ export default function SettingsPage() {
                 />
                 Desktop Ansicht erzwingen
               </label>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8, lineHeight: 1.4 }}>
+              <b>Hinweis:</b> Falls in Ihrem mobilen Browser die Funktion „Desktop-Website anfordern“ nativ aktiviert ist, lässt sich die Mobile Ansicht hierüber unter Umständen nicht erzwingen. Sie müssen diese Funktion dann zusätzlich im Browser-Menü deaktivieren.
             </div>
           </Field>
         </div>
