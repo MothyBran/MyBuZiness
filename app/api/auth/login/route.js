@@ -38,6 +38,8 @@ export async function POST(request) {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role || 'admin',
+      ownerId: user.ownerId || null,
     });
 
     const cookieStore = await cookies();
@@ -51,7 +53,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       ok: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, ownerId: user.ownerId },
     });
   } catch (e) {
     console.error(e);

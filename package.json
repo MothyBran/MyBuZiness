@@ -12,6 +12,7 @@
     "node": ">=18.17.0"
   },
   "dependencies": {
+    "@playwright/test": "^1.58.2",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.2",
     "lucide-react": "^0.577.0",
