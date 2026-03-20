@@ -9,7 +9,7 @@ function toISODate(d=new Date()){ const x=new Date(d); x.setHours(12,0,0,0); ret
 const THIS_YEAR = new Date().getFullYear();
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
 
-import { Calendar, Wallet, Receipt, FileText, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
+import { Calendar, Wallet, Receipt, FileText, ArrowUpRight, ArrowDownRight, Activity, Download } from "lucide-react";
 
 export default function FinanzenPage(){
   const [summary, setSummary] = useState(null);
@@ -198,15 +198,21 @@ export default function FinanzenPage(){
         </div>
       </div>
 
-      {/* Aktionen */}
-      <div className="surface" style={{display:"flex", flexWrap:"wrap", gap:12, alignItems:"center", marginBottom: 24}}>
-        <a className="btn-ghost" href="/api/export/invoices">Rechnungen CSV</a>
-        <a className="btn-ghost" href="/api/export/receipts">Belege CSV</a>
-        <a className="btn" href={`/api/export/finances/transactions?year=${filterYear}`}>Transaktionen CSV ({filterYear})</a>
-        <a className="btn-ghost" href={`/api/export/finances/ustva?month=${filterYear}-${String(filterMonth).padStart(2,'0')}`}>USt-VA CSV ({filterYear}-{String(filterMonth).padStart(2,'0')})</a>
-        <a className="btn-ghost" href={`/api/export/finances/euer?year=${filterYear}`}>EÜR CSV ({filterYear})</a>
-        <Link className="btn-ghost" href="/rechnungen">Zu Rechnungen →</Link>
-        <Link className="btn-ghost" href="/belege">Zu Belegen →</Link>
+      {/* Aktionen / Exporte */}
+      <div className="surface" style={{marginBottom: 24}}>
+        <div style={{fontWeight: 600, fontSize: 16, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8}}>
+          <Download size={18} className="subtle" />
+          Exporte & Aktionen
+        </div>
+        <div style={{display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))"}}>
+          <a className="btn-ghost" href="/api/export/invoices" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> Rechnungen CSV</a>
+          <a className="btn-ghost" href="/api/export/receipts" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> Belege CSV</a>
+          <a className="btn-primary" href={`/api/export/finances/transactions?year=${filterYear}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding:"10px 12px", borderRadius:8, background:"var(--color-primary,#0aa)", color:"#fff", border:"1px solid transparent", cursor:"pointer", textDecoration: "none"}}><Download size={16} /> Transaktionen CSV ({filterYear})</a>
+          <a className="btn-ghost" href={`/api/export/finances/ustva?month=${filterYear}-${String(filterMonth).padStart(2,'0')}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> USt-VA CSV ({filterYear}-{String(filterMonth).padStart(2,'0')})</a>
+          <a className="btn-ghost" href={`/api/export/finances/euer?year=${filterYear}`} style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Download size={16} /> EÜR CSV ({filterYear})</a>
+          <Link className="btn-ghost" href="/rechnungen" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><FileText size={16} /> Zu Rechnungen →</Link>
+          <Link className="btn-ghost" href="/belege" style={{display: "flex", alignItems: "center", justifyContent: "center", gap: 8}}><Receipt size={16} /> Zu Belegen →</Link>
+        </div>
       </div>
 
       {/* Schnellerfassung */}
