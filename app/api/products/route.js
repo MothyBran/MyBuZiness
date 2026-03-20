@@ -16,7 +16,10 @@ export async function GET() {
          "createdAt","updatedAt"
        FROM "Product"
        WHERE "userId"=$1
-       ORDER BY "createdAt" DESC`,
+       ORDER BY
+         CASE WHEN "categoryCode" IS NULL OR "categoryCode" = '' THEN 1 ELSE 0 END,
+         "categoryCode" ASC,
+         "createdAt" DESC`,
       [userId]
     )).rows;
     return Response.json({ ok: true, data: rows });

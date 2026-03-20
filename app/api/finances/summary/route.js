@@ -130,9 +130,12 @@ async function euerYearWithDocs() {
   return { incomeNet, expenseNet };
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
     const settings = await getSettings();
+    const { searchParams } = new URL(req.url);
+    const filterMonth = searchParams.get("month");
+    const filterYear = searchParams.get("year");
 
     // Perioden, die die Kacheln nutzen
     const P = {
@@ -141,6 +144,17 @@ export async function GET() {
       last30: periodBounds("last30"),
       mtd:    periodBounds("mtd"),
     };
+
+    if (filterMonth && filterYear) {
+      const start = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10) - 1, 1));
+      const end = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10), 1));
+      P.selected = {
+        from: start.toISOString().slice(0, 10),
+        to: end.toISOString().slice(0, 10)
+      };
+    } else {
+      P.selected = P.mtd;
+    }
 
     // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts + paid Invoices; Ausgaben = FinanceTx(expense)
     async function buildPeriod({ from, to }) {
@@ -158,8 +172,8 @@ export async function GET() {
       };
     }
 
-    const [pToday, p7, p30, pMtd] = await Promise.all([
-      buildPeriod(P.today), buildPeriod(P.last7), buildPeriod(P.last30), buildPeriod(P.mtd)
+    const [pToday, p7, p30, pMtd, pSelected] = await Promise.all([
+      buildPeriod(P.today), buildPeriod(P.last7), buildPeriod(P.last30), buildPeriod(P.mtd), buildPeriod(P.selected)
     ]);
 
     // Zusätze für das Tabellenjahr (für Hinweiszeile unter der Liste)
@@ -193,12 +207,14 @@ export async function GET() {
         last7:  { incomeCents: p7.incomeCents,      expenseCents: p7.expenseCents },
         last30: { incomeCents: p30.incomeCents,     expenseCents: p30.expenseCents },
         mtd:    { incomeCents: pMtd.incomeCents,    expenseCents: pMtd.expenseCents },
+        selected: { incomeCents: pSelected.incomeCents, expenseCents: pSelected.expenseCents }
       },
       adds: {
         today:  pToday.adds,
         last7:  p7.adds,
         last30: p30.adds,
         mtd:    pMtd.adds,
+        selected: pSelected.adds,
         ...additions
       },
       ust: { mtd: ust_mtd || { u19_net:0,u19_vat:0,u07_net:0,u07_vat:0,v19_vat:0,v07_vat:0,zahllast:0 } },
