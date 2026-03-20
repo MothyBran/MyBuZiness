@@ -51,6 +51,24 @@ export async function middleware(request) {
     return NextResponse.redirect(url);
   }
 
+  // 5. Role-based access control for employees
+  if (user && user.role === "employee") {
+    if (pathname.startsWith("/finanzen") || pathname.startsWith("/einstellungen") || pathname.startsWith("/mitarbeiter")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // 6. Restrict admin-only routes
+  if (user && user.role !== "admin") {
+    if (pathname.startsWith("/mitarbeiter")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return NextResponse.next();
 }
 

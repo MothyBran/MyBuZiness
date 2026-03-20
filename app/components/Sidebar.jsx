@@ -14,9 +14,10 @@ export default function Sidebar({ user }) {
     { href: "/produkte", label: "Produkte", icon: "📦" },
     { href: "/rechnungen", label: "Rechnungen", icon: "📄" },
     { href: "/belege", label: "Belege", icon: "🧾" },
-    { href: "/finanzen", label: "Finanzen", icon: "💶" },
-    { href: "/einstellungen", label: "Einstellungen", icon: "⚙️" },
-  ];
+    { href: "/finanzen", label: "Finanzen", icon: "💶", adminOnly: true },
+    { href: "/mitarbeiter", label: "Mitarbeiter", icon: "👥", adminOnly: true },
+    { href: "/einstellungen", label: "Einstellungen", icon: "⚙️", adminOnly: true },
+  ].filter(link => !link.adminOnly || user?.role !== "employee");
 
   function isActive(href) {
     if (href === "/") return pathname === "/";

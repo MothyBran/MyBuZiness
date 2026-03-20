@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
+export default function ModuleLauncher({ open, onClose, id = "module-panel", user }) {
   const pathname = usePathname();
 
   // Body-Scroll sperren, wenn offen
@@ -27,9 +27,10 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel" }) {
     { href:"/produkte",      icon:"📦", label:"Produkte" },
     { href:"/rechnungen",    icon:"📄", label:"Rechnungen" },
     { href:"/belege",        icon:"🧾", label:"Belege" },
-    { href:"/finanzen",      icon:"💶", label:"Finanzen" },
-    { href:"/einstellungen", icon:"⚙️", label:"Einstellungen" }, // <-- korrigiert
-  ];
+    { href:"/finanzen",      icon:"💶", label:"Finanzen", adminOnly: true },
+    { href:"/mitarbeiter",   icon:"👥", label:"Mitarbeiter", adminOnly: true },
+    { href:"/einstellungen", icon:"⚙️", label:"Einstellungen", adminOnly: true },
+  ].filter(link => !link.adminOnly || user?.role !== "employee");
 
   function isActive(href) {
     if (href === "/") return pathname === "/";

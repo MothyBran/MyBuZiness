@@ -25,7 +25,7 @@ export default async function RootLayout({ children }) {
             {/* Main Content Wrapper */}
             <div className="app-shell">
               {/* Optionaler Header */}
-              {HeaderTop ? <HeaderTop /> : null}
+              {HeaderTop ? <HeaderTop user={user} /> : null}
 
               {/* Hauptinhalt – alle Seiten nutzen <div className="page"> via UI.Page */}
               <main className="main-content">{children}</main>

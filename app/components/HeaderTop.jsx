@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import ModuleLauncher from "./ModuleLauncher";
 
-export default function HeaderTop() {
+export default function HeaderTop({ user }) {
   const [openModules, setOpenModules] = useState(false);
   const pathname = usePathname();
 
@@ -44,19 +44,32 @@ export default function HeaderTop() {
               ≡ Menü
             </button>
 
-            <a
-              href="/login"
-              className="btn header-btn"
-              onClick={() => document.dispatchEvent(new Event("app:nav"))}
-            >
-              Login
-            </a>
+            {user ? (
+              <button
+                type="button"
+                className="btn header-btn"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+              >
+                Logout
+              </button>
+            ) : (
+              <a
+                href="/login"
+                className="btn header-btn"
+                onClick={() => document.dispatchEvent(new Event("app:nav"))}
+              >
+                Login
+              </a>
+            )}
           </div>
         </div>
       </header>
 
       {/* Modul-Panel als Overlay (schwebt über der Seite, verschiebt nichts) */}
-      <ModuleLauncher open={openModules} id="module-panel" onClose={() => setOpenModules(false)} />
+      <ModuleLauncher open={openModules} id="module-panel" onClose={() => setOpenModules(false)} user={user} />
 
       <style jsx>{`
         .header-row{
