@@ -31,6 +31,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Ansicht
+  const [viewportMode, setViewportMode] = useState("mobile");
+
   // Firmendaten
   const [companyName, setCompanyName] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -62,6 +65,8 @@ export default function SettingsPage() {
   }), [companyName, ownerName, address1, address2, postalCode, city, phone, email, website, bankAccount, vatId, kleinunternehmer, currency, logoUrl]);
 
   useEffect(() => {
+    setViewportMode(localStorage.getItem("viewportMode") || "mobile");
+
     (async () => {
       setLoading(true);
       const js = await fetch("/api/settings", { cache: "no-store" }).then(r => r.json()).catch(() => ({ ok:false }));
@@ -109,6 +114,12 @@ export default function SettingsPage() {
     if (secondaryColor) root.style.setProperty("--color-secondary", secondaryColor);
     if (textColor) root.style.setProperty("--color-text", textColor);
     if (fontFamily) document.body.style.fontFamily = fontFamily;
+  }
+
+  function handleViewportChange(mode) {
+    setViewportMode(mode);
+    localStorage.setItem("viewportMode", mode);
+    window.dispatchEvent(new Event("viewportChanged"));
   }
 
   async function onUploadLogo(file) {
@@ -163,6 +174,37 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Ansicht (Mobile/Desktop) */}
+      <section className="surface" style={{ marginTop:12 }}>
+        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Ansicht</h2>
+        <div style={{ display:"grid", gap:12 }}>
+          <Field label="Darstellung auf Mobilgeräten">
+            <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="viewportMode"
+                  value="mobile"
+                  checked={viewportMode === "mobile"}
+                  onChange={() => handleViewportChange("mobile")}
+                />
+                Mobile Ansicht (Standard)
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="viewportMode"
+                  value="desktop"
+                  checked={viewportMode === "desktop"}
+                  onChange={() => handleViewportChange("desktop")}
+                />
+                Desktop Ansicht erzwingen
+              </label>
+            </div>
+          </Field>
+        </div>
+      </section>
 
       {/* Firmendaten */}
       <section className="surface" style={{ marginTop:12 }}>
