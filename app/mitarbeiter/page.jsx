@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, KeyRound } from "lucide-react";
 
 export default function MitarbeiterPage() {
   const [employees, setEmployees] = useState([]);
@@ -9,9 +9,10 @@ export default function MitarbeiterPage() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "" });
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
     loadEmployees();
@@ -47,8 +48,10 @@ export default function MitarbeiterPage() {
       const data = await res.json();
       if (data.ok) {
         setIsModalOpen(false);
-        setForm({ name: "", email: "", password: "" });
+        setForm({ name: "", email: "" });
+        setSuccessMsg(`Mitarbeiter angelegt. Erst-Login-Code: ${data.initialCode}`);
         loadEmployees();
+        setTimeout(() => setSuccessMsg(""), 10000); // Hide after 10s
       } else {
         setErrorMsg(data.error || "Ein Fehler ist aufgetreten.");
       }
@@ -56,6 +59,23 @@ export default function MitarbeiterPage() {
       setErrorMsg("Verbindung fehlgeschlagen.");
     }
     setSaving(false);
+  }
+
+  async function resetCode(id) {
+    if (!confirm("Erst-Login Code wirklich neu generieren? Das bisherige Passwort des Mitarbeiters wird dadurch gelöscht.")) return;
+    try {
+      const res = await fetch(`/api/mitarbeiter/${id}/reset`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setSuccessMsg(`Neuer Erst-Login-Code generiert: ${data.initialCode}`);
+        loadEmployees();
+        setTimeout(() => setSuccessMsg(""), 10000);
+      } else {
+        alert(data.error || "Zurücksetzen fehlgeschlagen.");
+      }
+    } catch (e) {
+      alert("Fehler beim Zurücksetzen.");
+    }
   }
 
   async function deleteEmployee(id) {
@@ -91,6 +111,12 @@ export default function MitarbeiterPage() {
         </div>
       </div>
 
+      {successMsg && (
+        <div style={{ padding: "12px", backgroundColor: "#d1fae5", color: "#065f46", borderRadius: 8, marginBottom: 16, fontSize: 14, fontWeight: 500 }}>
+          {successMsg}
+        </div>
+      )}
+
       <div className="surface" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -99,6 +125,7 @@ export default function MitarbeiterPage() {
                 <th style={th}>Name</th>
                 <th style={th}>E-Mail</th>
                 <th style={th}>Erstellt am</th>
+                <th style={th}>Status / Code</th>
                 <th style={{ ...th, textAlign: "right" }}>Aktionen</th>
               </tr>
             </thead>
@@ -111,7 +138,26 @@ export default function MitarbeiterPage() {
                     <td style={{ ...td, fontWeight: 500 }}>{emp.name || "-"}</td>
                     <td style={td}>{emp.email}</td>
                     <td style={td}>{new Date(emp.createdAt).toLocaleDateString("de-DE")}</td>
+                    <td style={td}>
+                      {emp.needsPasswordChange ? (
+                        <span style={{ backgroundColor: "#fef3c7", color: "#92400e", padding: "2px 6px", borderRadius: 4, fontSize: 12, fontWeight: 600 }}>
+                          Code: {emp.initialLoginCode}
+                        </span>
+                      ) : (
+                        <span style={{ backgroundColor: "#d1fae5", color: "#065f46", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>
+                          Aktiv
+                        </span>
+                      )}
+                    </td>
                     <td style={{ ...td, textAlign: "right" }}>
+                      <button
+                        className="btn-xxs btn-ghost"
+                        onClick={() => resetCode(emp.id)}
+                        title="Code neu generieren"
+                        style={{ marginRight: 8 }}
+                      >
+                        <KeyRound size={14} />
+                      </button>
                       <button
                         className="btn-xxs btn-danger"
                         onClick={() => deleteEmployee(emp.id)}
@@ -164,18 +210,6 @@ export default function MitarbeiterPage() {
                   value={form.email}
                   onChange={e => setForm({ ...form, email: e.target.value })}
                 />
-              </label>
-
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>Passwort</span>
-                <input
-                  required
-                  type="password"
-                  className="input"
-                  value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
-                />
-                <span className="subtle" style={{ fontSize: 11 }}>Min. 8 Zeichen, mind. ein Großbuchstabe, ein Kleinbuchstabe und eine Zahl.</span>
               </label>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>

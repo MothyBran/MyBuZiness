@@ -58,11 +58,15 @@ export default function Sidebar({ user }) {
 
       <div className="sidebar__footer">
         {user && (
-          <div className="sidebar__item" title={user.name || "User"} style={{ cursor: "default", background: "transparent", border: "none" }}>
+          <Link
+            href="/profil"
+            className={`sidebar__item ${isActive("/profil") ? "is-active" : ""}`}
+            title="Profil"
+          >
             <span style={{ fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase" }}>
               {(user.name || "U").substring(0, 2)}
             </span>
-          </div>
+          </Link>
         )}
         <button
           onClick={handleLogout}

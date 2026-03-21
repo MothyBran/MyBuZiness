@@ -25,6 +25,26 @@ export async function POST(request) {
       );
     }
 
+    // If employee needs to set up a password, check the initial login code
+    if (user.needsPasswordChange) {
+      // Password from request is the initial code
+      if (password !== user.initialLoginCode) {
+         return NextResponse.json(
+          { ok: false, error: "Ungültiger Erst-Login Code." },
+          { status: 401 }
+        );
+      }
+
+      // If code matches, return response indicating setup is needed
+      return NextResponse.json({
+        ok: true,
+        needsPasswordSetup: true,
+        email: user.email,
+        initialCode: password
+      });
+    }
+
+    // Normal login flow
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return NextResponse.json(
