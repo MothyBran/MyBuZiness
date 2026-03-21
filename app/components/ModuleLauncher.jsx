@@ -61,19 +61,49 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel", use
 
         {/* Panel selbst scrollbar; eine Zeile pro Link */}
         <nav className="ml-list" role="menu" aria-orientation="vertical">
-          {LINKS.map((m)=>(
-            <Link
-              key={m.href}
-              href={m.href}
-              className={`ml-item ${isActive(m.href) ? "is-active" : ""}`}
-              onClick={onItemClick}
-              role="menuitem"
-            >
-              <span className="ml-ico" aria-hidden>{m.icon}</span>
-              <span className="ml-txt">{m.label}</span>
-              <span className="ml-chevron" aria-hidden>›</span>
-            </Link>
-          ))}
+          <div className="ml-links-main">
+            {LINKS.map((m)=>(
+              <Link
+                key={m.href}
+                href={m.href}
+                className={`ml-item ${isActive(m.href) ? "is-active" : ""}`}
+                onClick={onItemClick}
+                role="menuitem"
+              >
+                <span className="ml-ico" aria-hidden>{m.icon}</span>
+                <span className="ml-txt">{m.label}</span>
+                <span className="ml-chevron" aria-hidden>›</span>
+              </Link>
+            ))}
+          </div>
+
+          {user && (
+            <div className="ml-links-footer">
+              <Link
+                href="/profil"
+                className={`ml-item ${isActive("/profil") ? "is-active" : ""}`}
+                onClick={onItemClick}
+                role="menuitem"
+              >
+                <span className="ml-ico" aria-hidden>👤</span>
+                <span className="ml-txt">Profil</span>
+                <span className="ml-chevron" aria-hidden>›</span>
+              </Link>
+              <button
+                type="button"
+                className="ml-item ml-item-logout"
+                onClick={async () => {
+                  onClose?.();
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+                role="menuitem"
+              >
+                <span className="ml-ico" aria-hidden>🚪</span>
+                <span className="ml-txt">Abmelden</span>
+              </button>
+            </div>
+          )}
         </nav>
       </aside>
 
@@ -119,8 +149,24 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel", use
 
         /* Liste: Panel scrollbar wenn zu lang */
         .ml-list{
-          overflow-y: auto; padding: 10px;
-          display: grid; gap: 8px;
+          overflow-y: auto;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px; /* Space between main links and footer links */
+        }
+
+        .ml-links-main {
+          display: grid;
+          gap: 8px;
+        }
+
+        .ml-links-footer {
+          display: grid;
+          gap: 8px;
+          padding-top: 16px;
+          border-top: 1px solid var(--border);
+          margin-bottom: 20px; /* Ensure space at the bottom when scrolled down */
         }
 
         /* Hochwertige Card-Links */
@@ -149,6 +195,18 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel", use
         .ml-item:focus-visible{
           outline: 2px solid var(--brand);
           outline-offset: 2px;
+        }
+
+        button.ml-item {
+          width: 100%;
+          text-align: left;
+          font-family: inherit;
+          font-size: inherit;
+          cursor: pointer;
+        }
+
+        button.ml-item.ml-item-logout .ml-txt {
+          color: var(--error);
         }
 
         /* Active-Zustand mit Akzent links */
