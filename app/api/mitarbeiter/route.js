@@ -10,7 +10,7 @@ export async function GET(request) {
     await initDb();
 
     const res = await q(`
-      SELECT id, name, email, "createdAt"
+      SELECT id, name, email, "createdAt", "needsPasswordChange", "initialLoginCode"
       FROM "User"
       WHERE "ownerId" = $1 AND "role" = 'employee'
       ORDER BY "createdAt" DESC
@@ -29,20 +29,10 @@ export async function POST(request) {
     if (!user || user.role !== "admin") return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
     await initDb();
-    const { name, email, password } = await request.json();
+    const { name, email } = await request.json();
 
-    if (!email || !password || !name) {
-      return NextResponse.json({ ok: false, error: "Alle Felder sind erforderlich." }, { status: 400 });
-    }
-
-    let score = 0;
-    if (password.length >= 8) score += 1;
-    if (/[a-z]/.test(password)) score += 1;
-    if (/[A-Z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password)) score += 1;
-
-    if (score < 4) {
-      return NextResponse.json({ ok: false, error: "Das Passwort erfüllt nicht die Mindestanforderungen." }, { status: 400 });
+    if (!email || !name) {
+      return NextResponse.json({ ok: false, error: "Name und E-Mail sind erforderlich." }, { status: 400 });
     }
 
     const existing = await q(`SELECT id FROM "User" WHERE email = $1`, [email]);
@@ -51,14 +41,14 @@ export async function POST(request) {
     }
 
     const id = uuid();
-    const hashed = await hashPassword(password);
+    const initialCode = Math.random().toString(36).slice(-8).toUpperCase(); // 8 character random code
 
     await q(
-      `INSERT INTO "User" (id, email, "passwordHash", name, role, "ownerId") VALUES ($1, $2, $3, $4, 'employee', $5)`,
-      [id, email, hashed, name, user.id]
+      `INSERT INTO "User" (id, email, "passwordHash", name, role, "ownerId", "needsPasswordChange", "initialLoginCode") VALUES ($1, $2, $3, $4, 'employee', $5, true, $6)`,
+      [id, email, "", name, user.id, initialCode]
     );
 
-    return NextResponse.json({ ok: true, id });
+    return NextResponse.json({ ok: true, id, initialCode });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ ok: false, error: "Speichern fehlgeschlagen." }, { status: 500 });
