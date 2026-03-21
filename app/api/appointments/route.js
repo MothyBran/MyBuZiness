@@ -54,7 +54,14 @@ export async function GET(req) {
     }
 
     if (where.length) sql += " WHERE " + where.join(" AND ");
-    sql += ` ORDER BY "date" ASC, "startAt" ASC NULLS FIRST`;
+
+    // For sorting, if it's descending order (e.g., when fetching history), we use DESC
+    const sort = searchParams.get("sort");
+    if (sort === "desc") {
+      sql += ` ORDER BY "date" DESC, "startAt" DESC NULLS LAST`;
+    } else {
+      sql += ` ORDER BY "date" ASC, "startAt" ASC NULLS FIRST`;
+    }
 
     if (limit > 0) {
       sql += ` LIMIT ${Math.max(1, Math.min(limit, 50))}`;

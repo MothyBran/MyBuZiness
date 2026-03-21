@@ -2,6 +2,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Badge } from "../components/UI";
 
 /** Helpers */
 function Field({ label, children }) {
@@ -197,16 +199,76 @@ export default function CustomersPage() {
   );
 }
 
+/* Status Pill for Appointments */
+function computeDisplayStatus(e){
+  const now = new Date();
+  const end = new Date(`${e.date}T${(e.endAt||e.startAt||"00:00")}:00`);
+  const isPast = end < now;
+  if (e.status === "cancelled") return "abgesagt";
+  if (e.status === "done") return "abgeschlossen";
+  if (e.status === "open" && isPast) return "abgeschlossen";
+  return "offen";
+}
+
+function StatusPill({ status }) {
+  const map = {
+    offen: { tone: "warning", label: "Offen" },
+    bezahlt: { tone: "success", label: "Bezahlt" },
+    überfällig: { tone: "danger", label: "Überfällig" },
+    storniert: { tone: "muted", label: "Storniert" },
+    entwurf: { tone: "info", label: "Entwurf" },
+    abgeschlossen: { tone: "success", label: "Abgeschlossen" },
+    geplant: { tone: "info", label: "Geplant" },
+    abgesagt: { tone: "danger", label: "Abgesagt" },
+  };
+  const m = map[(status || "").toLowerCase()] ?? { tone: "muted", label: status || "—" };
+  return <Badge tone={m.tone}>{m.label}</Badge>;
+}
+
+function formatDateDE(input){
+  if (!input) return "—";
+  const d = new Date(input);
+  if (isNaN(d)) return input;
+  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+}
+
 /** Details-Ansicht im aufgeklappten Bereich */
 function CustomerDetails({ row, onEdit, onDelete }) {
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppts, setLoadingAppts] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoadingAppts(true);
+    fetch(`/api/appointments?customerId=${row.id}&sort=desc`, { cache: "no-store" })
+      .then(async r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(data => { if (alive) setAppointments(Array.isArray(data) ? data : []); })
+      .catch(() => { if (alive) setAppointments([]); })
+      .finally(() => { if (alive) setLoadingAppts(false); });
+    return () => { alive = false; };
+  }, [row.id]);
+
   return (
-    <div style={{ display:"grid", gap:12 }}>
+    <div style={{ display:"grid", gap:24 }}>
+      <div style={{ display:"grid", gap:12 }}>
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
         <Field label="Name"><div>{row.name}</div></Field>
-        <Field label="E-Mail"><div>{row.email || "—"}</div></Field>
+        <Field label="E-Mail">
+          <div>
+            {row.email ? (
+              <a href={`mailto:${row.email}`} style={{ color: "var(--brand)", textDecoration: "none" }}>{row.email}</a>
+            ) : "—"}
+          </div>
+        </Field>
       </div>
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-        <Field label="Telefon"><div>{row.phone || "—"}</div></Field>
+        <Field label="Telefon">
+          <div>
+            {row.phone ? (
+              <a href={`tel:${row.phone}`} style={{ color: "var(--brand)", textDecoration: "none" }}>{row.phone}</a>
+            ) : "—"}
+          </div>
+        </Field>
         <Field label="Straße"><div>{row.addressStreet || "—"}</div></Field>
       </div>
       <div style={{ display:"grid", gap:12, gridTemplateColumns:"140px 1fr 1fr" }}>
@@ -219,6 +281,55 @@ function CustomerDetails({ row, onEdit, onDelete }) {
       <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap", marginTop:4 }}>
         <button style={btnGhost} onClick={onEdit}>⚙️ Bearbeiten</button>
         <button style={btnDanger} onClick={onDelete}>❌ Löschen</button>
+      </div>
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+        <h3 style={{ marginBottom: 12, fontSize: 16 }}>Termin-Historie</h3>
+        {loadingAppts ? (
+          <div className="muted" style={{ fontSize: 14 }}>Lade Termine…</div>
+        ) : appointments.length === 0 ? (
+          <div className="muted" style={{ fontSize: 14 }}>Keine Termine vorhanden.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {appointments.map(ev => {
+              const displayStatus = computeDisplayStatus(ev);
+              return (
+                <Link
+                  key={ev.id}
+                  href={`/termine/eintrag/${ev.id}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr auto",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    background: "var(--panel)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    color: "inherit"
+                  }}
+                >
+                  <div style={{ fontSize: 18 }} title={ev.kind === 'order' ? 'Auftrag' : 'Termin'}>
+                    {ev.kind === 'order' ? "🧾" : "📅"}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {ev.title || "(ohne Titel)"}
+                    </div>
+                    <div className="muted" style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {formatDateDE(ev.date)} · {ev.startAt?.slice(0, 5)}{ev.endAt ? `–${ev.endAt.slice(0, 5)}` : ""}
+                    </div>
+                  </div>
+                  <div>
+                    <StatusPill status={displayStatus} />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
