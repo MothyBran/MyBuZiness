@@ -108,6 +108,7 @@ export default function Sidebar({ user }) {
           overflow-y: auto;
           -ms-overflow-style: none; /* IE and Edge */
           scrollbar-width: none; /* Firefox */
+          -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
         }
 
         .sidebar__nav::-webkit-scrollbar {
@@ -123,6 +124,7 @@ export default function Sidebar({ user }) {
             margin-bottom: 1rem;
             padding-top: 1rem; /* Add some padding so it doesn't touch the scrollable nav directly */
             margin-top: auto; /* Push footer to the bottom */
+            flex-shrink: 0; /* Prevent the footer from shrinking */
         }
 
         .sidebar__item {
@@ -131,6 +133,8 @@ export default function Sidebar({ user }) {
           justify-content: center;
           width: 48px;
           height: 48px;
+          min-height: 48px; /* Ensure elements don't shrink on small screens */
+          flex-shrink: 0; /* Prevent elements from shrinking */
           border-radius: 12px;
           color: var(--text-weak);
           transition: all 0.2s ease;
