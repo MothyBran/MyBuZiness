@@ -105,6 +105,13 @@ export default function Sidebar({ user }) {
           width: 100%;
           align-items: center;
           flex: 1;
+          overflow-y: auto;
+          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: none; /* Firefox */
+        }
+
+        .sidebar__nav::-webkit-scrollbar {
+          display: none; /* Chrome, Safari and Opera */
         }
 
         .sidebar__footer {
@@ -114,6 +121,8 @@ export default function Sidebar({ user }) {
             width: 100%;
             align-items: center;
             margin-bottom: 1rem;
+            padding-top: 1rem; /* Add some padding so it doesn't touch the scrollable nav directly */
+            margin-top: auto; /* Push footer to the bottom */
         }
 
         .sidebar__item {
