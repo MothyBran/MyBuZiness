@@ -5,6 +5,7 @@ import AppFooter from "./components/AppFooter";
 import InstallPrompt from "./components/InstallPrompt";
 import Sidebar from "./components/Sidebar";
 import ViewportManager from "./components/ViewportManager";
+import ThemeManager from "./components/ThemeManager";
 import { getUser } from "@/lib/auth";
 
 export const metadata = {
@@ -22,6 +23,7 @@ export default async function RootLayout({ children }) {
       </head>
       <body>
         <ViewportManager />
+        <ThemeManager />
         {user ? (
           <>
             {/* Desktop Sidebar (Fixed) */}

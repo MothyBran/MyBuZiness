@@ -222,15 +222,17 @@ export default function FinanzenPage(){
             <input className="input" inputMode="decimal" placeholder="z. B. 19,99"
                    value={form.gross} onChange={e=>setForm(f=>({...f, gross:e.target.value}))}/>
           </label>
-          <label className="field">
-            <span className="label">MwSt-Satz</span>
-            <select className="select" value={form.vatRate} onChange={e=>setForm(f=>({...f, vatRate:e.target.value}))}>
-              <option value="19">19%</option>
-              <option value="7">7%</option>
-              <option value="0">0% / steuerfrei</option>
-              <option value="">(keine Angabe)</option>
-            </select>
-          </label>
+          {!summary?.settings?.kleinunternehmer && (
+            <label className="field">
+              <span className="label">MwSt-Satz</span>
+              <select className="select" value={form.vatRate} onChange={e=>setForm(f=>({...f, vatRate:e.target.value}))}>
+                <option value="19">19%</option>
+                <option value="7">7%</option>
+                <option value="0">0% / steuerfrei</option>
+                <option value="">(keine Angabe)</option>
+              </select>
+            </label>
+          )}
           <label className="field">
             <span className="label">Datum</span>
             <input className="input" type="date" value={form.bookedOn} onChange={e=>setForm(f=>({...f, bookedOn:e.target.value}))}/>
@@ -282,9 +284,9 @@ export default function FinanzenPage(){
                 <th style={th}>Datum</th>
                 <th style={th}>Art</th>
                 <th style={th}>Kategorie</th>
-                <th style={th}>MwSt</th>
+                {!summary?.settings?.kleinunternehmer && <th style={th}>MwSt</th>}
                 <th style={th}>Netto</th>
-                <th style={th}>USt/VSt</th>
+                {!summary?.settings?.kleinunternehmer && <th style={th}>USt/VSt</th>}
                 <th style={th}>Brutto</th>
                 <th style={th}>Zahlungsart</th>
                 <th style={th}>Bezug</th>
@@ -293,16 +295,16 @@ export default function FinanzenPage(){
             </thead>
             <tbody>
               {loading ? (
-                <tr><td style={td} colSpan={10}>Lade…</td></tr>
+                <tr><td style={td} colSpan={summary?.settings?.kleinunternehmer ? 8 : 10}>Lade…</td></tr>
               ) : rows.length ? rows.map(r=>(
                 <React.Fragment key={r.id}>
                   <tr style={{cursor: "pointer", background: expandedRowId === r.id ? "var(--panel, #f8fafc)" : "transparent"}} onClick={() => toggleRow(r.id)}>
                     <td style={td}>{r.bookedOn}</td>
                     <td style={td}>{r.kind}</td>
                     <td style={td}>{r.categoryName || r.categoryCode || "-"}</td>
-                    <td style={td}>{(r.vatRate==null || Number.isNaN(Number(r.vatRate)))? "—" : `${Number(r.vatRate)}%`}</td>
+                    {!summary?.settings?.kleinunternehmer && <td style={td}>{(r.vatRate==null || Number.isNaN(Number(r.vatRate)))? "—" : `${Number(r.vatRate)}%`}</td>}
                     <td style={td}>{centsToEUR(r.netCents)}</td>
-                    <td style={td}>{centsToEUR(r.vatCents)}</td>
+                    {!summary?.settings?.kleinunternehmer && <td style={td}>{centsToEUR(r.vatCents)}</td>}
                     <td style={td}><b>{centsToEUR(r.grossCents)}</b></td>
                     <td style={td}>{r.paymentMethod || "-"}</td>
                     <td style={td} onClick={e => e.stopPropagation()}>
@@ -316,7 +318,7 @@ export default function FinanzenPage(){
                   </tr>
                   {expandedRowId === r.id && (
                     <tr style={{background: "var(--panel, #f8fafc)"}}>
-                      <td colSpan={10} style={{padding: "16px 20px", borderBottom: "1px solid var(--border, #f2f2f2)"}}>
+                      <td colSpan={summary?.settings?.kleinunternehmer ? 8 : 10} style={{padding: "16px 20px", borderBottom: "1px solid var(--border, #f2f2f2)"}}>
                         <div style={{display: "flex", gap: 24, flexWrap: "wrap"}}>
                           <div style={{flex: "1 1 300px"}}>
                             <div style={{fontWeight: 600, marginBottom: 8}}>Details</div>
@@ -366,7 +368,7 @@ export default function FinanzenPage(){
                   )}
                 </React.Fragment>
               )) : (
-                <tr><td style={td} colSpan={10}>Keine Einträge.</td></tr>
+                <tr><td style={td} colSpan={summary?.settings?.kleinunternehmer ? 8 : 10}>Keine Einträge.</td></tr>
               )}
             </tbody>
           </table>

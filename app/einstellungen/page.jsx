@@ -33,6 +33,7 @@ export default function SettingsPage() {
 
   // Ansicht
   const [viewportMode, setViewportMode] = useState("mobile");
+  const [colorMode, setColorMode] = useState("system");
 
   // Firmendaten
   const [companyName, setCompanyName] = useState("");
@@ -66,6 +67,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setViewportMode(localStorage.getItem("viewportMode") || "mobile");
+    setColorMode(localStorage.getItem("colorMode") || "system");
 
     (async () => {
       setLoading(true);
@@ -120,6 +122,12 @@ export default function SettingsPage() {
     setViewportMode(mode);
     localStorage.setItem("viewportMode", mode);
     window.dispatchEvent(new Event("viewportChanged"));
+  }
+
+  function handleColorModeChange(mode) {
+    setColorMode(mode);
+    localStorage.setItem("colorMode", mode);
+    window.dispatchEvent(new Event("themeChanged"));
   }
 
   async function onUploadLogo(file) {
@@ -178,7 +186,43 @@ export default function SettingsPage() {
       {/* Ansicht (Mobile/Desktop) */}
       <section className="surface" style={{ marginTop:12 }}>
         <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Ansicht</h2>
-        <div style={{ display:"grid", gap:12 }}>
+        <div style={{ display:"grid", gap:24 }}>
+
+          <Field label="Light / Dark Mode">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", marginTop: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="colorMode"
+                  value="system"
+                  checked={colorMode === "system"}
+                  onChange={() => handleColorModeChange("system")}
+                />
+                System
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="colorMode"
+                  value="light"
+                  checked={colorMode === "light"}
+                  onChange={() => handleColorModeChange("light")}
+                />
+                Hell (Light)
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="colorMode"
+                  value="dark"
+                  checked={colorMode === "dark"}
+                  onChange={() => handleColorModeChange("dark")}
+                />
+                Dunkel (Dark)
+              </label>
+            </div>
+          </Field>
+
           <Field label="Darstellung auf Mobilgeräten">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", marginTop: 8 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
