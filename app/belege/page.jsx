@@ -233,32 +233,47 @@ export default function ReceiptsPage(){
     if(clean.length===0){ alert("Bitte mindestens eine Position erfassen."); return; }
 
     const payload = {
-      receiptNo: receiptNo || undefined,
-      date,
-      currency,
+      receiptNo: (receiptNo || "").trim() || undefined,
+      date: date || new Date().toISOString().slice(0,10),
+      currency: currency || "EUR",
       vatExempt: !!vatExempt,
-      discountCents: totals.disc,
-      note,
+      discountCents: toInt(totals.disc || 0),
+      note: (note || "").trim(),
       items: clean
     };
 
     let ok = false;
-    if (editRow) {
-      const res = await fetch(`/api/receipts/${editRow.id}`, {
-        method:"PUT",
-        headers:{ "content-type":"application/json" },
-        body: JSON.stringify(payload)
-      }).catch(()=>null);
-      ok = !!(res && res.ok);
-    } else {
-      const res = await fetch(`/api/receipts`, {
-        method:"POST",
-        headers:{ "content-type":"application/json" },
-        body: JSON.stringify(payload)
-      }).catch(()=>null);
-      ok = !!(res && res.ok);
+    let errMessage = "Speichern fehlgeschlagen.";
+    try {
+      let res;
+      if (editRow) {
+        res = await fetch(`/api/receipts/${editRow.id}`, {
+          method:"PUT",
+          headers:{ "content-type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch(`/api/receipts`, {
+          method:"POST",
+          headers:{ "content-type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+      if (res && res.ok) {
+        const js = await res.json().catch(()=>({}));
+        if (js.ok) {
+          ok = true;
+        } else {
+          errMessage = js.error || errMessage;
+        }
+      } else if (res) {
+        const js = await res.json().catch(()=>({}));
+        errMessage = js?.error || errMessage;
+      }
+    } catch(e) {
+       errMessage = e.message || errMessage;
     }
-    if(!ok){ alert("Speichern fehlgeschlagen."); return; }
+    if(!ok){ alert(errMessage); return; }
     setIsOpen(false);
     await load();
   }
