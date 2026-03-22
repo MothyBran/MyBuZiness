@@ -176,12 +176,23 @@ export default function ReceiptsPage(){
     );
     setIsOpen(true);
   }
-  function openNew(){
+  async function openNew(){
     setEditRow(null);
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
     const mm = pad2(now.getMonth()+1);
-    setReceiptNo(`BN-${yy}${mm}-001`);
+
+    // Auto-fetch next receipt No.
+    let nextNum = "001";
+    try {
+      const res = await fetch("/api/receipts/nextNo");
+      if (res.ok) {
+        const js = await res.json();
+        if (js.nextNo) nextNum = String(js.nextNo).padStart(3, "0");
+      }
+    } catch(e) {}
+
+    setReceiptNo(`BN-${yy}${mm}-${nextNum}`);
     setDate(now.toISOString().slice(0,10));
     setDiscount("0");
     setNote("");
