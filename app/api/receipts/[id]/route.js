@@ -13,7 +13,7 @@ export async function GET(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
 
     const head = (await q(
       `SELECT
@@ -64,7 +64,7 @@ export async function DELETE(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
     // rely on CASCADE for items
     const res = await q(`DELETE FROM "Receipt" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) {
@@ -83,7 +83,7 @@ export async function PUT(req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
     const body = await req.json().catch(()=> ({}));
 
     // Vorhandene Kopf-/Items holen (für Defaults & Summen) & Ownership Check
