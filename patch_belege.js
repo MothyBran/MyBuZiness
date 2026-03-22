@@ -1,60 +1,22 @@
-// app/belege/[id]/druck/page.jsx
-"use client";
+const fs = require('fs');
+const file = 'app/belege/[id]/druck/page.jsx';
+let content = fs.readFileSync(file, 'utf8');
 
-import { useEffect, useState } from "react";
-import React from "react";
+const regex = /const \[err, setErr\] = useState\(""\);/
+const stateVars = `const [err, setErr] = useState("");
+  const [settings, setSettings] = useState({});`;
 
-function money(cents, curr = "EUR") {
-  const n = Number(cents || 0) / 100;
-  return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
-}
+content = content.replace(regex, stateVars);
 
-function fmtDEDate(input){
-  if (!input) return "—";
-  const d = new Date(input);
-  return isNaN(d) ? "—" : d.toLocaleDateString("de-DE");
-}
-
-export default function ReceiptPrintPage({ params }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [settings, setSettings] = useState({});
-
-  useEffect(() => {
-    // Da params asynchron in Next.js 15+ sind
-    Promise.resolve(params).then(p => {
-      load(p.id);
-    });
-  }, [params]);
-
-  async function load(id) {
-    try {
-      const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Beleg nicht gefunden.");
-      const json = await res.json();
-      if (!json.ok || !json.data) throw new Error(json.error || "Beleg nicht gefunden.");
-      setData(json.data);
-
+const fetchRegex = /const json = await res\.json\(\);/
+const fetchSettings = `const json = await res.json();
       const sres = await fetch("/api/settings");
-      if (sres.ok) setSettings((await sres.json()) || {});
-    } catch (error) {
-      setErr(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+      if (sres.ok) setSettings((await sres.json()) || {});`;
 
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>;
-  if (err || !data) return <div style={{ padding: "2rem", color: "red", textAlign: "center" }}>Fehler: {err || "Beleg nicht gefunden"}</div>;
+content = content.replace(fetchRegex, fetchSettings);
 
-  const curr = data.currency || "EUR";
-  const items = Array.isArray(data.items) ? data.items : [];
-
-  return (
-    <>
-      {/* Verstecke die normale UI beim Drucken */}
-      <style dangerouslySetInnerHTML={{__html: `
+const cssRegex = /<style dangerouslySetInnerHTML=\{\{__html: \`/
+const cssChanges = `<style dangerouslySetInnerHTML={{__html: \`
         @page {
           margin: 0;
         }
@@ -64,11 +26,13 @@ export default function ReceiptPrintPage({ params }) {
           .print-area { margin: 0 auto; padding: 4mm; width: 80mm; max-width: 80mm; box-shadow: none; border: none; font-size: 10pt; line-height: 1.2; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
-        body { background: #f8fafc; color: var(--color-text, #1e293b); font-family: ${settings.fontFamily || "sans-serif"}; }
+        body { background: #f8fafc; color: var(--color-text, #1e293b); font-family: var(--font-family, sans-serif); }
         .print-area {
           width: 80mm; max-width: 80mm; margin: 2rem auto; padding: 4mm;
           background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
           font-size: 10pt; line-height: 1.2;
+          --color-primary: \${settings.primaryColor || "#0aa"};
+          font-family: \${settings.fontFamily || "sans-serif"};
         }
         .header { margin-bottom: 1rem; border-bottom: 1px dashed #e2e8f0; padding-bottom: 0.5rem; text-align: center; }
         .logo { max-width: 60mm; max-height: 20mm; margin: 0 auto 10px; display: block; object-fit: contain; }
@@ -95,20 +59,21 @@ export default function ReceiptPrintPage({ params }) {
 
         .btn-print {
           display: block; margin: 2rem auto; padding: 0.75rem 1.5rem;
-          background: ${settings.primaryColor || "#0aa"}; color: white; border: none; border-radius: 0.5rem;
+          background: var(--color-primary, #0aa); color: white; border: none; border-radius: 0.5rem;
           font-size: 1rem; cursor: pointer; font-weight: bold;
         }
-      `}} />
+\`;
 
-      <button className="no-print btn-print" onClick={() => window.print()}>🖨️ Jetzt drucken / als PDF speichern</button>
+content = content.replace(/<style dangerouslySetInnerHTML=\{\{__html: `[\s\S]*?`\}\} \/>/, cssChanges + "}} />");
 
-      <div className="print-area">
+const jsxRegex = /<div className="print-area">[\s\S]*?<\/div>\n    <\/>/
+const jsxChanges = `<div className="print-area">
         <div className="header">
           {settings.logoUrl && <img src={settings.logoUrl} alt="Logo" className="logo" />}
           <h1 className="title">{settings.companyName || "Quittung"}</h1>
           <div style={{ fontSize: "9pt", margin: "5px 0" }}>
             {settings.address1 && <div>{settings.address1}</div>}
-            {(settings.postalCode || settings.city) ? <div>{settings.postalCode} {settings.city}</div> : null}
+            {settings.postalCode || settings.city ? <div>{settings.postalCode} {settings.city}</div> : null}
             {settings.email && <div>{settings.email}</div>}
           </div>
 
@@ -184,6 +149,7 @@ export default function ReceiptPrintPage({ params }) {
           </div>
         )}
       </div>
-    </>
-  );
-}
+    </>`;
+
+content = content.replace(jsxRegex, jsxChanges);
+fs.writeFileSync(file, content);

@@ -646,7 +646,10 @@ function PrintArea({ row, settings, currency, customer }) {
   ].filter(Boolean).join(" • ");
 
   return (
-    <div className="print-area">
+    <div className="print-area" style={{
+      fontFamily: firm.fontFamily || "inherit",
+      "--color-primary": firm.primaryColor || "var(--brand, #14b8a6)"
+    }}>
       <div className="print-page">
         {/* Kopf */}
         <div className="ph-head">
@@ -725,7 +728,13 @@ function PrintArea({ row, settings, currency, customer }) {
         .ph-left{ flex:1; min-width: 55%; }
         .ph-right{ text-align:right; min-width: 35%; }
         .ph-logo{ max-height: 48px; margin-bottom: 8px; }
-        .ph-fromline{ font-weight:700; margin-top:4px; }
+        .ph-left { container-type: inline-size; }
+        .ph-fromline {
+          font-weight: 700;
+          margin-top: 4px;
+          white-space: nowrap;
+          font-size: clamp(6px, 4cqi, 10pt);
+        }
         .ph-sep{ height: 1px; background:#222; margin: 8px 0 12px; }
 
         .ph-recipient{ margin: 0 0 10px; }
