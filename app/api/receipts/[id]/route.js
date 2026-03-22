@@ -188,6 +188,9 @@ export async function PUT(req, { params }) {
     return Response.json({ ok:true, data:{ id } });
   } catch (e) {
     try { await q("ROLLBACK"); } catch {}
+    if (e.code === '23505' && e.constraint === 'Receipt_receiptNo_userId_key') {
+      return new Response(JSON.stringify({ ok:false, error:"Diese Beleg-Nr. wird bereits verwendet. Bitte wähle eine andere." }), { status: 400 });
+    }
     return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
   }
 }

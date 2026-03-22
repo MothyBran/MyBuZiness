@@ -195,7 +195,6 @@ export default function ReceiptPrintPage({ params }) {
           <strong>{settings.companyName || "—"}</strong><br />
           {settings.address1 && <span>{settings.address1}<br /></span>}
           {(settings.postalCode || settings.city) && <span>{settings.postalCode} {settings.city}<br /></span>}
-          {settings.bankAccount && <span style={{ whiteSpace: "pre-line" }}>Bankverbindung: {settings.bankAccount}<br /></span>}
           {settings.vatId && <span>USt-ID: {settings.vatId}</span>}
         </div>
 

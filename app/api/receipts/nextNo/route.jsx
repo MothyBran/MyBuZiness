@@ -1,15 +1,22 @@
 // app/api/receipts/nextNo/route.js
 import { initDb, q } from "@/lib/db";
 
+import { getUser } from "@/lib/auth";
+
 export async function GET() {
   try {
+    const session = await getUser();
+    if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const uId = session.role === "employee" && session.ownerId ? session.ownerId : session.id;
+
     await initDb();
     // Höchste Ziffernfolge aus receiptNo ziehen, +1
     const row = (await q(
       `SELECT COALESCE(MAX(
           NULLIF(regexp_replace("receiptNo", '\\D', '', 'g'), '')::bigint
         ), 0)::bigint AS last
-       FROM "Receipt"`
+       FROM "Receipt"
+       WHERE "userId" = $1`, [uId]
     )).rows[0];
 
     const next = Number(row?.last || 0) + 1;
