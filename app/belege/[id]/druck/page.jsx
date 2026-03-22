@@ -38,7 +38,10 @@ export default function ReceiptPrintPage({ params }) {
       setData(json.data);
 
       const sres = await fetch("/api/settings");
-      if (sres.ok) setSettings((await sres.json()) || {});
+      if (sres.ok) {
+        const js = await sres.json();
+        setSettings(js?.data || {});
+      }
     } catch (error) {
       setErr(error.message);
     } finally {

@@ -762,18 +762,29 @@ function PrintArea({ row, settings, currency, customer }) {
         {/* Fußzeile – Bank/Steuer */}
         <div className="ph-footer">
           <div className="ph-footer-col">
-            {firm.bankAccount && <span style={{ whiteSpace: "pre-line" }}><strong>Bankverbindung:</strong><br />{firm.bankAccount}</span>}
+            {firm.bankAccount && (
+              <span>
+                <strong>Bankverbindung:</strong>{" "}
+                {firm.bankAccount.replace(/\n/g, " | ")}
+              </span>
+            )}
           </div>
           <div className="ph-footer-col" style={{ textAlign: "right" }}>
-            {firm.vatId && <span><strong>USt-ID:</strong><br />{firm.vatId}</span>}
+            {firm.vatId && <span><strong>USt-ID:</strong> {firm.vatId}</span>}
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .print-page{ position: relative; padding: 24px 28px; padding-bottom: 120px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; min-height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; }
-        .ph-footer{ position: absolute; bottom: 0; left: 28px; right: 28px; border-top: 1px solid #ddd; padding-top: 16px; padding-bottom: 24px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; }
-        .ph-footer-col{ flex: 1; line-height: 1.5; }
+        .print-page{ padding: 24px 28px; padding-bottom: 0px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; display: flex; flex-direction: column; box-sizing: border-box; }
+        @media print {
+          .print-page { min-height: 100vh; position: relative; }
+          .ph-footer { position: fixed; bottom: 0; left: 0; right: 0; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; }
+          /* Add bottom margin to the page when printing so content doesn't underlap fixed footer */
+          @page { margin-bottom: 60px; }
+        }
+        .ph-footer{ border-top: 1px solid #ddd; margin-top: 40px; padding-top: 16px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; }
+        .ph-footer-col{ line-height: 1.5; }
         .ph-head{ display:flex; justify-content:space-between; gap:18px; }
         .ph-left{ flex:1; min-width: 55%; }
         .ph-right{ text-align:right; min-width: 35%; }
