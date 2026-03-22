@@ -130,6 +130,11 @@ export async function POST(request) {
     });
   } catch (e) {
     try { await q("ROLLBACK"); } catch {}
+    if (e.code === '23505' && e.constraint === 'Receipt_receiptNo_userId_key') {
+      return new Response(JSON.stringify({ ok:false, error: "Diese Beleg-Nr. wird bereits verwendet. Bitte wähle eine andere." }), {
+        status: 400, headers: { "content-type":"application/json" }
+      });
+    }
     return new Response(JSON.stringify({ ok:false, error: String(e) }), {
       status: e.message === "Unauthorized" ? 401 : 400, headers: { "content-type":"application/json" }
     });

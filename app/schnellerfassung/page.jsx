@@ -127,7 +127,7 @@ export default function SchnellerfassungPage() {
       currency,
       vatExempt: !!vatExempt,
       discountCents: totals.disc,
-      note: "Schnellerfassung",
+      note: "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
       items
     };
 
