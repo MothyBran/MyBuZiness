@@ -368,6 +368,8 @@ export default function InvoicesPage() {
 
         /* ===== Druck: nur print-area ausgeben ===== */
         @media print{
+          @page { margin: 0; }
+          body { background: white !important; margin: 0; padding: 0; }
           body *{ visibility: hidden !important; }
           .print-area, .print-area *{ visibility: visible !important; }
           .print-area{ position: absolute; left:0; top:0; width:100%; padding:0 !important; margin:0 !important; }
@@ -759,13 +761,26 @@ function PrintArea({ row, settings, currency, customer }) {
 
         {/* Fußzeile – Bank/Steuer */}
         <div className="ph-footer">
-          {firm.bankAccount && <div><strong>Bankverbindung:</strong> {firm.bankAccount}</div>}
-          {firm.vatId && <div><strong>USt-ID:</strong> {firm.vatId}</div>}
+          <div className="ph-footer-col">
+            <strong>{firm.companyName || "—"}</strong><br />
+            {firm.address1 && <span>{firm.address1}<br /></span>}
+            {(firm.postalCode || firm.city) && <span>{firm.postalCode} {firm.city}<br /></span>}
+            {firm.phone && <span>{firm.phone}<br /></span>}
+            {firm.email && <span>{firm.email}</span>}
+          </div>
+          <div className="ph-footer-col">
+            {firm.bankAccount && <span style={{ whiteSpace: "pre-line" }}><strong>Bankverbindung:</strong><br />{firm.bankAccount}</span>}
+          </div>
+          <div className="ph-footer-col">
+            {firm.vatId && <span><strong>USt-ID:</strong><br />{firm.vatId}</span>}
+          </div>
         </div>
       </div>
 
       <style jsx>{`
-        .print-page{ padding: 24px 28px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; }
+        .print-page{ padding: 24px 28px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; min-height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; }
+        .ph-footer{ border-top: 1px solid #ddd; margin-top: auto; padding-top: 16px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; }
+        .ph-footer-col{ flex: 1; line-height: 1.5; }
         .ph-head{ display:flex; justify-content:space-between; gap:18px; }
         .ph-left{ flex:1; min-width: 55%; }
         .ph-right{ text-align:right; min-width: 35%; }

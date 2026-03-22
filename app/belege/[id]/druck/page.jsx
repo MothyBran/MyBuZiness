@@ -191,11 +191,12 @@ export default function ReceiptPrintPage({ params }) {
         )}
 
         {/* Fußzeile mit Unternehmensdaten */}
-        <div style={{ marginTop: "2rem", borderTop: "1px dashed #cbd5e1", paddingTop: "0.5rem", fontSize: "8pt", textAlign: "center" }}>
-          <strong>{settings.companyName}</strong><br />
+        <div style={{ marginTop: "2rem", borderTop: "1px dashed #cbd5e1", paddingTop: "0.5rem", fontSize: "8pt", textAlign: "center", color: "black", opacity: 1, visibility: "visible" }}>
+          <strong>{settings.companyName || "—"}</strong><br />
           {settings.address1 && <span>{settings.address1}<br /></span>}
-          {settings.postalCode} {settings.city}
-          {settings.vatId && <><br />USt-ID: {settings.vatId}</>}
+          {(settings.postalCode || settings.city) && <span>{settings.postalCode} {settings.city}<br /></span>}
+          {settings.bankAccount && <span style={{ whiteSpace: "pre-line" }}>Bankverbindung: {settings.bankAccount}<br /></span>}
+          {settings.vatId && <span>USt-ID: {settings.vatId}</span>}
         </div>
 
       </div>
