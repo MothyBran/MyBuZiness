@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Barcode from "react-barcode";
+import BarcodeScannerModal from "../components/BarcodeScannerModal";
 
 /* ───────── Helpers ───────── */
 const toInt = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.trunc(n) : 0; };
@@ -65,6 +67,9 @@ export default function InvoicesPage() {
 
   const [printFor, setPrintFor] = useState(null);
 
+  const [q, setQ] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+
   async function load() {
     setLoading(true);
     try {
@@ -106,6 +111,19 @@ export default function InvoicesPage() {
     setTimeout(()=> window.print(), 50);
   }
 
+  const filteredRows = useMemo(() => {
+    if (!q) return rows;
+    const lowerQ = q.toLowerCase();
+    return rows.filter((r) => {
+      const rn = (r.invoiceNo || "").toLowerCase();
+      const dt = r.issueDate ? new Date(r.issueDate).toLocaleDateString().toLowerCase() : "";
+      const num = money(r.grossCents, r.currency || currency).toLowerCase();
+      const cn = (r.customerName || customers.find(c => String(c.id) === String(r.customerId))?.name || "").toLowerCase();
+
+      return rn.includes(lowerQ) || dt.includes(lowerQ) || num.includes(lowerQ) || cn.includes(lowerQ);
+    });
+  }, [rows, q, currency, customers]);
+
   return (
     <main className="container">
       {/* Kopf */}
@@ -114,10 +132,29 @@ export default function InvoicesPage() {
           <h1 className="page-title" style={{ marginBottom:4 }}>Rechnungen</h1>
           <div className="subtle">Ausgangsrechnungen & Abrechnungen</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center" }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Suchen (Nr/Datum/Kunde/Betrag)…"
+            style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel)", color: "var(--text)", width: "260px" }}
+          />
+          <button onClick={() => setShowScanner(true)} style={S.ghost} title="Barcode scannen">
+            📷 Scanner
+          </button>
           <button style={S.btn} onClick={() => setIsOpen(true)}>+ Neue Rechnung</button>
         </div>
       </div>
+
+      {showScanner && (
+        <BarcodeScannerModal
+          onClose={() => setShowScanner(false)}
+          onScan={(data) => {
+            setQ(data);
+            setShowScanner(false);
+          }}
+        />
+      )}
 
       {/* Tabelle – NUR diese Card bekommt horizontales Scrolling */}
       <div className="surface" style={{ padding: 0, overflow: "hidden" }}>
@@ -141,11 +178,11 @@ export default function InvoicesPage() {
             </thead>
             <tbody>
               {loading && <tr><td colSpan={5} className="muted">Lade…</td></tr>}
-              {!loading && rows.length === 0 && (
+              {!loading && filteredRows.length === 0 && (
                 <tr><td colSpan={5} className="muted">Keine Rechnungen vorhanden.</td></tr>
               )}
 
-              {!loading && rows.map((r) => {
+              {!loading && filteredRows.map((r) => {
                 const d = r.issueDate ? new Date(r.issueDate) : null;
                 const dateStr = d ? d.toLocaleDateString() : "—";
                 const isOpenRow = expandedId === r.id;
@@ -669,6 +706,11 @@ function PrintArea({ row, settings, currency, customer }) {
             <div className="ph-title">RECHNUNG</div>
             <div>Nr.: <strong>{row.invoiceNo}</strong></div>
             <div>Datum: <strong>{row.issueDate ? new Date(row.issueDate).toLocaleDateString("de-DE") : ""}</strong></div>
+            {row.invoiceNo && (
+              <div style={{ marginTop: "10px", textAlign: "right" }}>
+                <Barcode value={row.invoiceNo} width={1.5} height={40} displayValue={false} margin={0} />
+              </div>
+            )}
             {(firm.email || firm.phone) && (
               <div className="ph-contact">
                 {firm.email && <div>{firm.email}</div>}

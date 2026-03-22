@@ -374,7 +374,6 @@ export default function SettingsPage() {
 
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:16 }}>
           <button onClick={save} disabled={saving} style={btnPrimary}>{saving ? "Speichern…" : "Speichern"}</button>
-          <button onClick={()=>applyTheme({ primaryColor, secondaryColor, textColor, fontFamily })} style={btnGhost}>Live anwenden</button>
         </div>
       </section>
 

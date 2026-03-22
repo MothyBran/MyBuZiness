@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import React from "react";
+import Barcode from "react-barcode";
 
 function money(cents, curr = "EUR") {
   const n = Number(cents || 0) / 100;
@@ -124,6 +125,11 @@ export default function ReceiptPrintPage({ params }) {
               </tr>
             </tbody>
           </table>
+          {data.receiptNo && (
+            <div style={{ textAlign: "center", marginTop: "10px" }}>
+              <Barcode value={data.receiptNo} width={1.5} height={40} fontSize={12} displayValue={false} margin={0} />
+            </div>
+          )}
         </div>
 
         <table className="items-table">
@@ -183,6 +189,15 @@ export default function ReceiptPrintPage({ params }) {
             {data.note}
           </div>
         )}
+
+        {/* Fußzeile mit Unternehmensdaten */}
+        <div style={{ marginTop: "2rem", borderTop: "1px dashed #cbd5e1", paddingTop: "0.5rem", fontSize: "8pt", textAlign: "center" }}>
+          <strong>{settings.companyName}</strong><br />
+          {settings.address1 && <span>{settings.address1}<br /></span>}
+          {settings.postalCode} {settings.city}
+          {settings.vatId && <><br />USt-ID: {settings.vatId}</>}
+        </div>
+
       </div>
     </>
   );
