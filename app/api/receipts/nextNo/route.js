@@ -13,7 +13,7 @@ export async function GET() {
     // Höchste Ziffernfolge aus receiptNo ziehen, +1
     const row = (await q(
       `SELECT COALESCE(MAX(
-          NULLIF(regexp_replace("receiptNo", '\\D', '', 'g'), '')::bigint
+          NULLIF(substring("receiptNo" from '\\d+$'), '')::bigint
         ), 0)::bigint AS last
        FROM "Receipt"
        WHERE "userId" = $1`, [uId]
