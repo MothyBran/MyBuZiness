@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import BarcodeScannerModal from "../components/BarcodeScannerModal";
 
 /* ───────── Helpers ───────── */
 const toInt = (v) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : 0);
@@ -33,6 +34,30 @@ function unpack(resp){
 }
 function pad2(n){ return String(n).padStart(2,"0"); }
 
+function toCents(input) {
+  if (input == null) return 0;
+  if (typeof input === "number") return Math.round(input * 100);
+  let s = String(input).trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10) * 100;
+  s = s.replace(/[^\d.,]/g, "");
+  if (s.includes(",") && s.includes(".")) {
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    const dec = lc > ld ? "," : ".";
+    const thou = dec === "," ? "." : ",";
+    s = s.replace(new RegExp("\\" + thou, "g"), "");
+    s = s.replace(dec, ".");
+  } else if (s.includes(",") && !s.includes(".")) {
+    s = s.replace(",", ".");
+  }
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+function fromCents(c) {
+  const n = Number(c || 0) / 100;
+  return n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /* ───────── Page ───────── */
 export default function ReceiptsPage(){
   const [rows, setRows] = useState([]);
@@ -55,6 +80,10 @@ export default function ReceiptsPage(){
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
+  // Search state
+  const [q, setQ] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+
   // Formularfelder (Edit/New)
   const [receiptNo, setReceiptNo] = useState("");
   const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10));
@@ -62,7 +91,7 @@ export default function ReceiptsPage(){
   const [note, setNote] = useState("");
 
   const [items, setItems] = useState([
-    { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }
+    { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }
   ]);
 
   useEffect(()=>{ load(); },[]);
@@ -109,7 +138,7 @@ export default function ReceiptsPage(){
   function onPickProduct(rowId, productId){
     const p = products.find(x => String(x.id)===String(productId));
     if(!p){
-      patchItem(rowId, { productId:"", name:"", unitPriceCents:0 });
+      patchItem(rowId, { productId:"", name:"", unitPriceCents:0, unitDisplay:"0,00" });
       return;
     }
     const kind = p.kind || "product";
@@ -121,7 +150,7 @@ export default function ReceiptsPage(){
     }else{
       unit = toInt(p.priceCents || 0);
     }
-    patchItem(rowId, { productId:p.id, name:p.name, unitPriceCents:unit });
+    patchItem(rowId, { productId:p.id, name:p.name, unitPriceCents:unit, unitDisplay:fromCents(unit) });
   }
 
   function openEdit(row){
@@ -141,8 +170,9 @@ export default function ReceiptsPage(){
             name: it.name || "",
             quantity: toInt(it.quantity||1),
             unitPriceCents: toInt(it.unitPriceCents||0),
+            unitDisplay: fromCents(toInt(it.unitPriceCents||0))
           }))
-        : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]
+        : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]
     );
     setIsOpen(true);
   }
@@ -155,7 +185,7 @@ export default function ReceiptsPage(){
     setDate(now.toISOString().slice(0,10));
     setDiscount("0");
     setNote("");
-    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]);
+    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]);
     setIsOpen(true);
   }
 
@@ -171,8 +201,23 @@ export default function ReceiptsPage(){
   function patchItem(id, patch){
     setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
   }
-  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0 }]); }
+  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]); }
   function removeLast(){ setItems(prev => prev.length<=1 ? prev : prev.slice(0,-1)); }
+
+  function onChangeUnitDisplay(id, v) {
+    patchItem(id, { unitDisplay: v, unitPriceCents: toCents(v) });
+  }
+
+  const filteredRows = useMemo(() => {
+    if (!q) return rows;
+    const lowerQ = q.toLowerCase();
+    return rows.filter((r) => {
+      const rn = (r.receiptNo || "").toLowerCase();
+      const dt = fmtDEDate(r.date).toLowerCase();
+      const num = money(r.grossCents, r.currency || currency).toLowerCase();
+      return rn.includes(lowerQ) || dt.includes(lowerQ) || num.includes(lowerQ);
+    });
+  }, [rows, q, currency]);
 
   async function onSave(e){
     e?.preventDefault?.();
@@ -226,10 +271,29 @@ export default function ReceiptsPage(){
           <h1 className="page-title" style={{ marginBottom:4 }}>Belege</h1>
           <div className="subtle">Eingangsrechnungen & Quittungen</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center" }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Suchen (Nr/Datum/Betrag)…"
+            style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel)", color: "var(--text)", width: "240px" }}
+          />
+          <button onClick={() => setShowScanner(true)} className="btn-ghost" title="Barcode scannen">
+            📷 Scanner
+          </button>
           <button className="btn" onClick={openNew}>+ Neuer Beleg</button>
         </div>
       </div>
+
+      {showScanner && (
+        <BarcodeScannerModal
+          onClose={() => setShowScanner(false)}
+          onScan={(data) => {
+            setQ(data);
+            setShowScanner(false);
+          }}
+        />
+      )}
 
       {err && <div className="surface" style={{ color:"var(--color-danger, #b91c1c)", fontWeight:600, marginBottom: 16 }}>Fehler beim Laden: {err}</div>}
 
@@ -251,9 +315,9 @@ export default function ReceiptsPage(){
             </thead>
             <tbody>
               {loading && <tr><td colSpan={3} className="muted">Lade…</td></tr>}
-              {!loading && rows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
+              {!loading && filteredRows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
 
-              {!loading && rows.map(r=>{
+              {!loading && filteredRows.map(r=>{
                 const isOpen = expandedId===r.id;
                 return (
                   <React.Fragment key={r.id}>
@@ -409,10 +473,11 @@ export default function ReceiptsPage(){
                             <td>
                               <input
                                 className="inp"
-                                type="number"
-                                inputMode="numeric"
-                                value={Math.round(unit)}
-                                onChange={(e)=>patchItem(r.id,{ unitPriceCents: toInt(e.target.value) })}
+                                type="text"
+                                inputMode="decimal"
+                                value={r.unitDisplay}
+                                onChange={(e)=>onChangeUnitDisplay(r.id, e.target.value)}
+                                onBlur={(e)=>onChangeUnitDisplay(r.id, fromCents(toCents(e.target.value)))}
                                 style={{ textAlign:"right" }}
                               />
                             </td>
