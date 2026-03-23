@@ -1,4 +1,6 @@
 "use client";
+import { useDialog } from "../components/DialogProvider";
+
 
 import { useEffect, useMemo, useState } from "react";
 import Barcode from "react-barcode";
@@ -34,6 +36,7 @@ function money(cents, code = "EUR") {
 }
 function computeStatus(row) {
   const raw = String(row.status || "").toLowerCase();
+  if (raw === "storniert" || raw === "canceled") return "canceled";
   if (raw === "done" || raw === "abgeschlossen") return "done";
   const due = row.dueDate ? new Date(row.dueDate) : null;
   if (due) {
@@ -53,6 +56,7 @@ const S = {
 
 /* ───────── Page ───────── */
 export default function InvoicesPage() {
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -99,9 +103,9 @@ export default function InvoicesPage() {
   function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)); }
 
   async function deleteInvoice(id) {
-    if (!confirm("Rechnung wirklich löschen?")) return;
+    if (!await confirmMsg("Rechnung wirklich löschen?")) return;
     const res = await fetch(`/api/invoices/${id}`, { method: "DELETE" }).catch(() => null);
-    if (!res || !res.ok) { alert("Löschen fehlgeschlagen."); return; }
+    if (!res || !res.ok) { await alertMsg("Löschen fehlgeschlagen."); return; }
     if (expandedId === id) setExpandedId(null);
     load();
   }
@@ -187,7 +191,7 @@ export default function InvoicesPage() {
                 const dateStr = d ? d.toLocaleDateString() : "—";
                 const isOpenRow = expandedId === r.id;
                 const st = computeStatus(r);
-                const stLabel = st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen");
+                const stLabel = st === "canceled" ? "storniert" : (st === "done" ? "abgeschlossen" : (st === "overdue" ? "überfällig" : "offen"));
                 const customer = customers.find(c => String(c.id) === String(r.customerId));
 
                 return (
@@ -313,6 +317,7 @@ export default function InvoicesPage() {
         .st-dot.open{ background:#f59e0b }
         .st-dot.overdue{ background:#ef4444 }
         .st-dot.done{ background:#10b981 }
+        .st-dot.canceled{ background:#9ca3af }
 
         .details-cell{ background:var(--panel-2) }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
@@ -477,8 +482,8 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
 
   async function save(e) {
     e.preventDefault();
-    if (!customerId) return alert("Bitte Kunde wählen.");
-    if (items.length === 0) return alert("Mindestens eine Position ist erforderlich.");
+    if (!customerId) return await alertMsg("Bitte Kunde wählen.");
+    if (items.length === 0) return await alertMsg("Mindestens eine Position ist erforderlich.");
 
     const basePayload = {
       invoiceNo: (invoiceNo || "").trim() || undefined,
@@ -502,7 +507,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
         body: JSON.stringify(payload),
       }).catch(() => null);
       const js = res ? await res.json().catch(() => ({})) : null;
-      if (!res || !res.ok || !js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+      if (!res || !res.ok || !js?.ok) return await alertMsg(js?.error || "Speichern fehlgeschlagen.");
       onSaved?.();
     } else {
       const payload = { ...basePayload, status: "open" }; // neu: standardmäßig offen
@@ -512,7 +517,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
         body: JSON.stringify(payload),
       }).catch(() => null);
       const js = res ? await res.json().catch(() => ({})) : null;
-      if (!res || !res.ok || !js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+      if (!res || !res.ok || !js?.ok) return await alertMsg(js?.error || "Speichern fehlgeschlagen.");
       onSaved?.();
     }
   }
@@ -566,6 +571,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                   <select value={status} onChange={(e)=>setStatus(e.target.value)} style={S.input}>
                     <option value="open">offen</option>
                     <option value="done">abgeschlossen</option>
+                    <option value="canceled">storniert</option>
                     {/* "overdue" wird automatisch anhand Fälligkeit berechnet */}
                   </select>
                 </div>
@@ -755,7 +761,13 @@ function PrintArea({ row, settings, currency, customer }) {
         {/* Summen */}
         <div className="ph-totals">
           <div>Netto: <strong>{money(row.netCents, row.currency || currency)}</strong></div>
-          <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
+          {firm.kleinunternehmer ? (
+            <div style={{ fontSize: "9pt", margin: "4px 0", color: "#555" }}>
+              Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
+            </div>
+          ) : (
+            <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
+          )}
           <div className="ph-total">Gesamt: <strong>{money(row.grossCents, row.currency || currency)}</strong></div>
         </div>
 

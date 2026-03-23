@@ -62,7 +62,7 @@ export async function GET() {
     // --- Counts ---
     const customers = (await q(`SELECT COUNT(*)::int AS c FROM "Customer" WHERE "userId"=$1`, [userId])).rows[0].c ?? 0;
     const products  = (await q(`SELECT COUNT(*)::int AS c FROM "Product" WHERE "userId"=$1`, [userId])).rows[0].c ?? 0;
-    const invoices  = (await q(`SELECT COUNT(*)::int AS c FROM "Invoice" WHERE "userId"=$1`, [userId])).rows[0].c ?? 0;
+    const invoices  = (await q(`SELECT COUNT(*)::int AS c FROM "Invoice" WHERE "userId"=$1 AND "status" != 'canceled' AND "status" != 'storniert'`, [userId])).rows[0].c ?? 0;
     const receipts  = (await q(`SELECT COUNT(*)::int AS c FROM "Receipt" WHERE "userId"=$1`, [userId])).rows[0].c ?? 0;
 
     // --- Recent Receipts ---
@@ -80,7 +80,7 @@ export async function GET() {
              i."createdAt", i."updatedAt", c."name" AS "customerName"
       FROM "Invoice" i
       LEFT JOIN "Customer" c ON c."id" = i."customerId"
-      WHERE i."userId"=$1
+      WHERE i."userId"=$1 AND i."status" != 'canceled' AND i."status" != 'storniert'
       ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC
       LIMIT 10
     `, [userId])).rows;

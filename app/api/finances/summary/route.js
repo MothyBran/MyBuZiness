@@ -70,7 +70,7 @@ async function sumPaidInvoices(from, to) {
       ("paidAt" IS NOT NULL AND "paidAt"::date >= $1 AND "paidAt"::date < $2)
       OR
       ("paidAt" IS NULL AND "status" IN ('paid','done') AND "issueDate" >= $1 AND "issueDate" < $2)
-    )
+    ) AND "status" != 'canceled' AND "status" != 'storniert'
   `;
   try {
     const { rows } = await q(sql, [from, to]);

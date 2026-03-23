@@ -1,5 +1,7 @@
-// app/belege/page.jsx
 "use client";
+import { useDialog } from "../components/DialogProvider";
+// app/belege/page.jsx
+
 
 import React, { useEffect, useMemo, useState } from "react";
 import BarcodeScannerModal from "../components/BarcodeScannerModal";
@@ -128,9 +130,9 @@ export default function ReceiptsPage(){
   }
 
   async function onDelete(id){
-    if(!confirm("Beleg wirklich löschen?")) return;
+    if(!await confirmMsg("Beleg wirklich löschen?")) return;
     const res = await fetch(`/api/receipts/${id}`, { method:"DELETE" }).catch(()=>null);
-    if(!res || !res.ok){ alert("Löschen fehlgeschlagen."); return; }
+    if(!res || !res.ok){ await alertMsg("Löschen fehlgeschlagen."); return; }
     setRows(prev => prev.filter(r => r.id !== id));
     setExpandedId(p => p===id ? null : p);
   }
@@ -251,7 +253,7 @@ export default function ReceiptsPage(){
       }))
       .filter(it => it.quantity>0);
 
-    if(clean.length===0){ alert("Bitte mindestens eine Position erfassen."); return; }
+    if(clean.length===0){ await alertMsg("Bitte mindestens eine Position erfassen."); return; }
 
     const payload = {
       receiptNo: (receiptNo || "").trim() || undefined,
@@ -294,7 +296,7 @@ export default function ReceiptsPage(){
     } catch(e) {
        errMessage = e.message || errMessage;
     }
-    if(!ok){ alert(errMessage); return; }
+    if(!ok){ await alertMsg(errMessage); return; }
     setIsOpen(false);
     await load();
   }

@@ -1,4 +1,6 @@
 "use client";
+import { useDialog } from "../components/DialogProvider";
+
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -28,6 +30,7 @@ const fonts = [
 
 /* ---------- Seite ---------- */
 export default function SettingsPage() {
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -147,7 +150,7 @@ export default function SettingsPage() {
     }
     const res = await fetch("/api/uploads", { method: "POST", body: fd });
     const js = await res.json().catch(()=>({ ok:false }));
-    if (!js?.ok || !js?.url) return alert(js?.error || "Upload fehlgeschlagen.");
+    if (!js?.ok || !js?.url) return await alertMsg(js?.error || "Upload fehlgeschlagen.");
     setLogoUrl(js.url);
   }
 
@@ -170,11 +173,11 @@ export default function SettingsPage() {
     });
     const js = await res.json().catch(()=>({ ok:false }));
     setSaving(false);
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    if (!js?.ok) return await alertMsg(js?.error || "Speichern fehlgeschlagen.");
 
     // Anwendung sofort aktualisieren
     applyTheme({ primaryColor, secondaryColor, textColor, fontFamily });
-    alert("Einstellungen gespeichert.");
+    await alertMsg("Einstellungen gespeichert.");
   }
 
   return (

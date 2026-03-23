@@ -1,9 +1,12 @@
 "use client";
+import { useDialog } from "../components/DialogProvider";
+
 
 import { useState, useEffect } from "react";
 import { UserPlus, Trash2, KeyRound } from "lucide-react";
 
 export default function MitarbeiterPage() {
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,7 +29,7 @@ export default function MitarbeiterPage() {
       if (data.ok) {
         setEmployees(data.data || []);
       } else {
-        alert("Fehler beim Laden der Mitarbeiter");
+        await alertMsg("Fehler beim Laden der Mitarbeiter");
       }
     } catch (e) {
       console.error(e);
@@ -62,7 +65,7 @@ export default function MitarbeiterPage() {
   }
 
   async function resetCode(id) {
-    if (!confirm("Erst-Login Code wirklich neu generieren? Das bisherige Passwort des Mitarbeiters wird dadurch gelöscht.")) return;
+    if (!await confirmMsg("Erst-Login Code wirklich neu generieren? Das bisherige Passwort des Mitarbeiters wird dadurch gelöscht.")) return;
     try {
       const res = await fetch(`/api/mitarbeiter/${id}/reset`, { method: "POST" });
       const data = await res.json();
@@ -71,25 +74,25 @@ export default function MitarbeiterPage() {
         loadEmployees();
         setTimeout(() => setSuccessMsg(""), 10000);
       } else {
-        alert(data.error || "Zurücksetzen fehlgeschlagen.");
+        await alertMsg(data.error || "Zurücksetzen fehlgeschlagen.");
       }
     } catch (e) {
-      alert("Fehler beim Zurücksetzen.");
+      await alertMsg("Fehler beim Zurücksetzen.");
     }
   }
 
   async function deleteEmployee(id) {
-    if (!confirm("Mitarbeiter wirklich löschen?")) return;
+    if (!await confirmMsg("Mitarbeiter wirklich löschen?")) return;
     try {
       const res = await fetch(`/api/mitarbeiter/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.ok) {
         loadEmployees();
       } else {
-        alert(data.error || "Löschen fehlgeschlagen.");
+        await alertMsg(data.error || "Löschen fehlgeschlagen.");
       }
     } catch (e) {
-      alert("Fehler beim Löschen.");
+      await alertMsg("Fehler beim Löschen.");
     }
   }
 
