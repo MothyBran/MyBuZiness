@@ -29,7 +29,7 @@ export async function GET(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
     const inv = (await q(
       `SELECT i.*, c."name" AS "customerName",
               c."street" AS "customerStreet",
@@ -57,7 +57,7 @@ export async function PATCH(req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
     const body = await req.json().catch(()=> ({}));
 
     // Verify ownership first to be safe
@@ -195,7 +195,7 @@ export async function DELETE(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const id = params.id;
+    const { id } = await params;
     // rely on CASCADE for items
     const res = await q(`DELETE FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });

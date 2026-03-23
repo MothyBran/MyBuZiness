@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function PUT(req, { params }){
   try{
-    const id = params.id;
+    const { id } = await params;
     const body = await req.json();
     const fields = [];
     const ps = [];
@@ -27,7 +27,7 @@ export async function PUT(req, { params }){
 
 export async function DELETE(_req, { params }){
   try{
-    const id = params.id;
+    const { id } = await params;
     await q(`DELETE FROM "FinanceTransaction" WHERE "id"=$1`, [id]);
     return NextResponse.json({ ok:true });
   }catch(e){
