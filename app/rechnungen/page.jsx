@@ -161,19 +161,19 @@ export default function InvoicesPage() {
         <div className="table-wrap" style={{ border: "none" }}>
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "70px" }} />
-              <col style={{ width: "200px" }} />
-              <col style={{ width: "160px" }} />
+              <col style={{ width: "40px" }} />
+              <col style={{ width: "140px" }} />
+              <col style={{ width: "120px" }} />
               <col />
-              <col style={{ width: "200px" }} />
+              <col style={{ width: "140px", textAlign: "right" }} />
             </colgroup>
             <thead>
               <tr>
-                <th title="Status">🚦</th>
-                <th>Nr.</th>
-                <th className="hide-sm">Datum</th>
-                <th>Kunde</th>
-                <th>Betrag</th>
+                <th title="Status" style={{ paddingRight: "8px" }}>🚦</th>
+                <th style={{ paddingRight: "16px" }}>Nr.</th>
+                <th className="hide-sm" style={{ paddingRight: "16px" }}>Datum</th>
+                <th style={{ paddingRight: "16px" }}>Kunde</th>
+                <th style={{ textAlign: "right" }}>Betrag</th>
               </tr>
             </thead>
             <tbody>
@@ -193,10 +193,10 @@ export default function InvoicesPage() {
                 return (
                   <>
                     <tr key={r.id} className="row-clickable" onClick={() => toggleExpand(r.id)}>
-                      <td><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
-                      <td className="nowrap">#{r.invoiceNo || "-"}</td>
-                      <td className="hide-sm nowrap">{dateStr}</td>
-                      <td>{r.customerName || customer?.name || "—"}</td>
+                      <td style={{ paddingRight: "8px" }}><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
+                      <td className="nowrap" style={{ paddingRight: "16px" }}>#{r.invoiceNo || "-"}</td>
+                      <td className="hide-sm nowrap" style={{ paddingRight: "16px" }}>{dateStr}</td>
+                      <td style={{ paddingRight: "16px" }}>{r.customerName || customer?.name || "—"}</td>
                       <td className="nowrap" style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
                     </tr>
 
@@ -762,10 +762,12 @@ function PrintArea({ row, settings, currency, customer }) {
         {/* Fußzeile – Bank/Steuer */}
         <div className="ph-footer">
           <div className="ph-footer-col">
-            {firm.bankAccount && (
+            {(firm.bankInstitution || firm.bankRecipient || firm.bankIban || firm.bankBic || firm.bankAccount) && (
               <span>
                 <strong>Bankverbindung:</strong>{" "}
-                {firm.bankAccount.replace(/\n/g, " | ")}
+                {firm.bankInstitution || firm.bankRecipient || firm.bankIban || firm.bankBic
+                  ? `Institut: ${firm.bankInstitution || "-"} | Empfänger: ${firm.bankRecipient || "-"} | IBAN: ${firm.bankIban || "-"} | BIC: ${firm.bankBic || "-"}`
+                  : firm.bankAccount.replace(/\n/g, " | ")}
               </span>
             )}
           </div>

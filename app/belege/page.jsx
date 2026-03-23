@@ -91,7 +91,7 @@ export default function ReceiptsPage(){
   const [note, setNote] = useState("");
 
   const [items, setItems] = useState([
-    { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }
+    { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }
   ]);
 
   useEffect(()=>{ load(); },[]);
@@ -138,19 +138,26 @@ export default function ReceiptsPage(){
   function onPickProduct(rowId, productId){
     const p = products.find(x => String(x.id)===String(productId));
     if(!p){
-      patchItem(rowId, { productId:"", name:"", unitPriceCents:0, unitDisplay:"0,00" });
+      patchItem(rowId, { productId:"", name:"", unitPriceCents:0, baseCents:0, unitDisplay:"0,00" });
       return;
     }
     const kind = p.kind || "product";
-    let unit = 0;
-    if(kind==="service"){
-      unit = toInt(p.hourlyRateCents || p.priceCents || 0);
-    }else if(kind==="travel"){
-      unit = toInt(p.travelPerKmCents || 0);
-    }else{
-      unit = toInt(p.priceCents || 0);
+    if (kind === "service") {
+      const gp = toInt(p.priceCents || 0);
+      const hr = toInt(p.hourlyRateCents || 0);
+      if (hr > 0) {
+        patchItem(rowId, { productId: p.id, name: p.name, baseCents: gp, unitPriceCents: hr, unitDisplay: fromCents(hr) });
+      } else {
+        patchItem(rowId, { productId: p.id, name: p.name, baseCents: 0, unitPriceCents: gp, unitDisplay: fromCents(gp) });
+      }
+    } else if (kind === "travel") {
+      const base = toInt(p.travelBaseCents || 0);
+      const perKm = toInt(p.travelPerKmCents || 0);
+      patchItem(rowId, { productId: p.id, name: p.name, baseCents: base, unitPriceCents: perKm, unitDisplay: fromCents(perKm) });
+    } else {
+      const up = toInt(p.priceCents || 0);
+      patchItem(rowId, { productId: p.id, name: p.name, baseCents: 0, unitPriceCents: up, unitDisplay: fromCents(up) });
     }
-    patchItem(rowId, { productId:p.id, name:p.name, unitPriceCents:unit, unitDisplay:fromCents(unit) });
   }
 
   function openEdit(row){
@@ -170,9 +177,10 @@ export default function ReceiptsPage(){
             name: it.name || "",
             quantity: toInt(it.quantity||1),
             unitPriceCents: toInt(it.unitPriceCents||0),
+            baseCents: toInt(it.baseCents || 0) || Math.max(0, toInt(it.lineTotalCents || 0) - (toInt(it.quantity||1)*toInt(it.unitPriceCents||0))),
             unitDisplay: fromCents(toInt(it.unitPriceCents||0))
           }))
-        : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]
+        : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }]
     );
     setIsOpen(true);
   }
@@ -196,14 +204,14 @@ export default function ReceiptsPage(){
     setDate(now.toISOString().slice(0,10));
     setDiscount("0");
     setNote("");
-    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]);
+    setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }]);
     setIsOpen(true);
   }
 
   const totals = useMemo(()=>{
     const disc = Math.max(0, toCents(discount||"0"));
     // Beachte: unitPriceCents ist ggf. String oder Number in Cents
-    const netRaw = items.reduce((s,r)=> s + (toInt(r.quantity||0) * toInt(r.unitPriceCents||0)), 0);
+    const netRaw = items.reduce((s,r)=> s + (toInt(r.quantity||0) * toInt(r.unitPriceCents||0)) + toInt(r.baseCents||0), 0);
     const netAfter = Math.max(0, netRaw - disc);
     const tax = vatExempt ? 0 : Math.round(netAfter * 0.19);
     const gross = netAfter + tax;
@@ -213,7 +221,7 @@ export default function ReceiptsPage(){
   function patchItem(id, patch){
     setItems(prev => prev.map(r => r.id===id ? { ...r, ...patch } : r));
   }
-  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, unitDisplay:"0,00" }]); }
+  function addRow(){ setItems(prev => [...prev, { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }]); }
   function removeLast(){ setItems(prev => prev.length<=1 ? prev : prev.slice(0,-1)); }
 
   function onChangeUnitDisplay(id, v) {
@@ -239,6 +247,7 @@ export default function ReceiptsPage(){
         name: (it.name||"").trim() || "Position",
         quantity: toInt(it.quantity||0),
         unitPriceCents: toInt(it.unitPriceCents||0),
+        baseCents: toInt(it.baseCents||0),
       }))
       .filter(it => it.quantity>0);
 
@@ -329,15 +338,17 @@ export default function ReceiptsPage(){
         <div className="table-wrap" style={{ border: "none" }}>
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width:"42%" }} />
-              <col style={{ width:"28%" }} />
-              <col style={{ width:"30%" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "140px", textAlign: "right" }} />
+              <col />
             </colgroup>
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th>Datum</th>
+                <th style={{ paddingRight: "16px" }}>Nr.</th>
+                <th style={{ paddingRight: "16px" }}>Datum</th>
                 <th style={{ textAlign:"right" }}>Betrag</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -349,14 +360,15 @@ export default function ReceiptsPage(){
                 return (
                   <React.Fragment key={r.id}>
                     <tr className="row-clickable" onClick={()=>toggleExpand(r.id)}>
-                      <td className="ellipsis">#{r.receiptNo || "—"}</td>
-                      <td>{fmtDEDate(r.date)}</td>
-                      <td style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
+                      <td className="ellipsis nowrap" style={{ paddingRight: "16px" }}>#{r.receiptNo || "—"}</td>
+                      <td className="nowrap" style={{ paddingRight: "16px" }}>{fmtDEDate(r.date)}</td>
+                      <td className="nowrap" style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
+                      <td />
                     </tr>
 
                     {isOpen && (
                       <tr>
-                        <td colSpan={3} className="details-cell">
+                        <td colSpan={4} className="details-cell">
                           <div className="detail-head">
                             <div>
                               <div className="muted">Beleg</div>
@@ -388,10 +400,14 @@ export default function ReceiptsPage(){
                                   {details[r.id].data.items.map((it,i)=>{
                                     const qty = toInt(it.quantity||0);
                                     const unit= toInt(it.unitPriceCents||0);
-                                    const line= toInt(it.lineTotalCents ?? (qty*unit));
+                                    const base= toInt(it.baseCents||0);
+                                    const line= toInt(it.lineTotalCents ?? ((qty*unit)+base));
                                     return (
                                       <tr key={i}>
-                                        <td className="ellipsis">{it.name || "—"}</td>
+                                        <td className="ellipsis">
+                                          {it.name || "—"}
+                                          {base > 0 && <div style={{ fontSize:11, opacity:0.7 }}>inkl. Grundpreis: {money(base, currency)}</div>}
+                                        </td>
                                         <td>{qty}</td>
                                         <td>{money(unit, r.currency || currency)}</td>
                                         <td>{money(line, r.currency || currency)}</td>
@@ -474,7 +490,8 @@ export default function ReceiptsPage(){
                       {items.map(r=>{
                         const qty  = toInt(r.quantity||0);
                         const unit = toInt(r.unitPriceCents||0);
-                        const line = qty * unit;
+                        const base = toInt(r.baseCents||0);
+                        const line = (qty * unit) + base;
                         return (
                           <tr key={r.id}>
                             <td>
@@ -487,6 +504,7 @@ export default function ReceiptsPage(){
                                 <option value="">— Produkt/Dienstleistung wählen —</option>
                                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                               </select>
+                              {base > 0 && <div style={{ fontSize:11, marginTop:4, opacity:0.7 }}>inkl. Grundpreis: {money(base, currency)}</div>}
                             </td>
                             <td>
                               <select

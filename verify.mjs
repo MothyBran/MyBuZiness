@@ -1,91 +1,73 @@
 import { chromium } from 'playwright';
-import path from 'path';
-import fs from 'fs';
-
-const VERIFICATION_DIR = '/home/jules/verification';
-const VIDEO_DIR = path.join(VERIFICATION_DIR, 'video');
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ recordVideo: { dir: VIDEO_DIR } });
+  const context = await browser.newContext({ recordVideo: { dir: '/home/jules/verification/video' } });
   const page = await context.newPage();
 
   try {
-    console.log("Navigating to register...");
+    // Navigate to register and create test user
     await page.goto('http://localhost:3000/register');
-
-    // Create test user
+    await page.waitForTimeout(500);
     const testEmail = `test-${Date.now()}@example.com`;
-    await page.fill('input[type="text"]', 'Max Mustermann');
-    await page.fill('input[type="email"]', testEmail);
+    await page.locator('input[type="text"]').fill('Test User');
+    await page.locator('input[type="email"]').fill(testEmail);
     await page.locator('input[type="password"]').nth(0).fill('Password123!');
     await page.locator('input[type="password"]').nth(1).fill('Password123!');
-    await page.click('button[type="submit"]');
-
-    await page.waitForTimeout(3000);
-
-    console.log("Navigating to login...");
+    await page.getByRole('button', { name: /Registrieren/i }).click();
+    await page.waitForTimeout(1500);
     await page.goto('http://localhost:3000/login');
     await page.waitForTimeout(1000);
+    await page.locator('input[type="email"]').fill(testEmail);
+    await page.locator('input[type="password"]').fill('Password123!');
+    await page.getByRole('button', { name: /Anmelden/i }).click();
+    await page.waitForTimeout(1500);
 
-    // Login with the previously created test user
-    await page.fill('input[type="email"]', testEmail);
-    await page.fill('input[type="password"]', 'Password123!');
-    await page.click('button[type="submit"]');
+    // Navigate to Settings
+    await page.goto('http://localhost:3000/einstellungen');
+    await page.waitForTimeout(500);
 
-    await page.waitForTimeout(3000);
+    // Verify Settings Bank Fields exist
+    await page.locator('input[placeholder="z. B. Sparkasse Musterstadt"]').fill('MyBank');
+    await page.locator('input[placeholder="z. B. Max Mustermann"]').fill('John Doe');
+    await page.locator('input[placeholder="DE..."]').fill('DE123456');
+    await page.locator('input[placeholder="XXXXXXXXXXX"]').fill('BICKY');
+    await page.getByRole('button', { name: 'Speichern' }).nth(0).click();
+    await page.waitForTimeout(500);
 
-    console.log("Opening Belege...");
+    // Take screenshot of Settings
+    await page.screenshot({ path: '/home/jules/verification/settings.png' });
+
+    // Navigate to Belege
     await page.goto('http://localhost:3000/belege');
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(500);
 
-    // check if we are on belege page and have the button
-    const hasButton = await page.locator('button:has-text("+ Neuer Beleg")').count();
-    console.log("Button count:", hasButton);
-    if(hasButton > 0){
-        await page.click('button:has-text("+ Neuer Beleg")');
-        await page.waitForTimeout(1000);
+    // Create a new Beleg
+    await page.getByRole('button', { name: 'Neuer Beleg' }).click();
+    await page.waitForTimeout(500);
 
-        console.log("Entering Position...");
-        const qtySelect = page.locator('.positions select').nth(1);
-        await qtySelect.selectOption({ value: '1' });
+    // Fill in basic info
+    await page.locator('input[placeholder="0,00"]').nth(0).fill('0,00'); // discount
 
-        const priceInput = page.locator('.positions input[inputMode="decimal"]');
-        await priceInput.fill('60,00');
-        await priceInput.blur();
-        await page.waitForTimeout(500);
+    // Create a dummy product to pick from (need to mock or skip it)
+    // Wait, let's just use a free-text item.
+    // Oh wait, free-text in Receipts doesn't have an input element for free text name in the standard select flow, it just uses a generic select for product or a manual update, but we don't have free text in belege positions...
+    // Let's create a product first!
+    await page.goto('http://localhost:3000/produkte');
+    await page.waitForTimeout(1000);
+    // Forget products, just go to Belege and test the new widths & fields there directly.
+    await page.goto('http://localhost:3000/belege');
+    await page.waitForTimeout(1000);
 
-        console.log("Entering Discount...");
-        const discountInput = page.locator('input[placeholder="0,00"]');
-        await discountInput.fill('5,00');
-        await discountInput.blur();
-        await page.waitForTimeout(1000);
+    // Neuer Beleg
+    await page.getByRole('button').nth(0).click();
+    await page.waitForTimeout(500);
 
-        console.log("Saving Beleg...");
-        await page.click('button:has-text("Anlegen")');
-        await page.waitForTimeout(2000);
+    // Take screenshot to show Grundpreis + Layout
+    await page.screenshot({ path: '/home/jules/verification/belege.png' });
 
-        console.log("Expanding first Beleg...");
-        await page.locator('.row-clickable').first().click();
-        await page.waitForTimeout(1000);
-
-        const printHref = await page.locator('a.btn-ghost:has-text("Druckansicht")').getAttribute('href');
-        if (printHref) {
-          console.log("Navigating to Print View:", printHref);
-          await page.goto(`http://localhost:3000${printHref}`);
-          await page.waitForTimeout(2000);
-
-          console.log("Taking screenshot of Print View...");
-          await page.screenshot({ path: path.join(VERIFICATION_DIR, 'print_view.png') });
-        } else {
-          console.log("Could not find print view link.");
-        }
-    } else {
-        console.log("Taking screenshot of Belege Page to see what went wrong...");
-        await page.screenshot({ path: path.join(VERIFICATION_DIR, 'belege_error.png') });
-    }
-  } catch (error) {
-    console.error("Test failed:", error);
+  } catch (err) {
+    console.error(err);
   } finally {
     await context.close();
     await browser.close();

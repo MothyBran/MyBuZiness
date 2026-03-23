@@ -46,7 +46,11 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [currency, setCurrency] = useState("EUR");
-  const [bankAccount, setBankAccount] = useState("");
+  const [bankAccount, setBankAccount] = useState(""); // deprecated
+  const [bankInstitution, setBankInstitution] = useState("");
+  const [bankRecipient, setBankRecipient] = useState("");
+  const [bankIban, setBankIban] = useState("");
+  const [bankBic, setBankBic] = useState("");
 
   // Steuerdaten (eigener Abschnitt)
   const [vatId, setVatId] = useState("");
@@ -62,8 +66,8 @@ export default function SettingsPage() {
 
   const samplePreview = useMemo(() => ({
     companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-    bankAccount, vatId, kleinunternehmer, currency, logoUrl
-  }), [companyName, ownerName, address1, address2, postalCode, city, phone, email, website, bankAccount, vatId, kleinunternehmer, currency, logoUrl]);
+    bankAccount, bankInstitution, bankRecipient, bankIban, bankBic, vatId, kleinunternehmer, currency, logoUrl
+  }), [companyName, ownerName, address1, address2, postalCode, city, phone, email, website, bankAccount, bankInstitution, bankRecipient, bankIban, bankBic, vatId, kleinunternehmer, currency, logoUrl]);
 
   useEffect(() => {
     setViewportMode(localStorage.getItem("viewportMode") || "mobile");
@@ -85,6 +89,10 @@ export default function SettingsPage() {
       setEmail(s.email || "");
       setWebsite(s.website || "");
       setBankAccount(s.bankAccount || "");
+      setBankInstitution(s.bankInstitution || "");
+      setBankRecipient(s.bankRecipient || "");
+      setBankIban(s.bankIban || "");
+      setBankBic(s.bankBic || "");
       setCurrency(s.currency || "EUR");
 
       // Steuerdaten
@@ -149,7 +157,7 @@ export default function SettingsPage() {
     const payload = {
       // Firmendaten
       companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
-      currency, bankAccount,
+      currency, bankAccount, bankInstitution, bankRecipient, bankIban, bankBic,
       // Steuerdaten
       vatId, kleinunternehmer, taxRateDefault,
       // Branding
@@ -275,10 +283,17 @@ export default function SettingsPage() {
               {currencies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
+        </div>
+      </section>
 
-          <Field label="Bankverbindung">
-            <textarea style={{ ...input, minHeight: 80 }} value={bankAccount} onChange={e=>setBankAccount(e.target.value)} placeholder="IBAN / BIC / Bankname" />
-          </Field>
+      {/* Bankdaten */}
+      <section className="surface" style={{ marginTop:12 }}>
+        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Bankdaten</h2>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+          <Field label="Institut"><input style={input} value={bankInstitution} onChange={e=>setBankInstitution(e.target.value)} placeholder="z. B. Sparkasse Musterstadt" /></Field>
+          <Field label="Empfänger"><input style={input} value={bankRecipient} onChange={e=>setBankRecipient(e.target.value)} placeholder="z. B. Max Mustermann" /></Field>
+          <Field label="IBAN"><input style={input} value={bankIban} onChange={e=>setBankIban(e.target.value)} placeholder="DE..." /></Field>
+          <Field label="BIC"><input style={input} value={bankBic} onChange={e=>setBankBic(e.target.value)} placeholder="XXXXXXXXXXX" /></Field>
         </div>
       </section>
 
@@ -392,6 +407,7 @@ export default function SettingsPage() {
 function BrandPreview({ settings }) {
   const {
     companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
+    bankInstitution, bankRecipient, bankIban, bankBic,
     kleinunternehmer, currency, logoUrl, primaryColor, secondaryColor, fontFamily, textColor
   } = settings;
 
@@ -422,6 +438,9 @@ function BrandPreview({ settings }) {
           <div><b>Telefon:</b> {phone || "—"} · <b>E‑Mail:</b> {email || "—"}</div>
           {website ? <div><b>Web:</b> {website}</div> : null}
           <div><b>Währung:</b> {currency}</div>
+          {(bankInstitution || bankRecipient || bankIban || bankBic) && (
+             <div><b>Bankdaten:</b> Institut: {bankInstitution} | Empfänger: {bankRecipient} | IBAN: {bankIban} | BIC: {bankBic}</div>
+          )}
           {kleinunternehmer && (
             <div style={{ fontSize:12, opacity:.8, marginTop:8 }}>
               Hinweis gem. § 19 UStG (Kleinunternehmerregelung): Es wird keine Umsatzsteuer ausgewiesen.
