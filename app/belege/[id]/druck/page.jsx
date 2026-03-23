@@ -162,7 +162,7 @@ export default function ReceiptPrintPage({ params }) {
             <tbody>
               <tr>
                 <td className="label">Zwischensumme</td>
-                <td>{money(data.netCents + (data.discountCents || 0), curr)}</td>
+                <td>{money(Number(data.netCents || 0) + Number(data.discountCents || 0), curr)}</td>
               </tr>
               {data.discountCents > 0 && (
                 <tr>
