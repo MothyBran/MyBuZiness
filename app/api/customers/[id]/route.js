@@ -6,7 +6,7 @@ export async function GET(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const { id } = params;
+    const { id } = await params;
     const row = (await q(`SELECT * FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
     if (!row) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     return Response.json({ ok:true, data: row });
@@ -19,7 +19,7 @@ export async function PUT(request, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json().catch(()=> ({}));
 
     // Normalisierung (unterstützt alte/new UI-Feldnamen)
@@ -65,7 +65,7 @@ export async function DELETE(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
-    const { id } = params;
+    const { id } = await params;
     const res = await q(`DELETE FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     return Response.json({ ok:true });
