@@ -648,12 +648,12 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
           <div className="totals-grid">
             <div />
             <div className="totals-box">
-              <div>Zwischensumme: <strong>{money(items.reduce((s, r)=> s + (toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0)), 0), currency)}</strong></div>
-              <div>Rabatt: <strong>- {money(Math.max(0, toCents(discount || "0")), currency)}</strong></div>
-              <div>Netto: <strong>{money((items.reduce((s, r)=> s + (toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0)), 0)) - Math.max(0, toCents(discount || "0")), currency)}</strong></div>
-              <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(Math.round((Math.max(0, (items.reduce((s, r)=> s + (toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0)), 0)) - Math.max(0, toCents(discount || "0"))) * (vatExempt ? 0 : 19) / 100)), currency)}</strong></div>
+              <div>Zwischensumme: <strong>{money(totals.net, currency)}</strong></div>
+              <div>Rabatt: <strong>- {money(totals.discountCents, currency)}</strong></div>
+              <div>Netto: <strong>{money(totals.netAfterDiscount, currency)}</strong></div>
+              <div>USt {vatExempt ? "(befreit §19)" : "19%"}: <strong>{money(totals.tax, currency)}</strong></div>
               <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>
-                Gesamt: {money((Math.max(0, (items.reduce((s, r)=> s + (toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0)), 0)) - Math.max(0, toCents(discount || "0"))) + Math.round((Math.max(0, (items.reduce((s, r)=> s + (toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0)), 0)) - Math.max(0, toCents(discount || "0"))) * (vatExempt ? 0 : 19) / 100))), currency)}
+                Gesamt: {money(totals.gross, currency)}
               </div>
             </div>
           </div>

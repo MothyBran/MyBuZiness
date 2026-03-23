@@ -201,7 +201,7 @@ export default function ReceiptsPage(){
   }
 
   const totals = useMemo(()=>{
-    const disc = Math.max(0, Math.round(parseFloat(String(discount||"0").replace(",", ".")) * 100) || 0);
+    const disc = Math.max(0, toCents(discount||"0"));
     // Beachte: unitPriceCents ist ggf. String oder Number in Cents
     const netRaw = items.reduce((s,r)=> s + (toInt(r.quantity||0) * toInt(r.unitPriceCents||0)), 0);
     const netAfter = Math.max(0, netRaw - disc);
