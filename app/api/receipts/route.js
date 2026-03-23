@@ -76,7 +76,7 @@ export async function POST(request) {
     // Summen
     let net = 0;
     for (const it of items) {
-      net += toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0);
+      net += (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
     }
     const netAfter = Math.max(0, net - discountCents);
     const taxRate = vatExempt ? 0 : 19;
@@ -114,13 +114,14 @@ export async function POST(request) {
       const itemId = uuid();
       const qty = toInt(it.quantity || 0);
       const unit = toInt(it.unitPriceCents || 0);
-      const line = qty * unit;
+      const base = toInt(it.baseCents || 0);
+      const line = (qty * unit) + base;
       await q(
         `INSERT INTO "ReceiptItem"
-           ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
+           ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
          VALUES
-           ($1,$2,$3,$4,$5,$6,$7, now(), now())`,
-        [itemId, id, it.productId || null, (it.name || "Position").trim(), qty, unit, line]
+           ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
+        [itemId, id, it.productId || null, (it.name || "Position").trim(), qty, unit, base, line]
       );
     }
     await q("COMMIT");

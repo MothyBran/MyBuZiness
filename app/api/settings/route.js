@@ -21,6 +21,10 @@ async function fetchOne(userId) {
        COALESCE("email",'')             AS "email",
        COALESCE("website",'')           AS "website",
        COALESCE("bankAccount",'')       AS "bankAccount",
+       COALESCE("bankInstitution",'')   AS "bankInstitution",
+       COALESCE("bankRecipient",'')     AS "bankRecipient",
+       COALESCE("bankIban",'')          AS "bankIban",
+       COALESCE("bankBic",'')           AS "bankBic",
        COALESCE("vatId",'')             AS "vatId",
        COALESCE("kleinunternehmer", true) AS "kleinunternehmer",
        COALESCE("currency",'EUR')       AS "currency",
@@ -79,6 +83,10 @@ export async function PUT(request) {
       email: body.email ?? null,
       website: body.website ?? null,
       bankAccount: body.bankAccount ?? null,
+      bankInstitution: body.bankInstitution ?? null,
+      bankRecipient: body.bankRecipient ?? null,
+      bankIban: body.bankIban ?? null,
+      bankBic: body.bankBic ?? null,
       vatId: body.vatId ?? null,
       kleinunternehmer: !!body.kleinunternehmer,
       currency: body.currency ?? "EUR",
@@ -97,19 +105,18 @@ export async function PUT(request) {
       await q(
         `INSERT INTO "Settings" (
            "id","companyName","ownerName","address1","address2","postalCode","city",
-           "phone","email","website","bankAccount","vatId","kleinunternehmer","currency",
+           "phone","email","website","bankAccount","bankInstitution","bankRecipient","bankIban","bankBic","vatId","kleinunternehmer","currency",
            "logoUrl","primaryColor","secondaryColor","fontFamily","textColor","taxRateDefault",
            "createdAt","updatedAt","userId"
          ) VALUES (
            $1,$2,$3,$4,$5,$6,$7,
-           $8,$9,$10,$11,$12,$13,$14,
-           $15,$16,$17,$18,$19,$20,
-           now(), now(), $21
+           $8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+           now(), now(), $25
          )`,
         [
           id,
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
-          payload.phone, payload.email, payload.website, payload.bankAccount, payload.vatId, payload.kleinunternehmer, payload.currency,
+          payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.fontFamily, payload.textColor, payload.taxRateDefault,
           userId
         ]
@@ -118,15 +125,15 @@ export async function PUT(request) {
       await q(
         `UPDATE "Settings" SET
            "companyName"=$2, "ownerName"=$3, "address1"=$4, "address2"=$5, "postalCode"=$6, "city"=$7,
-           "phone"=$8, "email"=$9, "website"=$10, "bankAccount"=$11, "vatId"=$12, "kleinunternehmer"=$13, "currency"=$14,
-           "logoUrl"=$15, "primaryColor"=$16, "secondaryColor"=$17, "fontFamily"=$18, "textColor"=$19,
-           "taxRateDefault"=$20,
+           "phone"=$8, "email"=$9, "website"=$10, "bankAccount"=$11, "bankInstitution"=$12, "bankRecipient"=$13, "bankIban"=$14, "bankBic"=$15, "vatId"=$16, "kleinunternehmer"=$17, "currency"=$18,
+           "logoUrl"=$19, "primaryColor"=$20, "secondaryColor"=$21, "fontFamily"=$22, "textColor"=$23,
+           "taxRateDefault"=$24,
            "updatedAt"=now()
-         WHERE "id" = $1 AND "userId" = $21`,
+         WHERE "id" = $1 AND "userId" = $25`,
         [
           existing.id,
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
-          payload.phone, payload.email, payload.website, payload.bankAccount, payload.vatId, payload.kleinunternehmer, payload.currency,
+          payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.fontFamily, payload.textColor,
           payload.taxRateDefault,
           userId

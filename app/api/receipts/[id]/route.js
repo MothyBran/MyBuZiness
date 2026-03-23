@@ -45,6 +45,7 @@ export async function GET(_req, { params }) {
          COALESCE("name",'')                    AS "name",
          COALESCE("quantity",0)                 AS "quantity",
          COALESCE("unitPriceCents",0)::bigint   AS "unitPriceCents",
+         COALESCE("baseCents",0)::bigint        AS "baseCents",
          COALESCE("lineTotalCents",0)::bigint   AS "lineTotalCents",
          "createdAt","updatedAt"
        FROM "ReceiptItem"
@@ -98,7 +99,8 @@ export async function PUT(req, { params }) {
 
     const existingItems = (await q(
       `SELECT COALESCE("quantity",0) AS "quantity",
-              COALESCE("unitPriceCents",0)::bigint AS "unitPriceCents"
+              COALESCE("unitPriceCents",0)::bigint AS "unitPriceCents",
+              COALESCE("baseCents",0)::bigint AS "baseCents"
        FROM "ReceiptItem" WHERE "receiptId"=$1`,
       [id]
     )).rows;
@@ -109,10 +111,12 @@ export async function PUT(req, { params }) {
       ? body.items.map(it => ({
           quantity: toInt(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
+          baseCents: toInt(it.baseCents || 0),
         }))
       : existingItems.map(it => ({
           quantity: toInt(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
+          baseCents: toInt(it.baseCents || 0),
         }));
 
     // Summen neu rechnen
@@ -122,7 +126,7 @@ export async function PUT(req, { params }) {
 
     let net = 0;
     for (const it of itemsForTotals) {
-      net += toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0);
+      net += (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
     }
     const netAfter = Math.max(0, net - discountCents);
     const taxRate  = vatExempt ? 0 : 19;
@@ -167,18 +171,19 @@ export async function PUT(req, { params }) {
         const itemId = randomUUID();
         const qty  = toInt(it.quantity || 0);
         const unit = toInt(it.unitPriceCents || 0);
-        const line = qty * unit;
+        const base = toInt(it.baseCents || 0);
+        const line = (qty * unit) + base;
         await q(
           `INSERT INTO "ReceiptItem"
-             ("id","receiptId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
+             ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
            VALUES
-             ($1,$2,$3,$4,$5,$6,$7, now(), now())`,
+             ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
           [
             itemId,
             id,
             it.productId || null,
             (it.name || "Position").trim(),
-            qty, unit, line
+            qty, unit, base, line
           ]
         );
       }

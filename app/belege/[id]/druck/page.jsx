@@ -143,17 +143,23 @@ export default function ReceiptPrintPage({ params }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((it, idx) => (
-              <tr key={idx}>
-                <td style={{ paddingBottom: "8px" }}>
-                  <span className="item-name">{idx + 1}. {it.name}</span>
-                  <span className="item-details">{it.quantity} x {money(it.unitPriceCents, curr)}</span>
-                </td>
-                <td className="num" style={{ verticalAlign: "bottom", paddingBottom: "8px" }}>
-                  {money(it.lineTotalCents || (it.quantity * it.unitPriceCents), curr)}
-                </td>
-              </tr>
-            ))}
+            {items.map((it, idx) => {
+              const base = Number(it.baseCents || 0);
+              return (
+                <tr key={idx}>
+                  <td style={{ paddingBottom: "8px" }}>
+                    <span className="item-name">{idx + 1}. {it.name}</span>
+                    <span className="item-details">
+                      {it.quantity} x {money(it.unitPriceCents, curr)}
+                      {base > 0 && <><br/>inkl. Grundpreis: {money(base, curr)}</>}
+                    </span>
+                  </td>
+                  <td className="num" style={{ verticalAlign: "bottom", paddingBottom: "8px" }}>
+                    {money(it.lineTotalCents || (it.quantity * it.unitPriceCents) + base, curr)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -198,7 +204,14 @@ export default function ReceiptPrintPage({ params }) {
           <strong>{settings.companyName || "—"}</strong><br />
           {settings.address1 && <span>{settings.address1}<br /></span>}
           {(settings.postalCode || settings.city) && <span>{settings.postalCode} {settings.city}<br /></span>}
-          {settings.vatId && <span>USt-ID: {settings.vatId}</span>}
+          {settings.vatId && <span>USt-ID: {settings.vatId}<br /></span>}
+          {(settings.bankInstitution || settings.bankRecipient || settings.bankIban || settings.bankBic || settings.bankAccount) && (
+            <div style={{ marginTop: "4px" }}>
+              {settings.bankInstitution || settings.bankRecipient || settings.bankIban || settings.bankBic
+                ? `Institut: ${settings.bankInstitution || "-"} | Empfänger: ${settings.bankRecipient || "-"} | IBAN: ${settings.bankIban || "-"} | BIC: ${settings.bankBic || "-"}`
+                : settings.bankAccount.replace(/\n/g, " | ")}
+            </div>
+          )}
         </div>
 
       </div>
