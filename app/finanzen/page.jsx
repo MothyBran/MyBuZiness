@@ -12,6 +12,7 @@ const THIS_YEAR = new Date().getFullYear();
 const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
 
 import { Calendar, Wallet, Receipt, FileText, ArrowUpRight, ArrowDownRight, Activity, Download } from "lucide-react";
+import TaxSection from "./components/TaxSection";
 
 export default function FinanzenPage(){
   const { confirm: confirmMsg, alert: alertMsg } = useDialog();
@@ -191,6 +192,9 @@ export default function FinanzenPage(){
           </div>
         </div>
       </div>
+
+      {/* Steuern & Vorauszahlungen Section */}
+      <TaxSection year={filterYear} isKleinunternehmer={summary?.settings?.kleinunternehmer} />
 
       {/* Aktionen / Exporte */}
       <div className="surface" style={{marginBottom: 24}}>
