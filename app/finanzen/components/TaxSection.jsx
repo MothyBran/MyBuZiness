@@ -28,7 +28,12 @@ export default function TaxSection({ year, isKleinunternehmer }) {
     ustVorauszahlung: "",
     tatsaechlicheEst: "",
     tatsaechlicheGewst: "",
-    tatsaechlicheUst: ""
+    tatsaechlicheUst: "",
+    zusammenveranlagung: false,
+    partnerEinkommen: "",
+    kirchensteuer: false,
+    kirchensteuerSatz: 9,
+    steuerklasse: "1"
   });
 
   async function loadData() {
@@ -46,6 +51,11 @@ export default function TaxSection({ year, isKleinunternehmer }) {
           tatsaechlicheEst: formatInputEUR(j.data.tatsaechlicheEstCents),
           tatsaechlicheGewst: formatInputEUR(j.data.tatsaechlicheGewstCents),
           tatsaechlicheUst: formatInputEUR(j.data.tatsaechlicheUstCents),
+          zusammenveranlagung: j.data.zusammenveranlagung || false,
+          partnerEinkommen: formatInputEUR(j.data.partnerEinkommenCents),
+          kirchensteuer: j.data.kirchensteuer || false,
+          kirchensteuerSatz: j.data.kirchensteuerSatz || 9,
+          steuerklasse: j.data.steuerklasse || "1"
         });
       }
     } catch (e) {
@@ -70,6 +80,11 @@ export default function TaxSection({ year, isKleinunternehmer }) {
         tatsaechlicheEstCents: form.tatsaechlicheEst ? parseEURToCents(form.tatsaechlicheEst) : null,
         tatsaechlicheGewstCents: form.tatsaechlicheGewst ? parseEURToCents(form.tatsaechlicheGewst) : null,
         tatsaechlicheUstCents: form.tatsaechlicheUst ? parseEURToCents(form.tatsaechlicheUst) : null,
+        zusammenveranlagung: form.zusammenveranlagung,
+        partnerEinkommenCents: parseEURToCents(form.partnerEinkommen),
+        kirchensteuer: form.kirchensteuer,
+        kirchensteuerSatz: parseInt(form.kirchensteuerSatz, 10),
+        steuerklasse: form.steuerklasse
       };
 
       const r = await fetch("/api/finances/tax", {
@@ -88,8 +103,8 @@ export default function TaxSection({ year, isKleinunternehmer }) {
   }
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   if (loading && !data) return <div className="surface" style={{padding: 24, textAlign: 'center'}}>Lade Steuerdaten...</div>;
@@ -97,6 +112,8 @@ export default function TaxSection({ year, isKleinunternehmer }) {
 
   const est = data.estimates?.estCents || 0;
   const gewst = data.estimates?.gewstCents || 0;
+  const soli = data.estimates?.soliCents || 0;
+  const kist = data.estimates?.kistCents || 0;
   const eNet = data.euer?.profitCents || 0;
 
   // Tatsächliche Steuerlast heranziehen, falls vorhanden, sonst Schätzung
@@ -106,7 +123,11 @@ export default function TaxSection({ year, isKleinunternehmer }) {
 
   const tatEst = data.data.tatsaechlicheEstCents !== null ? data.data.tatsaechlicheEstCents : est;
   const tatGewst = data.data.tatsaechlicheGewstCents !== null ? data.data.tatsaechlicheGewstCents : gewst;
-  const netProfitAfterTaxes = eNet - tatEst - tatGewst;
+  // Hinweis: Wenn tatsächliche ESt eingetragen wird, gehen wir davon aus, dass Soli/KiSt darin enthalten oder getrennt abgerechnet wurden
+  // Um hier eine korrekte Netto-Rechnung zu haben, nehmen wir die Schätzung, es sei denn, tatsächliche ESt ist ausgefüllt.
+  const estimatedTotalTaxes = tatGewst + tatEst + (data.data.tatsaechlicheEstCents !== null ? 0 : (soli + kist));
+
+  const netProfitAfterTaxes = eNet - estimatedTotalTaxes;
 
   return (
     <div className="surface" style={{marginBottom: 24}}>
@@ -136,7 +157,21 @@ export default function TaxSection({ year, isKleinunternehmer }) {
               <span><User size={14} style={{display:'inline', verticalAlign:'text-bottom', marginRight: 4}} className="subtle"/> Einkommensteuer</span>
               <span style={{fontWeight: 600}}>{centsToEUR(est)}</span>
             </div>
-            <div className="subtle" style={{fontSize: 12, marginTop: -8}}>Grobe Annahme für Ledige inkl. Grundfreibetrag und GewSt-Anrechnung.</div>
+            <div className="subtle" style={{fontSize: 12, marginTop: -8}}>Berücksichtigt Grundfreibetrag, GewSt-Anrechnung und Zusammenveranlagung.</div>
+
+            {soli > 0 && (
+              <div style={{display: "flex", justifyContent: "space-between", fontSize: 13}}>
+                <span className="subtle">Solidaritätszuschlag (≈)</span>
+                <span>{centsToEUR(soli)}</span>
+              </div>
+            )}
+
+            {kist > 0 && (
+              <div style={{display: "flex", justifyContent: "space-between", fontSize: 13}}>
+                <span className="subtle">Kirchensteuer ({form.kirchensteuerSatz}%)</span>
+                <span>{centsToEUR(kist)}</span>
+              </div>
+            )}
 
             <div style={{marginTop: 8, paddingTop: 12, borderTop: "1px dashed var(--border, #cbd5e1)", display: "flex", justifyContent: "space-between", fontWeight: 700}}>
               <span>Verbleibender Gewinn (Netto)</span>
@@ -152,11 +187,58 @@ export default function TaxSection({ year, isKleinunternehmer }) {
           </h3>
 
           <div style={{display: "grid", gap: 12}}>
-            <label className="field">
-              <span className="label">Gewerbesteuer-Hebesatz (%)</span>
-              <input type="number" name="gewerbesteuerHebesatz" className="input" value={form.gewerbesteuerHebesatz} onChange={handleInputChange} min="200" max="900" required />
-            </label>
+            {/* Persönliche Steuerparameter */}
+            <div style={{background: "var(--panel, #f8fafc)", padding: 12, borderRadius: 6, display: "flex", flexDirection: "column", gap: 12}}>
+              <div style={{fontWeight: 600, fontSize: 13}}>Steuer-Parameter</div>
 
+              <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
+                <label className="field">
+                  <span className="label">Gewerbesteuer-Hebesatz (%)</span>
+                  <input type="number" name="gewerbesteuerHebesatz" className="input" value={form.gewerbesteuerHebesatz} onChange={handleInputChange} min="200" max="900" required />
+                </label>
+                <label className="field">
+                  <span className="label">Steuerklasse (optional)</span>
+                  <select name="steuerklasse" className="select" value={form.steuerklasse} onChange={handleInputChange}>
+                    <option value="1">1 (Ledig)</option>
+                    <option value="2">2 (Alleinerziehend)</option>
+                    <option value="3">3 (Verheiratet/Höher)</option>
+                    <option value="4">4 (Verheiratet/Gleich)</option>
+                    <option value="5">5 (Verheiratet/Niedriger)</option>
+                    <option value="6">6 (Zweitjob)</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="field" style={{display: "flex", alignItems: "center", gap: 8, flexDirection: "row"}}>
+                <input type="checkbox" name="zusammenveranlagung" checked={form.zusammenveranlagung} onChange={handleInputChange} />
+                <span style={{fontSize: 14, fontWeight: 500}}>Zusammenveranlagung (Splittingtarif)</span>
+              </label>
+
+              {form.zusammenveranlagung && (
+                <label className="field">
+                  <span className="label">Einkommen Partner/in (€ brutto p.a.)</span>
+                  <input type="text" inputMode="decimal" name="partnerEinkommen" placeholder="0,00" className="input" value={form.partnerEinkommen} onChange={handleInputChange} />
+                </label>
+              )}
+
+              <div style={{display: "flex", gap: 16, alignItems: "flex-end"}}>
+                <label className="field" style={{display: "flex", alignItems: "center", gap: 8, flexDirection: "row", marginBottom: 8}}>
+                  <input type="checkbox" name="kirchensteuer" checked={form.kirchensteuer} onChange={handleInputChange} />
+                  <span style={{fontSize: 14, fontWeight: 500}}>Kirchensteuerpflichtig</span>
+                </label>
+                {form.kirchensteuer && (
+                  <label className="field" style={{flex: 1}}>
+                    <span className="label">Satz</span>
+                    <select name="kirchensteuerSatz" className="select" value={form.kirchensteuerSatz} onChange={handleInputChange}>
+                      <option value="8">8% (BY, BW)</option>
+                      <option value="9">9% (Andere BL)</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div style={{marginTop: 4, fontWeight: 600, fontSize: 13}}>Geleistete Vorauszahlungen (in {year})</div>
             <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
               <label className="field">
                 <span className="label">ESt-Vorauszahlung (€)</span>
