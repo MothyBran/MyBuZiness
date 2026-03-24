@@ -5,28 +5,60 @@ import { getUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// Vereinfachte Einkommensteuerberechnung nach Grundtarif (grob für DE)
-function calculateIncomeTaxEstimate(taxableIncome, year) {
-  // Grundfreibetrag (GFB) je nach Jahr
+// Näherungsweise Einkommensteuerberechnung nach Grundtarif (grob für DE)
+// (Ersatz für § 32a EStG, stark vereinfacht für Rücklagenbildung)
+function calcBaseTax(zvE, year) {
   let gfb = 11604; // 2024
   if (year === 2023) gfb = 10908;
-  if (year === 2022) gfb = 10347;
-  if (year >= 2025) gfb = 12084; // geschätzt/geplant
+  if (year <= 2022) gfb = 10347;
+  if (year >= 2025) gfb = 12084; // geschätzt
 
-  if (taxableIncome <= gfb) return 0;
+  if (zvE <= gfb) return 0;
 
-  // Grobe pauschale Schätzung für den Rest (Progressionszone bis Spitzensteuersatz)
-  // Dies ist keine exakte Berechnung nach § 32a EStG, sondern eine Schätzung für die Rücklage!
-  const incomeAboveGfb = taxableIncome - gfb;
-
-  // Einfache Staffelung als Näherung
+  // Vereinfachte Progressionszonen
+  const incomeAboveGfb = zvE - gfb;
   let tax = 0;
+
+  // Erste Progressionszone (~14% bis ~24%) -> vereinfacht pauschal ~20%
   if (incomeAboveGfb <= 15000) {
-    tax = incomeAboveGfb * 0.20; // ca. 20% in der ersten Zone
-  } else if (incomeAboveGfb <= 45000) {
+    tax = incomeAboveGfb * 0.20;
+  }
+  // Zweite Progressionszone (~24% bis 42%) -> vereinfacht
+  else if (incomeAboveGfb <= 45000) {
     tax = (15000 * 0.20) + ((incomeAboveGfb - 15000) * 0.30);
-  } else {
+  }
+  // Spitzensteuersatz (42%)
+  else if (incomeAboveGfb <= 250000) {
     tax = (15000 * 0.20) + (30000 * 0.30) + ((incomeAboveGfb - 45000) * 0.42);
+  }
+  // Reichensteuer (45%) ab 277.826 € (hier grob vereinfacht ab 250k)
+  else {
+    tax = (15000 * 0.20) + (30000 * 0.30) + (205000 * 0.42) + ((incomeAboveGfb - 250000) * 0.45);
+  }
+
+  return tax;
+}
+
+function calculateIncomeTaxEstimate(taxableIncome, year, settings) {
+  const { zusammenveranlagung = false, partnerEinkommenCents = 0 } = settings;
+  const partnerIncome = partnerEinkommenCents / 100;
+
+  let totalIncome = taxableIncome;
+  let tax = 0;
+
+  // Splittingtarif anwenden (zu versteuerndes Einkommen halbieren, Grundsteuer berechnen, verdoppeln)
+  if (zusammenveranlagung) {
+    totalIncome += partnerIncome;
+    const splitIncome = totalIncome / 2;
+    tax = calcBaseTax(splitIncome, year) * 2;
+
+    // Steueranteil auf den eigenen Gewerbegewinn herunterrechnen (Pro rata)
+    if (totalIncome > 0) {
+      tax = tax * (taxableIncome / totalIncome);
+    }
+  } else {
+    // Grundtarif (Einzelveranlagung)
+    tax = calcBaseTax(taxableIncome, year);
   }
 
   return Math.round(tax);
@@ -96,7 +128,12 @@ export async function GET(req) {
       ustVorauszahlungCents: 0,
       tatsaechlicheEstCents: null,
       tatsaechlicheGewstCents: null,
-      tatsaechlicheUstCents: null
+      tatsaechlicheUstCents: null,
+      zusammenveranlagung: false,
+      partnerEinkommenCents: 0,
+      kirchensteuer: false,
+      kirchensteuerSatz: 9,
+      steuerklasse: "1"
     };
 
     const { rows } = await q(`SELECT * FROM "TaxYear" WHERE "year" = $1 AND "userId" = $2`, [year, uId]);
@@ -111,6 +148,8 @@ export async function GET(req) {
     // 3. Berechne Schätzungen
     let estimatedGewStCents = 0;
     let estimatedEStCents = 0;
+    let estimatedSoliCents = 0;
+    let estimatedKiStCents = 0;
 
     if (profitEur > 0) {
       // Gewerbesteuer Schätzung (Freibetrag 24.500 € für Einzelunternehmen)
@@ -129,14 +168,36 @@ export async function GET(req) {
       // Anrechnung der GewSt auf ESt: das 3,8-fache des Steuermessbetrags (bis max zur tats. GewSt)
       const anrechnungGewSt = Math.min(steuermessbetrag * 3.8, gewst);
 
-      // Rohe Einkommensteuerschätzung
-      const rohEst = calculateIncomeTaxEstimate(profitEur, year);
+      // Rohe Einkommensteuerschätzung inkl. Splittingtarif
+      const rohEst = calculateIncomeTaxEstimate(profitEur, year, taxYearData);
 
-      // Abzug der GewSt-Anrechnung
+      // Abzug der GewSt-Anrechnung auf die tarifliche Einkommensteuer
       let est = rohEst - anrechnungGewSt;
       if (est < 0) est = 0;
 
+      // Soli-Berechnung (Freigrenze ab 2024: 18.130 € ESt, bei Splitting 36.260 € ESt)
+      const soliFreigrenze = taxYearData.zusammenveranlagung ? 36260 : 18130;
+      // Hier nehmen wir zur Berechnung des Solis die "rohEst" vor der GewSt-Anrechnung als Basis,
+      // da die Gewerbesteuer nach § 35 EStG die Bemessungsgrundlage für den Soli reduziert (tarifliche ESt abzgl. Ermäßigung).
+      // Also basierend auf der tatsächlichen ESt-Schuld 'est':
+      let soli = 0;
+      if (est > soliFreigrenze) {
+         // Der Einfachheit halber setzen wir 5.5% des übersteigenden Betrags in der Gleitzone bzw. voll an.
+         // Dies ist nur eine grobe Näherung!
+         soli = est * 0.055;
+      }
+
+      // Kirchensteuer
+      let kist = 0;
+      if (taxYearData.kirchensteuer && taxYearData.kirchensteuerSatz) {
+        // Kirchensteuer berechnet sich aus der ESt *nach* Kinderfreibeträgen, aber *vor* § 35 Anrechnung.
+        // Daher Basis = rohEst.
+        kist = rohEst * (taxYearData.kirchensteuerSatz / 100);
+      }
+
       estimatedEStCents = Math.round(est * 100);
+      estimatedSoliCents = Math.round(soli * 100);
+      estimatedKiStCents = Math.round(kist * 100);
     }
 
     return NextResponse.json({
@@ -145,7 +206,9 @@ export async function GET(req) {
       euer,
       estimates: {
         gewstCents: estimatedGewStCents,
-        estCents: estimatedEStCents
+        estCents: estimatedEStCents,
+        soliCents: estimatedSoliCents,
+        kistCents: estimatedKiStCents
       }
     });
 
@@ -172,7 +235,12 @@ export async function POST(req) {
       ustVorauszahlungCents,
       tatsaechlicheEstCents,
       tatsaechlicheGewstCents,
-      tatsaechlicheUstCents
+      tatsaechlicheUstCents,
+      zusammenveranlagung,
+      partnerEinkommenCents,
+      kirchensteuer,
+      kirchensteuerSatz,
+      steuerklasse
     } = body;
 
     if (!year) {
@@ -193,6 +261,11 @@ export async function POST(req) {
           "tatsaechlicheEstCents" = $5,
           "tatsaechlicheGewstCents" = $6,
           "tatsaechlicheUstCents" = $7,
+          "zusammenveranlagung" = $10,
+          "partnerEinkommenCents" = $11,
+          "kirchensteuer" = $12,
+          "kirchensteuerSatz" = $13,
+          "steuerklasse" = $14,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE "year" = $8 AND "userId" = $9
       `, [
@@ -204,7 +277,12 @@ export async function POST(req) {
         tatsaechlicheGewstCents,
         tatsaechlicheUstCents,
         year,
-        uId
+        uId,
+        zusammenveranlagung ?? false,
+        partnerEinkommenCents ?? 0,
+        kirchensteuer ?? false,
+        kirchensteuerSatz ?? 9,
+        steuerklasse ?? null
       ]);
     } else {
       // Insert
@@ -218,8 +296,13 @@ export async function POST(req) {
           "ustVorauszahlungCents",
           "tatsaechlicheEstCents",
           "tatsaechlicheGewstCents",
-          "tatsaechlicheUstCents"
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          "tatsaechlicheUstCents",
+          "zusammenveranlagung",
+          "partnerEinkommenCents",
+          "kirchensteuer",
+          "kirchensteuerSatz",
+          "steuerklasse"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `, [
         newId, year, uId,
         gewerbesteuerHebesatz ?? 400,
@@ -228,7 +311,12 @@ export async function POST(req) {
         ustVorauszahlungCents ?? 0,
         tatsaechlicheEstCents,
         tatsaechlicheGewstCents,
-        tatsaechlicheUstCents
+        tatsaechlicheUstCents,
+        zusammenveranlagung ?? false,
+        partnerEinkommenCents ?? 0,
+        kirchensteuer ?? false,
+        kirchensteuerSatz ?? 9,
+        steuerklasse ?? null
       ]);
     }
 
