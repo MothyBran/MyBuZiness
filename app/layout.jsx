@@ -6,6 +6,7 @@ import InstallPrompt from "./components/InstallPrompt";
 import Sidebar from "./components/Sidebar";
 import ViewportManager from "./components/ViewportManager";
 import ThemeManager from "./components/ThemeManager";
+import { DialogProvider } from "./components/DialogProvider";
 import { getUser } from "@/lib/auth";
 
 export const metadata = {
@@ -24,6 +25,7 @@ export default async function RootLayout({ children }) {
       <body>
         <ViewportManager />
         <ThemeManager />
+        <DialogProvider>
         {user ? (
           <>
             {/* Desktop Sidebar (Fixed) */}
@@ -49,6 +51,7 @@ export default async function RootLayout({ children }) {
             {children}
           </main>
         )}
+        </DialogProvider>
       </body>
     </html>
   );

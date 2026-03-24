@@ -1,4 +1,6 @@
 "use client";
+import { useDialog } from "../components/DialogProvider";
+
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -46,6 +48,7 @@ const btnDanger = { padding:"8px 10px", borderRadius:8, background:"transparent"
 const modalWrap = { position:"fixed", left:"50%", top:"8%", transform:"translateX(-50%)", width:"min(900px,94vw)", maxHeight:"84vh", overflow:"auto", background:"var(--panel)", borderRadius:14, padding:16, zIndex:1000, boxShadow:"0 10px 40px rgba(0,0,0,.15)" };
 
 export default function ProductsPage() {
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
@@ -63,10 +66,10 @@ export default function ProductsPage() {
   function toggleExpand(id){ setExpandedId(prev => prev === id ? null : id); }
 
   async function removeRow(id){
-    if (!confirm("Dieses Produkt wirklich löschen?")) return;
+    if (!await confirmMsg("Dieses Produkt wirklich löschen?")) return;
     const res = await fetch(`/api/products/${id}`, { method:"DELETE" });
     const js = await res.json().catch(()=>({}));
-    if (!js?.ok) return alert(js?.error || "Löschen fehlgeschlagen.");
+    if (!js?.ok) return await alertMsg(js?.error || "Löschen fehlgeschlagen.");
     if (expandedId === id) setExpandedId(null);
     load();
   }
@@ -193,7 +196,7 @@ function ProductModal({ title, initial, onClose, onSaved }) {
   const [travelPerKmInput, setTravelPerKmInput] = useState(initial?.travelPerKmCents ? fromCents(initial.travelPerKmCents) : "");
 
   async function save() {
-    if (!name.trim()) return alert("Bitte Bezeichnung angeben.");
+    if (!name.trim()) return await alertMsg("Bitte Bezeichnung angeben.");
 
     const body = {
       name: name.trim(),
@@ -211,7 +214,7 @@ function ProductModal({ title, initial, onClose, onSaved }) {
     const method = initial ? "PUT" : "POST";
     const res = await fetch(url, { method, headers:{ "content-type":"application/json" }, body: JSON.stringify(body) });
     const js = await res.json().catch(()=>({}));
-    if (!js?.ok) return alert(js?.error || "Speichern fehlgeschlagen.");
+    if (!js?.ok) return await alertMsg(js?.error || "Speichern fehlgeschlagen.");
     onSaved?.();
   }
 

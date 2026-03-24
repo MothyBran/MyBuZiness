@@ -1,5 +1,7 @@
-// app/finanzen/page.jsx
 "use client";
+import { useDialog } from "../components/DialogProvider";
+// app/finanzen/page.jsx
+
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -12,6 +14,7 @@ const THIS_MONTH = `${new Date().getFullYear()}-${String(new Date().getMonth()+1
 import { Calendar, Wallet, Receipt, FileText, ArrowUpRight, ArrowDownRight, Activity, Download } from "lucide-react";
 
 export default function FinanzenPage(){
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [summary, setSummary] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +67,7 @@ export default function FinanzenPage(){
   async function saveQuick(e){
     e.preventDefault();
     const grossCents = Math.round(parseFloat(String(form.gross).replace(",", ".")) * 100);
-    if (!Number.isFinite(grossCents) || grossCents<=0) return alert("Betrag (brutto) ungültig.");
+    if (!Number.isFinite(grossCents) || grossCents<=0) return await alertMsg("Betrag (brutto) ungültig.");
 
     let documentId = null;
     if (capFile) {
@@ -72,7 +75,7 @@ export default function FinanzenPage(){
       fd.append("file", capFile);
       if (form.note) fd.append("note", form.note);
       const up = await fetch("/api/uploads", { method: "POST", body: fd }).then(r => r.json()).catch(() => ({ ok: false }));
-      if (!up.ok) return alert(up.error || "Upload fehlgeschlagen.");
+      if (!up.ok) return await alertMsg(up.error || "Upload fehlgeschlagen.");
       documentId = up.file?.id || null;
     }
 
@@ -90,7 +93,7 @@ export default function FinanzenPage(){
       method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify(payload)
     });
     const j = await r.json();
-    if(!j.ok) return alert(j.error || "Speichern fehlgeschlagen.");
+    if(!j.ok) return await alertMsg(j.error || "Speichern fehlgeschlagen.");
     setForm({ kind:"expense", gross:"", vatRate:"19", bookedOn:toISODate(), categoryCode:"", note:"", paymentMethod:"bank" });
     setCapFile(null);
     const fileInput = document.querySelector('input[type="file"]');
@@ -99,9 +102,9 @@ export default function FinanzenPage(){
   }
 
   async function removeRow(id){
-    if(!confirm("Eintrag wirklich löschen?")) return;
+    if(!await confirmMsg("Eintrag wirklich löschen?")) return;
     const r = await fetch(`/api/finances/transactions/${id}`, { method:"DELETE" });
-    const j = await r.json(); if(!j.ok) return alert(j.error || "Löschen fehlgeschlagen.");
+    const j = await r.json(); if(!j.ok) return await alertMsg(j.error || "Löschen fehlgeschlagen.");
     if (expandedRowId === id) setExpandedRowId(null);
     await Promise.all([loadSummary(), loadRows()]);
   }

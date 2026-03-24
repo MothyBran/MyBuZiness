@@ -180,10 +180,18 @@ export default function ReceiptPrintPage({ params }) {
                 <td className="label">Netto</td>
                 <td>{money(data.netCents, curr)}</td>
               </tr>
-              <tr>
-                <td className="label">USt. {data.vatExempt ? "(Befreit)" : "19%"}</td>
-                <td>{money(data.taxCents, curr)}</td>
-              </tr>
+              {data.vatExempt ? (
+                <tr>
+                  <td colSpan={2} style={{ fontSize: "8pt", color: "#555", paddingTop: "4px", paddingBottom: "4px" }}>
+                    Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
+                  </td>
+                </tr>
+              ) : (
+                <tr>
+                  <td className="label">USt. 19%</td>
+                  <td>{money(data.taxCents, curr)}</td>
+                </tr>
+              )}
               <tr>
                 <td className="label final">Gesamt</td>
                 <td className="final">{money(data.grossCents, curr)}</td>
