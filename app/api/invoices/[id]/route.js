@@ -61,7 +61,7 @@ export async function PATCH(req, { params }) {
     const body = await req.json().catch(()=> ({}));
 
     // Verify ownership first to be safe
-    const existing = (await q(`SELECT id FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
+    const existing = (await q(`SELECT * FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
     if (!existing) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
 
     // Einstellungen für Steuer & Währung
@@ -79,9 +79,24 @@ export async function PATCH(req, { params }) {
     if (body.customerId !== undefined) patch.customerId = body.customerId || null;
     if (typeof body.status === "string") patch.status = body.status.trim(); // optionales Feld
 
+    // Beleg generieren, wenn Status explizit auf "done" (oder "abgeschlossen") geändert wird und vorher nicht war
+    const isNowDone = patch.status === "done" || patch.status === "abgeschlossen";
+    const wasDone = existing.status === "done" || existing.status === "abgeschlossen";
+    const shouldGenerateReceipt = isNowDone && !wasDone;
+
     // Positionen (vollständig neu setzen, wenn übergeben)
     const items = Array.isArray(body.items) ? body.items : null;
     const discountCents = toInt(body.discountCents || 0);
+
+    let resNetCents = existing.netCents;
+    let resTaxCents = existing.taxCents;
+    let resGrossCents = existing.grossCents;
+    let resTaxRate = existing.taxRate;
+    let resCurrency = currency;
+    let resInvoiceNo = patch.invoiceNo || existing.invoiceNo;
+    let resIssueDate = patch.issueDate !== undefined ? patch.issueDate : existing.issueDate;
+    let resDiscountCents = discountCents || 0;
+    let generatedReceiptItems = [];
 
     // Wenn Positionen editiert werden, Produkte laden
     let productMap = new Map();
@@ -141,6 +156,11 @@ export async function PATCH(req, { params }) {
       const grossCents = netAfterDiscount + taxCents;
 
       // Invoice updaten (inkl. Summen)
+      resNetCents = netAfterDiscount;
+      resTaxCents = taxCents;
+      resGrossCents = grossCents;
+      resTaxRate = taxRate;
+
       const keys = Object.keys(patch);
       const sets = keys.map((k, i) => `"${k}"=$${i+1}`);
       const vals = keys.map(k => patch[k]);
@@ -168,21 +188,93 @@ export async function PATCH(req, { params }) {
              ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
           [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents]
         );
+        generatedReceiptItems.push({
+          productId: it.productId,
+          name: it.name,
+          quantity: it.quantity,
+          unitPriceCents: it.unitPriceCents,
+          baseCents: it.lineTotalCents - (it.quantity * it.unitPriceCents),
+          lineTotalCents: it.lineTotalCents
+        });
+      }
+    } else {
+      // Patch ohne Positionsänderung
+      if (Object.keys(patch).length) {
+        const keys = Object.keys(patch);
+        const sets = keys.map((k, i) => `"${k}"=$${i+1}`).join(", ");
+        const vals = keys.map(k => patch[k]);
+        const res = await q(
+          `UPDATE "Invoice" SET ${sets}, "updatedAt"=now() WHERE "id"=$${keys.length+1} AND "userId"=$${keys.length+2}`,
+          [...vals, id, userId]
+        );
+        if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
       }
 
-      return Response.json({ ok:true });
+      if (shouldGenerateReceipt) {
+        // Positionen aus Datenbank laden, da sie nicht mitgesendet wurden
+        const existingItems = (await q(`SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "createdAt" ASC`, [id])).rows;
+        for (const it of existingItems) {
+          const qty = toInt(it.quantity || 0);
+          const unit = toInt(it.unitPriceCents || 0);
+          const lineTotal = toInt(it.lineTotalCents || 0);
+          generatedReceiptItems.push({
+            productId: it.productId,
+            name: it.name,
+            quantity: qty,
+            unitPriceCents: unit,
+            baseCents: lineTotal - (qty * unit),
+            lineTotalCents: lineTotal
+          });
+        }
+        resDiscountCents = 0; // Wir können hier den Rabatt nicht trivial herleiten, wir nehmen 0 an (es sei denn wir speichern ihn in Invoice)
+        // Aber moment, Invoice hat keinen discountCents Column - Rabatt ist bereits in netCents/taxCents/grossCents berechnet.
+        // Das bedeutet für den generierten Receipt reicht es `discountCents` auf 0 zu lassen, wenn wir Net/Tax/Gross übernehmen.
+        // Wir berechnen den Rabatt rückwärts: sum(lineTotal) - netCents.
+        const sumLineTotals = generatedReceiptItems.reduce((acc, it) => acc + it.lineTotalCents, 0);
+        resDiscountCents = Math.max(0, sumLineTotals - existing.netCents);
+      }
     }
 
-    // Patch ohne Positionsänderung
-    if (Object.keys(patch).length) {
-      const keys = Object.keys(patch);
-      const sets = keys.map((k, i) => `"${k}"=$${i+1}`).join(", ");
-      const vals = keys.map(k => patch[k]);
-      const res = await q(
-        `UPDATE "Invoice" SET ${sets}, "updatedAt"=now() WHERE "id"=$${keys.length+1} AND "userId"=$${keys.length+2}`,
-        [...vals, id, userId]
+    if (shouldGenerateReceipt) {
+      // Datum der Rechnung für die Notiz formatieren
+      const invDate = resIssueDate ? new Date(resIssueDate) : new Date();
+      const dateStr = invDate.toLocaleDateString("de-DE");
+      const note = `Rechnung ${resInvoiceNo || id} vom ${dateStr} bezahlt.`;
+
+      // Receipt Nummer generieren
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const prefix = `BN-${yy}${mm}-`;
+
+      const last = await q(`SELECT "receiptNo" FROM "Receipt" WHERE "userId"=$1 AND "receiptNo" LIKE $2 ORDER BY "receiptNo" DESC LIMIT 1`, [userId, `${prefix}%`]);
+      let nextNum = 1;
+      if (last.rows.length > 0 && last.rows[0].receiptNo) {
+        const lastStr = last.rows[0].receiptNo;
+        const lastNum = parseInt(lastStr.split("-").pop() || "0", 10);
+        if (!isNaN(lastNum)) nextNum = lastNum + 1;
+      }
+      const receiptNo = `${prefix}${String(nextNum).padStart(3, "0")}`;
+      const receiptId = uuid();
+
+      // In Receipt einfügen
+      await q(`
+        INSERT INTO "Receipt"
+          ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId")
+        VALUES
+          ($1,$2,COALESCE($3::date, CURRENT_DATE),$4,$5,$6,$7,$8,$9, now(), now(), $10, $11)`,
+        [receiptId, receiptNo, resIssueDate || null, resTaxRate === 0 || vatExempt, resCurrency, resNetCents, resTaxCents, resGrossCents, resDiscountCents, note, userId]
       );
-      if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
+
+      for (const it of generatedReceiptItems) {
+        await q(
+          `INSERT INTO "ReceiptItem"
+             ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
+           VALUES
+             ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
+          [uuid(), receiptId, it.productId || null, (it.name || "Position").trim(), it.quantity, it.unitPriceCents, it.baseCents, it.lineTotalCents]
+        );
+      }
     }
 
     return Response.json({ ok:true });
