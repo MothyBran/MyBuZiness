@@ -49,7 +49,7 @@ import { expect } from '@playwright/test';
     await newPage.waitForTimeout(2000);
 
     // Erfasse PDF Bericht Screenshot
-    await newPage.screenshot({ path: '/home/jules/verification/bericht_page.png', fullPage: true });
+    await newPage.screenshot({ path: '/home/jules/verification/bericht_page_with_data.png', fullPage: true });
 
   } catch (err) {
     console.error(err);

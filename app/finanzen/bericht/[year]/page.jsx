@@ -35,25 +35,29 @@ export default function BerichtPrintPage({ params }) {
       const start = `${y}-01-01`;
       const end = `${y}-12-31`;
 
-      const [resTx, resSet] = await Promise.all([
+      const [resTx, resSet, resRec, resInv] = await Promise.all([
         fetch(`/api/finances/transactions?from=${start}&to=${end}&limit=5000`, { cache: "no-store" }),
-        fetch("/api/settings", { cache: "no-store" })
+        fetch("/api/settings", { cache: "no-store" }),
+        fetch(`/api/receipts?limit=5000`, { cache: "no-store" }),
+        fetch(`/api/invoices?limit=5000`, { cache: "no-store" })
       ]);
 
       if (!resTx.ok) throw new Error("Transaktionen konnten nicht geladen werden.");
 
       const jsonTx = await resTx.json();
       const jsonSet = await resSet.json().catch(() => ({}));
+      const jsonRec = await resRec.json().catch(() => ({ data: [] }));
+      const jsonInv = await resInv.json().catch(() => ({ data: [] }));
 
       if (!jsonTx.ok) throw new Error(jsonTx.error || "Fehler beim Laden.");
 
-      // Split income and expenses
-      const rows = jsonTx.rows || [];
       const incomes = [];
       const expenses = [];
       let totalIncome = 0;
       let totalExpense = 0;
 
+      // 1. Finance Transactions
+      const rows = jsonTx.rows || [];
       rows.forEach(r => {
         if (r.kind === 'income') {
           incomes.push(r);
@@ -61,6 +65,50 @@ export default function BerichtPrintPage({ params }) {
         } else if (r.kind === 'expense') {
           expenses.push(r);
           totalExpense += Number(r.grossCents || 0);
+        }
+      });
+
+      // 2. Receipts (immer Einnahmen)
+      const receipts = Array.isArray(jsonRec.data) ? jsonRec.data : [];
+      receipts.forEach(rec => {
+        const d = new Date(rec.date);
+        const recYear = d.getFullYear();
+        if (recYear === Number(y)) {
+           incomes.push({
+             id: rec.id,
+             bookedOn: rec.date,
+             categoryName: "Kasse/Beleg",
+             note: `Beleg-Nr: ${rec.receiptNo || '-'} ${rec.note ? `(${rec.note})` : ''}`,
+             grossCents: rec.grossCents
+           });
+           totalIncome += Number(rec.grossCents || 0);
+        }
+      });
+
+      // 3. Invoices (nur bezahlte/abgeschlossene als Einnahmen im gewählten Jahr)
+      const invoices = Array.isArray(jsonInv.data) ? jsonInv.data : [];
+      invoices.forEach(inv => {
+        if (inv.status === 'canceled' || inv.status === 'storniert') return;
+
+        let invDate = null;
+        if (inv.paidAt) {
+          invDate = new Date(inv.paidAt);
+        } else if (inv.status === 'paid' || inv.status === 'done') {
+          invDate = new Date(inv.issueDate);
+        }
+
+        if (invDate) {
+           const invYear = invDate.getFullYear();
+           if (invYear === Number(y)) {
+              incomes.push({
+                id: inv.id,
+                bookedOn: invDate.toISOString().slice(0, 10),
+                categoryName: "Rechnung",
+                note: `Rechnung-Nr: ${inv.invoiceNo || '-'} an ${inv.customerName || '-'}`,
+                grossCents: inv.grossCents
+              });
+              totalIncome += Number(inv.grossCents || 0);
+           }
         }
       });
 
