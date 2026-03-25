@@ -42,7 +42,7 @@ function computeStatus(row) {
   if (due) {
     const t0 = new Date(); t0.setHours(0,0,0,0);
     const d0 = new Date(due); d0.setHours(0,0,0,0);
-    if (d0 < t0) return "overdue";
+    if (d0 < t0 && raw === "open") return "overdue";
   }
   return "open";
 }

@@ -59,25 +59,9 @@ async function sumReceipts(from, to) {
   }
 }
 
-/* ---------- Summen bezahlte/abgeschlossene Invoices (Periode) ---------- */
+/* ---------- Summen bezahlte/abgeschlossene Invoices (Periode) - DEPRECATED ---------- */
 async function sumPaidInvoices(from, to) {
-  const sql = `
-    SELECT
-      COALESCE(SUM("grossCents"),0)::int AS inv_gross,
-      COALESCE(SUM("netCents"),0)::int   AS inv_net
-    FROM "Invoice"
-    WHERE (
-      ("paidAt" IS NOT NULL AND "paidAt"::date >= $1 AND "paidAt"::date < $2)
-      OR
-      ("paidAt" IS NULL AND "status" IN ('paid','done') AND "issueDate" >= $1 AND "issueDate" < $2)
-    ) AND "status" != 'canceled' AND "status" != 'storniert'
-  `;
-  try {
-    const { rows } = await q(sql, [from, to]);
-    return rows[0] || { inv_gross:0, inv_net:0 };
-  } catch {
-    return { inv_gross:0, inv_net:0 };
-  }
+  return { inv_gross: 0, inv_net: 0 };
 }
 
 /* ---------- Settings ---------- */
@@ -113,7 +97,7 @@ async function euerYearWithDocs() {
   const y = new Date().getFullYear();
   const from = `${y}-01-01`, to = `${y+1}-01-01`;
 
-  const [tx, rec, inv] = await Promise.all([
+  const [tx, rec] = await Promise.all([
     q(`
       SELECT
         COALESCE(SUM(CASE WHEN "kind"='income'  THEN "netCents" END),0)::int AS inc_net,
@@ -121,11 +105,10 @@ async function euerYearWithDocs() {
       FROM "FinanceTransaction"
       WHERE "bookedOn" >= $1 AND "bookedOn" < $2
     `,[from,to]).then(r=>r.rows[0]||{inc_net:0,exp_net:0}),
-    sumReceipts(from, to),
-    sumPaidInvoices(from, to)
+    sumReceipts(from, to)
   ]);
 
-  const incomeNet = (tx.inc_net || 0) + (rec.rec_net || 0) + (inv.inv_net || 0);
+  const incomeNet = (tx.inc_net || 0) + (rec.rec_net || 0);
   const expenseNet = (tx.exp_net || 0);
   return { incomeNet, expenseNet };
 }
@@ -156,19 +139,18 @@ export async function GET(req) {
       P.selected = P.mtd;
     }
 
-    // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts + paid Invoices; Ausgaben = FinanceTx(expense)
+    // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts; Ausgaben = FinanceTx(expense)
     async function buildPeriod({ from, to }) {
-      const [tx, rec, inv] = await Promise.all([
+      const [tx, rec] = await Promise.all([
         sumFinanceTx(from, to),
-        sumReceipts(from, to),
-        sumPaidInvoices(from, to),
+        sumReceipts(from, to)
       ]);
-      const incomeCents = (tx.inc_gross || 0) + (rec.rec_gross || 0) + (inv.inv_gross || 0);
+      const incomeCents = (tx.inc_gross || 0) + (rec.rec_gross || 0);
       const expenseCents = (tx.exp_gross || 0);
       return {
         incomeCents,
         expenseCents,
-        adds: { receiptsGross: rec.rec_gross || 0, invoicesGross: inv.inv_gross || 0 }
+        adds: { receiptsGross: rec.rec_gross || 0, invoicesGross: 0 }
       };
     }
 
@@ -179,17 +161,16 @@ export async function GET(req) {
     // Zusätze für das Tabellenjahr (für Hinweiszeile unter der Liste)
     const year = new Date().getFullYear();
     const yearFrom = `${year}-01-01`, yearTo = `${year+1}-01-01`;
-    const [yearRec, yearInv] = await Promise.all([
-      sumReceipts(yearFrom, yearTo),
-      sumPaidInvoices(yearFrom, yearTo),
+    const [yearRec] = await Promise.all([
+      sumReceipts(yearFrom, yearTo)
     ]);
     const additions = {
       year: {
         year,
         receiptsGross: yearRec.rec_gross || 0,
-        invoicesGross: yearInv.inv_gross || 0,
+        invoicesGross: 0,
         receiptsNet: yearRec.rec_net || 0,
-        invoicesNet: yearInv.inv_net || 0
+        invoicesNet: 0
       }
     };
 
