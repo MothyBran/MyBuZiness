@@ -387,12 +387,35 @@ export default function InvoicesPage() {
 /* ───────── Modal (Neu/Korrigieren) ───────── */
 function InvoiceModal({ mode="create", initial=null, customers, products, currency, vatExempt, onClose, onSaved }) {
   const isEdit = mode === "edit";
+  const defaultIssueDate = initial?.issueDate ? String(initial.issueDate).slice(0,10) : new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  let defaultDueDate = "";
+  if (initial?.dueDate) {
+    defaultDueDate = String(initial.dueDate).slice(0,10);
+  } else {
+    const defaultIssueDateObj = new Date(defaultIssueDate);
+    defaultIssueDateObj.setDate(defaultIssueDateObj.getDate() + 14);
+    defaultDueDate = new Date(defaultIssueDateObj.getTime() - defaultIssueDateObj.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
   const [invoiceNo, setInvoiceNo] = useState(initial?.invoiceNo || "");
-  const [issueDate, setIssueDate] = useState(initial?.issueDate ? String(initial.issueDate).slice(0,10) : new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState(initial?.dueDate ? String(initial.dueDate).slice(0,10) : "");
+  const [issueDate, setIssueDate] = useState(defaultIssueDate);
+  const [dueDate, setDueDate] = useState(defaultDueDate);
   const [customerId, setCustomerId] = useState(initial?.customerId || "");
   const [discount, setDiscount] = useState("0");
   const [status, setStatus] = useState(initial?.status || "open");  // nur bei Edit sichtbar
+
+  const [userEditedDueDate, setUserEditedDueDate] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit && issueDate && !userEditedDueDate) {
+      const issueObj = new Date(issueDate);
+      if (!isNaN(issueObj)) {
+        issueObj.setDate(issueObj.getDate() + 14);
+        setDueDate(new Date(issueObj.getTime() - issueObj.getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+      }
+    }
+  }, [issueDate, isEdit, userEditedDueDate]);
 
   function makeRow() {
     return {
@@ -550,7 +573,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
             <div className="row">
               <div className="cell w-date">
                 <label style={S.lbl}>Fällig am</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={S.input} />
+                <input type="date" value={dueDate} onChange={(e) => { setDueDate(e.target.value); setUserEditedDueDate(true); }} style={S.input} />
               </div>
               <div className="cell w-money">
                 <label style={S.lbl}>Rabatt gesamt (€, optional)</label>
