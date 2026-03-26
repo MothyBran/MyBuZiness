@@ -62,6 +62,7 @@ function fromCents(c) {
 
 /* ───────── Page ───────── */
 export default function ReceiptsPage(){
+  const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
