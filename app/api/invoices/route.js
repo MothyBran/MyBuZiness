@@ -214,13 +214,57 @@ export async function POST(request) {
     const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
     const grossCents = netAfterDiscount + taxCents;
 
+    const dueDate = body.dueDate || null;
+
     await q(
       `INSERT INTO "Invoice"
          ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt","userId")
        VALUES
          ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6,$7,$8,$9,$10,now(),now(),$11)`,
-      [id, invoiceNo, customerId, body.issueDate || null, body.dueDate || null, currency, netAfterDiscount, taxCents, grossCents, taxRate, userId]
+      [id, invoiceNo, customerId, body.issueDate || null, dueDate, currency, netAfterDiscount, taxCents, grossCents, taxRate, userId]
     );
+
+    // Überfällig-Automation bei Erstellung
+    let isOverdue = false;
+    if (dueDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(dueDate);
+      due.setHours(0, 0, 0, 0);
+      if (due < today) {
+        isOverdue = true;
+      }
+    }
+
+    if (isOverdue) {
+      // Check if an appointment already exists for this exact due date and invoice
+      const apptTitle = `${invoiceNo} überfällig`;
+      const apptRes = await q(
+        `SELECT "id" FROM "Appointment"
+          WHERE "userId"=$1
+            AND "date"=$2
+            AND "title"=$3
+            AND "customerId"=$4
+          LIMIT 1`,
+        [userId, dueDate, apptTitle, customerId]
+      );
+
+      if (apptRes.rows.length === 0) {
+        // Fetch customer name
+        const custRes = await q(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [customerId, userId]);
+        const customerName = custRes.rows[0]?.name || "";
+
+        // Insert new appointment
+        const apptNote = `Die Zahlung der Rechnung ${invoiceNo} ist überfällig, der Kunde muss benachrichtigt werden!`;
+        await q(
+          `INSERT INTO "Appointment"
+             ("id", "kind", "title", "date", "startAt", "status", "customerId", "customerName", "note", "userId", "createdAt", "updatedAt")
+           VALUES
+             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())`,
+          [uuid(), "order", apptTitle, dueDate, "12:00", "open", customerId, customerName, apptNote, userId]
+        );
+      }
+    }
 
     for (const it of prepared) {
       await q(

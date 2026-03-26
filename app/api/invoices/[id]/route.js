@@ -79,6 +79,21 @@ export async function PATCH(req, { params }) {
     if (body.customerId !== undefined) patch.customerId = body.customerId || null;
     if (typeof body.status === "string") patch.status = body.status.trim(); // optionales Feld
 
+    // Überfällig-Automation (Appointment anlegen, falls dueDate in der Vergangenheit liegt und Status "open" ist)
+    const isNowOpen = (patch.status || existing.status) === "open";
+    const currentDueDate = patch.dueDate !== undefined ? patch.dueDate : existing.dueDate;
+
+    let isOverdue = false;
+    if (isNowOpen && currentDueDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(currentDueDate);
+      due.setHours(0, 0, 0, 0);
+      if (due < today) {
+        isOverdue = true;
+      }
+    }
+
     // Beleg generieren, wenn Status explizit auf "done" (oder "abgeschlossen") geändert wird und vorher nicht war
     const isNowDone = patch.status === "done" || patch.status === "abgeschlossen";
     const wasDone = existing.status === "done" || existing.status === "abgeschlossen";
@@ -232,6 +247,37 @@ export async function PATCH(req, { params }) {
         // Wir berechnen den Rabatt rückwärts: sum(lineTotal) - netCents.
         const sumLineTotals = generatedReceiptItems.reduce((acc, it) => acc + it.lineTotalCents, 0);
         resDiscountCents = Math.max(0, sumLineTotals - existing.netCents);
+      }
+    }
+
+    if (isOverdue) {
+      // Check if an appointment already exists for this exact due date and invoice
+      const apptTitle = `${resInvoiceNo} überfällig`;
+      const noteContains = resInvoiceNo;
+      const apptRes = await q(
+        `SELECT "id" FROM "Appointment"
+          WHERE "userId"=$1
+            AND "date"=$2
+            AND "title"=$3
+            AND "customerId"=$4
+          LIMIT 1`,
+        [userId, currentDueDate, apptTitle, existing.customerId || patch.customerId]
+      );
+
+      if (apptRes.rows.length === 0) {
+        // Fetch customer name
+        const custRes = await q(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [existing.customerId || patch.customerId, userId]);
+        const customerName = custRes.rows[0]?.name || "";
+
+        // Insert new appointment
+        const apptNote = `Die Zahlung der Rechnung ${resInvoiceNo} ist überfällig, der Kunde muss benachrichtigt werden!`;
+        await q(
+          `INSERT INTO "Appointment"
+             ("id", "kind", "title", "date", "startAt", "status", "customerId", "customerName", "note", "userId", "createdAt", "updatedAt")
+           VALUES
+             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())`,
+          [uuid(), "order", apptTitle, currentDueDate, "12:00", "open", existing.customerId || patch.customerId, customerName, apptNote, userId]
+        );
       }
     }
 
