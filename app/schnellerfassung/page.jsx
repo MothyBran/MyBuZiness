@@ -20,6 +20,9 @@ export default function SchnellerfassungPage() {
   const [showCart, setShowCart] = useState(false);
   const [discountInput, setDiscountInput] = useState("0");
   const [animations, setAnimations] = useState({});
+  const [showPayment, setShowPayment] = useState(false);
+  const [givenCents, setGivenCents] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -122,13 +125,22 @@ export default function SchnellerfassungPage() {
 
     const d = new Date();
     const localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+
+    let change = null;
+    if (givenCents !== null) {
+      change = givenCents - totals.gross;
+    }
+
     const payload = {
       date: localDate, // Today
       currency,
       vatExempt: !!vatExempt,
       discountCents: totals.disc,
       note: "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
-      items
+      items,
+      givenCents,
+      changeCents: change,
+      paymentMethod
     };
 
     try {
@@ -286,13 +298,100 @@ export default function SchnellerfassungPage() {
                       <span>Gesamt:</span>
                       <span>{money(totals.gross, currency)}</span>
                    </div>
+                   {givenCents !== null && (
+                     <>
+                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                          <span className="muted">Gegeben ({paymentMethod === "card" ? "Karte" : "Bar"}):</span>
+                          <span>{money(givenCents, currency)}</span>
+                       </div>
+                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                          <span className="muted">Wechselgeld:</span>
+                          <span>{money(givenCents - totals.gross, currency)}</span>
+                       </div>
+                     </>
+                   )}
                 </div>
               )}
             </div>
 
-            <div className="cart-footer">
+            <div className="cart-footer" style={{ justifyContent: "space-between" }}>
                <button className="btn btn--subtle" onClick={() => setShowCart(false)}>Zurück</button>
-               <button className="btn btn--primary" onClick={handleSave} disabled={cart.length === 0}>Abschließen</button>
+               <div style={{ display: "flex", gap: "12px" }}>
+                 <button className="btn btn--ghost" onClick={() => setShowPayment(true)}>Kassen-Modus</button>
+                 <button className="btn btn--primary" onClick={handleSave} disabled={cart.length === 0}>Abschließen</button>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPayment && (
+        <div className="cart-overlay" onClick={() => setShowPayment(false)} style={{ zIndex: 110 }}>
+          <div className="cart-panel" onClick={e => e.stopPropagation()}>
+            <div className="cart-header">
+              <h2 style={{ margin: 0 }}>Kassen-Modus</h2>
+              <button className="btn btn--ghost btn--icon" onClick={() => setShowPayment(false)}>
+                <Icon name="x" />
+              </button>
+            </div>
+
+            <div className="cart-body" style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "20px" }}>
+                Zu zahlen: {money(totals.gross, currency)}
+              </div>
+
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: "12px",
+                maxWidth: "400px",
+                margin: "0 auto"
+              }}>
+                {[
+                  { label: "1 €", val: 100 },
+                  { label: "2 €", val: 200 },
+                  { label: "5 €", val: 500 },
+                  { label: "10 €", val: 1000 },
+                  { label: "20 €", val: 2000 },
+                  { label: "50 €", val: 5000 },
+                  { label: "100 €", val: 10000 },
+                  { label: "Passend", val: totals.gross, method: "cash" },
+                  { label: "Karte", val: totals.gross, method: "card" }
+                ].map((btn, i) => (
+                  <button
+                    key={i}
+                    className="btn btn--subtle"
+                    style={{
+                      height: "60px",
+                      fontSize: "1.1rem",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: "1px solid var(--border)",
+                      background: "var(--panel)"
+                    }}
+                    onClick={() => {
+                      setGivenCents(btn.val);
+                      setPaymentMethod(btn.method || "cash");
+                      setShowPayment(false);
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ marginTop: "24px" }}>
+                 <button className="btn btn--ghost" onClick={() => {
+                   setGivenCents(null);
+                   setPaymentMethod(null);
+                   setShowPayment(false);
+                 }}>
+                   Auswahl aufheben
+                 </button>
+              </div>
             </div>
           </div>
         </div>

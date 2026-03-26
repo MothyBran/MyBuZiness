@@ -130,12 +130,16 @@ export default function HomePage() {
             <List
               items={nextAppointments}
               empty="Keine anstehenden Einträge."
-              mapItem={(e) => ({
-                icon: e.kind === "order" ? "🗂️" : "📅",
-                title: e.title || "(ohne Titel)",
-                meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
-                href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
-              })}
+              mapItem={(e) => {
+                const isOverdue = new Date(e.date).getTime() < new Date(new Date().setHours(0,0,0,0)).getTime();
+                return {
+                  icon: isOverdue ? "⏳" : (e.kind === "order" ? "🗂️" : "📅"),
+                  title: e.title || "(ohne Titel)",
+                  meta: `${formatDateDE(e.date)} · ${e.startAt?.slice(0, 5)}${e.endAt ? `–${e.endAt.slice(0, 5)}` : ""}${e.customerName ? ` · ${e.customerName}` : ""}`,
+                  href: e.id ? `/termine/eintrag/${e.id}` : "/termine",
+                  isOverdue
+                };
+              }}
             />
           </Card>
         </Col>
@@ -275,12 +279,15 @@ function List({ items, empty, mapItem }) {
             prefetch={false}
             onClick={() => document.dispatchEvent(new Event("app:nav"))}
             className="list-item"
+            style={{ opacity: m.isOverdue ? 0.6 : 1 }}
           >
-            <div className="list-icon">
+            <div className="list-icon" style={{ backgroundColor: m.isOverdue ? "var(--muted)" : "var(--panel-2)", color: m.isOverdue ? "white" : "var(--text-weak)" }}>
               {m.icon}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div className="ellipsis" style={{ fontWeight: 600, fontSize: "0.93rem" }}>{m.title}</div>
+              <div className="ellipsis" style={{ fontWeight: 600, fontSize: "0.93rem", color: m.isOverdue ? "var(--muted)" : "inherit" }}>
+                {m.title} {m.isOverdue && <span style={{fontSize: "0.75rem", color: "var(--brand)", marginLeft: "4px", padding: "2px 6px", border: "1px solid var(--brand)", borderRadius: "4px"}}>Überfällig</span>}
+              </div>
               <div className="ellipsis" style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{m.meta}</div>
             </div>
           </Link>

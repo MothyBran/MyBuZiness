@@ -27,9 +27,26 @@ export async function GET(req) {
     const where = [`"userId" = $1`];
     const args = [userId];
 
+    if (status) {
+      where.push(`"status" = $${args.length + 1}`);
+      args.push(status);
+    }
+
     if (upcoming === "true") {
-      where.push(`"date" >= $${args.length + 1}`);
-      args.push(todayYMD());
+      if (status === "open") {
+        // The condition `"status" = $2` is already added above (because `status` is truthy).
+        // Since we want both upcoming (any status) AND past-open, the logic is:
+        // (date >= today OR status = 'open')
+        // But since `status` is explicitly set to 'open', ALL results will be 'open'.
+        // So `date >= today OR status = 'open'` evaluates to TRUE for ALL open appointments.
+        // Therefore, we don't need to add the date constraint if status is 'open'.
+        // Wait, if status is 'open', it's already fetching ALL open appointments past and future!
+        // So actually, we just skip adding `date >= today` here!
+        // But let's be explicit and ensure we don't break anything.
+      } else {
+        where.push(`"date" >= $${args.length + 1}`);
+        args.push(todayYMD());
+      }
     } else if (date) {
       where.push(`"date" = $${args.length + 1}`);
       args.push(date);
@@ -46,11 +63,6 @@ export async function GET(req) {
     if (customerId) {
       where.push(`"customerId" = $${args.length + 1}`);
       args.push(customerId);
-    }
-
-    if (status) {
-      where.push(`"status" = $${args.length + 1}`);
-      args.push(status);
     }
 
     if (where.length) sql += " WHERE " + where.join(" AND ");
