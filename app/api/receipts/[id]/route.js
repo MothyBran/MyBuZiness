@@ -27,6 +27,7 @@ export async function GET(_req, { params }) {
          COALESCE("discountCents",0)::bigint    AS "discountCents",
          COALESCE("note",'')                    AS "note",
          COALESCE("vatExempt",false)            AS "vatExempt",
+         "givenCents", "changeCents", "paymentMethod",
          "createdAt","updatedAt"
        FROM "Receipt"
        WHERE "id"=$1 AND "userId"=$2
@@ -123,6 +124,9 @@ export async function PUT(req, { params }) {
     const discountCents = toInt(body.discountCents ?? head.discountCents ?? 0);
     const vatExempt     = typeof body.vatExempt === "boolean" ? body.vatExempt : !!head.vatExempt;
     const currency      = body.currency ?? head.currency ?? "EUR";
+    const givenCents    = body.givenCents != null ? toInt(body.givenCents) : null;
+    const changeCents   = body.changeCents != null ? toInt(body.changeCents) : null;
+    const paymentMethod = body.paymentMethod || null;
 
     let net = 0;
     for (const it of itemsForTotals) {
@@ -147,8 +151,11 @@ export async function PUT(req, { params }) {
          "taxCents"      = $7,
          "grossCents"    = $8,
          "note"          = COALESCE($9,"note"),
+         "givenCents"    = COALESCE($10,"givenCents"),
+         "changeCents"   = COALESCE($11,"changeCents"),
+         "paymentMethod" = COALESCE($12,"paymentMethod"),
          "updatedAt"     = now()
-       WHERE "id"=$10 AND "userId"=$11`,
+       WHERE "id"=$13 AND "userId"=$14`,
       [
         body.receiptNo ?? null,
         body.date ?? null,
@@ -159,6 +166,9 @@ export async function PUT(req, { params }) {
         taxCents,
         grossCents,
         body.note ?? null,
+        givenCents,
+        changeCents,
+        paymentMethod,
         id,
         userId
       ]

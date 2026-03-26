@@ -37,6 +37,7 @@ export async function GET(request) {
         COALESCE("grossCents",0)::bigint       AS "grossCents",
         COALESCE("discountCents",0)::bigint    AS "discountCents",
         COALESCE("note",'')                    AS "note",
+        "givenCents", "changeCents", "paymentMethod",
         "createdAt","updatedAt"
       FROM "Receipt"
       WHERE ${where.join(" AND ")}
@@ -72,6 +73,9 @@ export async function POST(request) {
     const currency = body.currency || "EUR";
     const vatExempt = !!body.vatExempt;
     const discountCents = toInt(body.discountCents || 0);
+    const givenCents = body.givenCents != null ? toInt(body.givenCents) : null;
+    const changeCents = body.changeCents != null ? toInt(body.changeCents) : null;
+    const paymentMethod = body.paymentMethod || null;
 
     // Summen
     let net = 0;
@@ -104,10 +108,10 @@ export async function POST(request) {
 
     await q(`
       INSERT INTO "Receipt"
-        ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId")
+        ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId","givenCents","changeCents","paymentMethod")
       VALUES
-        ($1,$2,COALESCE($3::date, CURRENT_DATE),$4,$5,$6,$7,$8,$9, now(), now(), COALESCE($10,''), $11)`,
-      [id, receiptNo, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents, body.note || "", userId]
+        ($1,$2,COALESCE($3::date, CURRENT_DATE),$4,$5,$6,$7,$8,$9, now(), now(), COALESCE($10,''), $11, $12, $13, $14)`,
+      [id, receiptNo, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents, body.note || "", userId, givenCents, changeCents, paymentMethod]
     );
 
     for (const it of items) {

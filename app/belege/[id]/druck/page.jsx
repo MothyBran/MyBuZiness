@@ -196,6 +196,18 @@ export default function ReceiptPrintPage({ params }) {
                 <td className="label final">Gesamt</td>
                 <td className="final">{money(data.grossCents, curr)}</td>
               </tr>
+              {data.givenCents !== null && (
+                <>
+                  <tr>
+                    <td className="label" style={{ paddingTop: "10px" }}>Gegeben ({data.paymentMethod === "card" ? "Kartenzahlung" : "Barzahlung"})</td>
+                    <td style={{ paddingTop: "10px" }}>{money(data.givenCents, curr)}</td>
+                  </tr>
+                  <tr>
+                    <td className="label">Rückgeld</td>
+                    <td>{money(data.changeCents, curr)}</td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </div>
