@@ -1,8 +1,9 @@
 // app/kunden/page.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "../components/UI";
 
 /** Helpers */
@@ -19,7 +20,10 @@ const btnPrimary = { padding:"10px 12px", borderRadius:8, border:"1px solid tran
 const btnGhost = { padding:"10px 12px", borderRadius:8, border:"1px solid var(--color-primary, #0aa)", background:"transparent", color:"var(--color-primary, #0aa)", cursor:"pointer" };
 const btnDanger = { padding:"8px 10px", borderRadius:8, border:"1px solid #c00", background:"transparent", color:"#c00", cursor:"pointer" };
 
-export default function CustomersPage() {
+function CustomersContent() {
+  const searchParams = useSearchParams();
+  const expandParam = searchParams?.get("expand");
+
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -35,7 +39,19 @@ export default function CustomersPage() {
     setRows(json.data || []);
     setLoading(false);
   }
+
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (expandParam && rows.length > 0) {
+      const found = rows.find((r) => String(r.id) === expandParam);
+      if (found) {
+        setExpandedId(found.id);
+        // Clean up URL silently
+        window.history.replaceState(null, '', '/kunden');
+      }
+    }
+  }, [expandParam, rows]);
 
   function toggleExpand(id) {
     setExpandedId(prev => prev === id ? null : id);
@@ -196,6 +212,14 @@ export default function CustomersPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={<div className="container p-4">Lade...</div>}>
+      <CustomersContent />
+    </Suspense>
   );
 }
 
