@@ -24,6 +24,10 @@ export default function SchnellerfassungPage() {
   const [givenCents, setGivenCents] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(null);
 
+  // Temporary state for the Kassen-Modus modal
+  const [tempGivenCents, setTempGivenCents] = useState(0);
+  const [tempPaymentMethod, setTempPaymentMethod] = useState("cash");
+
   useEffect(() => {
     async function load() {
       try {
@@ -330,16 +334,29 @@ export default function SchnellerfassungPage() {
         <div className="cart-overlay" onClick={() => setShowPayment(false)} style={{ zIndex: 110 }}>
           <div className="cart-panel" onClick={e => e.stopPropagation()}>
             <div className="cart-header">
-              <h2 style={{ margin: 0 }}>Kassen-Modus</h2>
+              <h2 style={{ margin: 0 }}>Zahlungseingang (Kassen-Modus)</h2>
               <button className="btn btn--ghost btn--icon" onClick={() => setShowPayment(false)}>
                 <Icon name="x" />
               </button>
             </div>
 
             <div className="cart-body" style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "20px" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "12px" }}>
                 Zu zahlen: {money(totals.gross, currency)}
               </div>
+
+              <div style={{ fontSize: "1.2rem", marginBottom: "8px", color: "var(--brand)" }}>
+                Gegeben: {money(tempGivenCents, currency)} {tempPaymentMethod === "card" && "(Karte)"}
+              </div>
+
+              {tempGivenCents > 0 && (
+                <div style={{ fontSize: "1.2rem", marginBottom: "20px", fontWeight: "bold", color: tempGivenCents >= totals.gross ? "var(--success, #10b981)" : "var(--danger, #ef4444)" }}>
+                  {tempGivenCents >= totals.gross
+                    ? `Rückgeld: ${money(tempGivenCents - totals.gross, currency)}`
+                    : `Noch offen: ${money(totals.gross - tempGivenCents, currency)}`
+                  }
+                </div>
+              )}
 
               <div style={{
                 display: "grid",
@@ -356,8 +373,8 @@ export default function SchnellerfassungPage() {
                   { label: "20 €", val: 2000 },
                   { label: "50 €", val: 5000 },
                   { label: "100 €", val: 10000 },
-                  { label: "Passend", val: totals.gross, method: "cash" },
-                  { label: "Karte", val: totals.gross, method: "card" }
+                  { label: "Passend", val: totals.gross, method: "cash", exact: true },
+                  { label: "Karte", val: totals.gross, method: "card", exact: true }
                 ].map((btn, i) => (
                   <button
                     key={i}
@@ -373,9 +390,25 @@ export default function SchnellerfassungPage() {
                       background: "var(--panel)"
                     }}
                     onClick={() => {
-                      setGivenCents(btn.val);
-                      setPaymentMethod(btn.method || "cash");
-                      setShowPayment(false);
+                      let newGivenCents;
+                      let newMethod = btn.method || "cash";
+
+                      if (btn.exact) {
+                        newGivenCents = btn.val;
+                      } else {
+                        newGivenCents = tempGivenCents + btn.val;
+                      }
+
+                      setTempGivenCents(newGivenCents);
+                      setTempPaymentMethod(newMethod);
+
+                      // Wenn der gezahlte Betrag reicht, übernehmen und Modal schließen
+                      if (newGivenCents >= totals.gross) {
+                        setGivenCents(newGivenCents);
+                        setPaymentMethod(newMethod);
+                        // Optional: kleine Verzögerung, damit man sieht, dass das Rückgeld aktualisiert wurde
+                        setTimeout(() => setShowPayment(false), 300);
+                      }
                     }}
                   >
                     {btn.label}
@@ -383,13 +416,14 @@ export default function SchnellerfassungPage() {
                 ))}
               </div>
 
-              <div style={{ marginTop: "24px" }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginTop: "32px" }}>
                  <button className="btn btn--ghost" onClick={() => {
+                   setTempGivenCents(0);
+                   setTempPaymentMethod("cash");
                    setGivenCents(null);
                    setPaymentMethod(null);
-                   setShowPayment(false);
                  }}>
-                   Auswahl aufheben
+                   Zurücksetzen
                  </button>
               </div>
             </div>
