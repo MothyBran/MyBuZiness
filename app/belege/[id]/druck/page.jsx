@@ -213,13 +213,6 @@ export default function ReceiptPrintPage({ params }) {
           {settings.address1 && <span>{settings.address1}<br /></span>}
           {(settings.postalCode || settings.city) && <span>{settings.postalCode} {settings.city}<br /></span>}
           {settings.vatId && <span>USt-ID: {settings.vatId}<br /></span>}
-          {(settings.bankInstitution || settings.bankRecipient || settings.bankIban || settings.bankBic || settings.bankAccount) && (
-            <div style={{ marginTop: "4px" }}>
-              {settings.bankInstitution || settings.bankRecipient || settings.bankIban || settings.bankBic
-                ? `Institut: ${settings.bankInstitution || "-"} | Empfänger: ${settings.bankRecipient || "-"} | IBAN: ${settings.bankIban || "-"} | BIC: ${settings.bankBic || "-"}`
-                : settings.bankAccount.replace(/\n/g, " | ")}
-            </div>
-          )}
         </div>
 
       </div>

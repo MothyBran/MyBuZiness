@@ -146,7 +146,15 @@ export default function EntryDetailPage({ params }){
                   </div>
                   <div className="card" style={{ padding:12 }}>
                     <div className="muted">Kunde</div>
-                    <div style={{ fontWeight:700, marginTop:4 }}>{data.customerName || "—"}</div>
+                    <div style={{ fontWeight:700, marginTop:4 }}>
+                      {data.customerId ? (
+                        <Link href={`/kunden?expand=${data.customerId}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
+                          {data.customerName || "—"}
+                        </Link>
+                      ) : (
+                        data.customerName || "—"
+                      )}
+                    </div>
                   </div>
                 </div>
 

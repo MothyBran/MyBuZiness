@@ -753,8 +753,8 @@ function PrintArea({ row, settings, currency, customer }) {
         {/* Zahlungsinfo/Hinweis */}
         <div className="ph-note">
           {dueTxt
-            ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> auf die unten aufgeführten Bankdaten.</>
-            : <>Bitte überweisen Sie den Gesamtbetrag auf die unten aufgeführten Bankdaten.</>
+            ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
+            : <>Bitte überweisen Sie den Gesamtbetrag mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
           }
         </div>
 
