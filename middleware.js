@@ -54,25 +54,32 @@ export async function middleware(request) {
   }
 
   // 4b. Admin route protection
-  if (isAdminRoute && pathname !== "/admin/login") {
-    const adminToken = request.cookies.get("admin_session")?.value;
-    if (!adminToken) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
-    }
-    // We assume the admin_session is valid for now.
-    // Real validation of signature could be done here if needed.
-  }
-  if (pathname === "/admin/login") {
-    const adminToken = request.cookies.get("admin_session")?.value;
-    if (adminToken) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin";
-      return NextResponse.redirect(url);
-    }
-  }
+  if (isAdminRoute) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-is-admin-route", "true");
 
+    if (pathname !== "/admin/login") {
+      const adminToken = request.cookies.get("admin_session")?.value;
+      if (!adminToken) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/login";
+        return NextResponse.redirect(url, { headers: requestHeaders });
+      }
+    } else {
+      const adminToken = request.cookies.get("admin_session")?.value;
+      if (adminToken) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin";
+        return NextResponse.redirect(url, { headers: requestHeaders });
+      }
+    }
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
   // 5. Role-based access control for employees
   if (user && user.role === "employee") {
     if (pathname.startsWith("/finanzen") || pathname.startsWith("/einstellungen") || pathname.startsWith("/mitarbeiter")) {

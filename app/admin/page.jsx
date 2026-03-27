@@ -63,14 +63,12 @@ export default function AdminDashboardPage() {
       <header style={{
         background: "var(--panel)",
         borderBottom: "1px solid var(--border)",
-        padding: "1rem",
+        padding: "1rem 2rem",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: "1rem"
+        justifyContent: "space-between"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <Image src="/logo.png" alt="Logo" width={40} height={40} style={{ borderRadius: "8px" }} />
           <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Admin Dashboard</h1>
         </div>
@@ -79,26 +77,16 @@ export default function AdminDashboardPage() {
         </button>
       </header>
 
-      <main style={{ padding: "1rem", maxWidth: "1200px", margin: "0 auto", width: "100%", flex: 1 }}>
-        <div
-          style={{
-            display: "flex",
-            gap: "1rem",
-            marginBottom: "1.5rem",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "flex-start"
-          }}
-        >
+      <main style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto", width: "100%", flex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
           <div>
-            <h2 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>Lizenzverwaltung</h2>
-            <p style={{ color: "var(--muted)", margin: 0, fontSize: "0.875rem" }}>Verwalten und generieren Sie Lizenzschlüssel für die Registrierung.</p>
+            <h2 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Lizenzverwaltung</h2>
+            <p style={{ color: "var(--muted)", margin: 0 }}>Verwalten und generieren Sie Lizenzschlüssel für die Registrierung.</p>
           </div>
           <button
             onClick={handleGenerateLicense}
             className="btn btn--primary"
             disabled={generating}
-            style={{ width: "fit-content" }}
           >
             {generating ? "Generiere..." : "+ Neuen Schlüssel generieren"}
           </button>
