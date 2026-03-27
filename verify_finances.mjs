@@ -8,11 +8,21 @@ import { expect } from '@playwright/test';
 
   try {
     // Registriere Benutzer um sich einzuloggen
+    await page.goto('http://localhost:3000/admin/login');
+    await page.waitForTimeout(500);
+    await page.locator('input[type="password"]').fill('admin123');
+    await page.getByRole('button', { name: 'Anmelden' }).click();
+    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: '+ Neuen Schlüssel generieren' }).click();
+    await page.waitForTimeout(1000);
+    const licenseKey = await page.locator('table tbody tr:first-child td:first-child').innerText();
+
     await page.goto('http://localhost:3000/register');
     await page.waitForTimeout(500);
 
     const uniqueEmail = `testuser_${Date.now()}@example.com`;
-    await page.locator('input[type="text"]').fill('Test User');
+    await page.locator('input[placeholder="XXX-XXX-XXX"]').fill(licenseKey);
+    await page.locator('input[placeholder="z.B. Max Mustermann"]').fill('Test User');
     await page.locator('input[type="email"]').fill(uniqueEmail);
     await page.locator('input[type="password"]').nth(0).fill('Password123!');
     await page.locator('input[type="password"]').nth(1).fill('Password123!');

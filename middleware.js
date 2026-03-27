@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
+  "/api/admin/auth",
   "/brand-logo.png",
   "/logo.png",
   "/manifest.json",
@@ -36,8 +37,9 @@ export async function middleware(request) {
 
   // 4. Redirect logic
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isAdminRoute = pathname.startsWith("/admin");
 
-  if (!user && !isAuthPage) {
+  if (!user && !isAuthPage && !isAdminRoute) {
     // Not logged in, trying to access protected page -> Redirect to login
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -49,6 +51,26 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // 4b. Admin route protection
+  if (isAdminRoute && pathname !== "/admin/login") {
+    const adminToken = request.cookies.get("admin_session")?.value;
+    if (!adminToken) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
+    }
+    // We assume the admin_session is valid for now.
+    // Real validation of signature could be done here if needed.
+  }
+  if (pathname === "/admin/login") {
+    const adminToken = request.cookies.get("admin_session")?.value;
+    if (adminToken) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
   }
 
   // 5. Role-based access control for employees

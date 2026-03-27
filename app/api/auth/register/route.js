@@ -6,11 +6,11 @@ import { cookies } from "next/headers";
 export async function POST(request) {
   try {
     await initDb();
-    const { email, password, name } = await request.json();
+    const { email, password, name, licenseKey } = await request.json();
 
-    if (!email || !password) {
+    if (!email || !password || !licenseKey) {
       return NextResponse.json(
-        { ok: false, error: "E-Mail und Passwort erforderlich." },
+        { ok: false, error: "E-Mail, Passwort und Lizenzschlüssel erforderlich." },
         { status: 400 }
       );
     }
@@ -29,6 +29,23 @@ export async function POST(request) {
       );
     }
 
+    // Validate License Key
+    const licenseResult = await q(`SELECT * FROM "License" WHERE key = $1`, [licenseKey]);
+    if (licenseResult.rows.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Ungültiger Lizenzschlüssel." },
+        { status: 400 }
+      );
+    }
+
+    const license = licenseResult.rows[0];
+    if (license.userId) {
+      return NextResponse.json(
+        { ok: false, error: "Dieser Lizenzschlüssel wurde bereits verwendet." },
+        { status: 400 }
+      );
+    }
+
     // Check if user exists
     const existing = await q(`SELECT id FROM "User" WHERE email = $1`, [email]);
     if (existing.rows.length > 0) {
@@ -41,10 +58,18 @@ export async function POST(request) {
     const id = uuid();
     const hashed = await hashPassword(password);
 
+    // We should do this in a transaction, but using separate queries for simplicity since q uses a pool
+    // In production we would use a client transaction.
     // Create User
     await q(
       `INSERT INTO "User" (id, email, "passwordHash", name) VALUES ($1, $2, $3, $4)`,
       [id, email, hashed, name || email.split("@")[0]]
+    );
+
+    // Mark License as used
+    await q(
+      `UPDATE "License" SET "userId" = $1, "usedAt" = CURRENT_TIMESTAMP WHERE key = $2`,
+      [id, licenseKey]
     );
 
     // Create Default Settings
