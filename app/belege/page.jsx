@@ -629,8 +629,12 @@ export default function ReceiptsPage(){
         .positions .table-wrap{ overflow-x:auto }
         .positions .table{ min-width:720px }
 
-        .btn{ padding:10px 12px; border-radius:12px; background:var(--color-primary,#0aa); color:#fff; border:1px solid transparent; cursor:pointer }
-        .btn-ghost{ padding:10px 12px; border-radius:12px; background:transparent; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
+        /* Scoped to page so we don't accidentally style Header/Nav buttons */
+        main .btn{ padding:10px 12px; border-radius:12px; background:var(--color-primary,#0aa); color:#fff; border:1px solid transparent; cursor:pointer }
+        main .btn-ghost{ padding:10px 12px; border-radius:12px; background:transparent; color:var(--color-primary,#0aa); border:1px solid var(--color-primary,#0aa); cursor:pointer }
+
+        /* Fix Header buttons that get caught in global selectors */
+        .hero .header-btn { background: var(--panel-2) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
 
         @media (max-width: 720px){
           .w-no{ max-width:220px } .w-date{ max-width:200px } .w-money{ max-width:220px } .w-note{ max-width:520px }
