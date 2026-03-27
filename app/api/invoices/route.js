@@ -66,6 +66,7 @@ export async function GET(request) {
           COALESCE("quantity", 0)                AS "quantity",
           COALESCE("unitPriceCents", 0)::bigint  AS "unitPriceCents",
           COALESCE("lineTotalCents", 0)::bigint  AS "lineTotalCents",
+          COALESCE("taxRate", 19)                AS "taxRate",
           COALESCE("createdAt", now())           AS "createdAt"
         FROM "InvoiceItem"
        WHERE "invoiceId"::text = ANY($1::text[])
@@ -84,7 +85,8 @@ export async function GET(request) {
                 COALESCE("priceCents",0)::bigint AS "priceCents",
                 COALESCE("hourlyRateCents",0)::bigint AS "hourlyRateCents",
                 COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
-                COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
+                COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents",
+                COALESCE("taxRate",19) AS "taxRate"
            FROM "Product"
           WHERE "id"::text = ANY($1::text[]) AND "userId" = $2`,
         [productIds, userId]
@@ -169,7 +171,8 @@ export async function POST(request) {
                 COALESCE("priceCents",0)::bigint AS "priceCents",
                 COALESCE("hourlyRateCents",0)::bigint AS "hourlyRateCents",
                 COALESCE("travelBaseCents",0)::bigint AS "travelBaseCents",
-                COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents"
+                COALESCE("travelPerKmCents",0)::bigint AS "travelPerKmCents",
+                COALESCE("taxRate",19) AS "taxRate"
            FROM "Product"
           WHERE "id"::text = ANY($1::text[]) AND "userId"=$2`,
         [prodIds, userId]
@@ -179,40 +182,57 @@ export async function POST(request) {
 
     // Items + Summen
     const prepared = [];
-    let net = 0;
+    let totalGross = 0;
+    let totalTax = 0;
 
     for (const raw of items) {
       const qty = toInt(raw.quantity || 0);
-      let unit = toInt(raw.unitPriceCents || 0);
-      let base = 0;
+      let unitGross = toInt(raw.unitPriceCents || 0); // Eingegebene Preise sind brutto
+      let baseGross = 0;
       let name = (raw.name || "").trim();
       const pid = raw.productId || null;
+      let itemTaxRate = raw.taxRate !== undefined ? Number(raw.taxRate) : taxRate;
 
       if (pid && productMap.has(String(pid))) {
         const p = productMap.get(String(pid));
         const { base: b, unit: u } = computeBaseAndUnit(p);
-        base = b; unit = u;
+        baseGross = b; unitGross = u;
+        if (p.taxRate !== undefined) {
+          itemTaxRate = Number(p.taxRate);
+        }
         if (!name) name = p.name || "Position";
       }
 
-      const line = base + qty * unit;
-      net += line;
+      if (vatExempt) {
+         itemTaxRate = 0;
+      }
+
+      const lineGross = baseGross + qty * unitGross;
+      totalGross += lineGross;
+
+      const lineNet = Math.round(lineGross / (1 + (itemTaxRate / 100)));
+      const lineTax = lineGross - lineNet;
+      totalTax += lineTax;
 
       prepared.push({
         productId: pid,
         name: name || "Position",
         description: null,
         quantity: qty,
-        unitPriceCents: unit,
-        lineTotalCents: line
+        unitPriceCents: unitGross, // wir speichern den Bruttopreis als Referenz für die UI!
+        lineTotalCents: lineGross,
+        taxRate: itemTaxRate
       });
     }
 
-    // Rabatt optional (vor Steuer)
+    // Rabatt optional
     const discountCents = toInt(body.discountCents || 0);
-    const netAfterDiscount = Math.max(0, net - discountCents);
-    const taxCents = Math.round(netAfterDiscount * (taxRate / 100));
-    const grossCents = netAfterDiscount + taxCents;
+    const grossAfterDiscount = Math.max(0, totalGross - discountCents);
+
+    // Annäherung: Wir passen die Gesammtsteuer proportional zum Rabatt an
+    const taxCents = totalGross > 0 ? Math.round(totalTax * (grossAfterDiscount / totalGross)) : 0;
+    const grossCents = grossAfterDiscount;
+    const netAfterDiscount = grossCents - taxCents;
 
     const dueDate = body.dueDate || null;
 
@@ -269,10 +289,10 @@ export async function POST(request) {
     for (const it of prepared) {
       await q(
         `INSERT INTO "InvoiceItem"
-           ("id","invoiceId","productId","name","description","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
+           ("id","invoiceId","productId","name","description","quantity","unitPriceCents","lineTotalCents","taxRate","createdAt","updatedAt")
          VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
-        [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents]
+           ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
+        [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate]
       );
     }
 

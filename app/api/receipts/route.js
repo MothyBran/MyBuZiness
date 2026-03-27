@@ -78,14 +78,24 @@ export async function POST(request) {
     const paymentMethod = body.paymentMethod || null;
 
     // Summen
-    let net = 0;
+    let totalGross = 0;
+    let totalTax = 0;
     for (const it of items) {
-      net += (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
+      let itemGross = (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
+      totalGross += itemGross;
+
+      let itemTaxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
+      if (vatExempt) itemTaxRate = 0;
+
+      const itemNet = Math.round(itemGross / (1 + (itemTaxRate / 100)));
+      const itemTax = itemGross - itemNet;
+      totalTax += itemTax;
     }
-    const netAfter = Math.max(0, net - discountCents);
-    const taxRate = vatExempt ? 0 : 19;
-    const taxCents = Math.round(netAfter * (taxRate/100));
-    const grossCents = netAfter + taxCents;
+
+    const grossAfterDiscount = Math.max(0, totalGross - discountCents);
+    const taxCents = totalGross > 0 ? Math.round(totalTax * (grossAfterDiscount / totalGross)) : 0;
+    const grossCents = grossAfterDiscount;
+    const netAfter = grossCents - taxCents;
 
     await q("BEGIN");
 
@@ -122,10 +132,10 @@ export async function POST(request) {
       const line = (qty * unit) + base;
       await q(
         `INSERT INTO "ReceiptItem"
-           ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
+          ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
          VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
-        [itemId, id, it.productId || null, (it.name || "Position").trim(), qty, unit, base, line]
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
+        [uuid(), id, it.productId || null, (it.name || "Position").trim(), toInt(it.quantity||0), toInt(it.unitPriceCents||0), toInt(it.baseCents||0), line, it.taxRate !== undefined ? Number(it.taxRate) : 19, userId]
       );
     }
     await q("COMMIT");

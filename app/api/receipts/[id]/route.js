@@ -48,6 +48,7 @@ export async function GET(_req, { params }) {
          COALESCE("unitPriceCents",0)::bigint   AS "unitPriceCents",
          COALESCE("baseCents",0)::bigint        AS "baseCents",
          COALESCE("lineTotalCents",0)::bigint   AS "lineTotalCents",
+         COALESCE("taxRate",19)                 AS "taxRate",
          "createdAt","updatedAt"
        FROM "ReceiptItem"
        WHERE "receiptId"=$1
@@ -113,11 +114,13 @@ export async function PUT(req, { params }) {
           quantity: toInt(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
           baseCents: toInt(it.baseCents || 0),
+          taxRate: it.taxRate !== undefined ? Number(it.taxRate) : 19,
         }))
       : existingItems.map(it => ({
           quantity: toInt(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
           baseCents: toInt(it.baseCents || 0),
+          taxRate: it.taxRate !== undefined ? Number(it.taxRate) : 19,
         }));
 
     // Summen neu rechnen
@@ -128,14 +131,24 @@ export async function PUT(req, { params }) {
     const changeCents   = body.changeCents != null ? toInt(body.changeCents) : null;
     const paymentMethod = body.paymentMethod || null;
 
-    let net = 0;
+    let totalGross = 0;
+    let totalTax = 0;
     for (const it of itemsForTotals) {
-      net += (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
+      let itemGross = (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
+      totalGross += itemGross;
+
+      let itemTaxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
+      if (vatExempt) itemTaxRate = 0;
+
+      const itemNet = Math.round(itemGross / (1 + (itemTaxRate / 100)));
+      const itemTax = itemGross - itemNet;
+      totalTax += itemTax;
     }
-    const netAfter = Math.max(0, net - discountCents);
-    const taxRate  = vatExempt ? 0 : 19;
-    const taxCents = Math.round(netAfter * (taxRate/100));
-    const grossCents = netAfter + taxCents;
+
+    const grossAfterDiscount = Math.max(0, totalGross - discountCents);
+    const taxCents = totalGross > 0 ? Math.round(totalTax * (grossAfterDiscount / totalGross)) : 0;
+    const grossCents = grossAfterDiscount;
+    const netAfter = grossCents - taxCents;
 
     await q("BEGIN");
 
@@ -185,15 +198,16 @@ export async function PUT(req, { params }) {
         const line = (qty * unit) + base;
         await q(
           `INSERT INTO "ReceiptItem"
-             ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
+             ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
            VALUES
-             ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
+             ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(), now())`,
           [
             itemId,
             id,
             it.productId || null,
             (it.name || "Position").trim(),
-            qty, unit, base, line
+            qty, unit, base, line,
+            it.taxRate !== undefined ? Number(it.taxRate) : 19
           ]
         );
       }

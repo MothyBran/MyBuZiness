@@ -13,6 +13,7 @@ export async function GET() {
          COALESCE("hourlyRateCents",0)     AS "hourlyRateCents",
          COALESCE("travelBaseCents",0)     AS "travelBaseCents",
          COALESCE("travelPerKmCents",0)    AS "travelPerKmCents",
+         COALESCE("taxRate", 19)           AS "taxRate",
          "createdAt","updatedAt"
        FROM "Product"
        WHERE "userId"=$1
@@ -43,20 +44,21 @@ export async function POST(request) {
     const hourlyRateCents   = Number(body.hourlyRateCents || 0);   // Dienstleistung €/Std. (optional)
     const travelBaseCents   = Number(body.travelBaseCents || 0);   // Grundpreis Fahrtkosten
     const travelPerKmCents  = Number(body.travelPerKmCents || 0);  // €/km
+    const taxRate           = body.taxRate !== undefined && body.taxRate !== null ? Number(body.taxRate) : 19;
 
     await q(
       `INSERT INTO "Product"(
          "id","name","sku","description","categoryCode","kind",
-         "priceCents","hourlyRateCents","travelBaseCents","travelPerKmCents",
+         "priceCents","hourlyRateCents","travelBaseCents","travelPerKmCents","taxRate",
          "createdAt","updatedAt","userId"
        ) VALUES (
          $1,$2,$3,$4,$5,$6,
-         $7,$8,$9,$10,
-         now(),now(),$11
+         $7,$8,$9,$10,$11,
+         now(),now(),$12
        )`,
       [
         id, name, body.sku || null, body.description || null, body.categoryCode || null, kind,
-        priceCents, hourlyRateCents, travelBaseCents, travelPerKmCents, userId
+        priceCents, hourlyRateCents, travelBaseCents, travelPerKmCents, taxRate, userId
       ]
     );
 
