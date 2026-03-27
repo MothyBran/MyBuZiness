@@ -11,8 +11,12 @@ const SECRET_KEY = new TextEncoder().encode(
 
 export async function POST(request) {
   try {
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
     const { password } = await request.json();
+
+    if (!ADMIN_PASSWORD) {
+      return NextResponse.json({ ok: false, error: "Das Admin-Passwort ist noch nicht konfiguriert." }, { status: 500 });
+    }
 
     if (password !== ADMIN_PASSWORD) {
       return NextResponse.json({ ok: false, error: "Ungültiges Passwort" }, { status: 401 });
