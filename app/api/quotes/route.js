@@ -38,28 +38,40 @@ export async function POST(request) {
   const quoteNo = b.quoteNo?.trim() || renderNumber(format, seq);
 
   const id = uuid();
-  let net = 0;
+  const ku = !!s.kleinunternehmer;
+  const defaultTaxRate = ku ? 0 : Number(s.taxRateDefault ?? 19);
+
+  let totalGross = 0;
+  let totalTax = 0;
+
   const prepared = items.map(i => {
     const qn = Number(i.quantity||0);
     const up = Number(i.unitPriceCents||0);
-    const line = qn*up;
-    net += line;
-    return { ...i, quantity: qn, unitPriceCents: up, lineTotalCents: line };
+    const lineGross = qn*up;
+    totalGross += lineGross;
+
+    let itemTaxRate = i.taxRate !== undefined ? Number(i.taxRate) : defaultTaxRate;
+    if (ku) itemTaxRate = 0;
+
+    const lineNet = Math.round(lineGross / (1 + (itemTaxRate / 100)));
+    const lineTax = lineGross - lineNet;
+    totalTax += lineTax;
+
+    return { ...i, quantity: qn, unitPriceCents: up, lineTotalCents: lineGross, taxRate: itemTaxRate };
   });
 
-  const ku = !!s.kleinunternehmer;
-  const taxRate = ku ? 0 : Number(s.taxRateDefault ?? 19);
-  const tax = Math.round(net * (taxRate/100));
-  const gross = net + tax;
+  const tax = totalTax;
+  const gross = totalGross;
+  const net = gross - tax;
 
   await q(`INSERT INTO "Quote"("id","quoteNo","customerId","issueDate","validUntil","currency","netCents","taxCents","grossCents","status","createdAt","updatedAt")
            VALUES ($1,$2,$3,COALESCE($4,CURRENT_DATE),$5,$6,$7,$8,$9,'open',now(),now())`,
     [id, quoteNo, b.customerId, b.issueDate || null, b.validUntil || null, b.currency || s.currency || "EUR", net, tax, gross]
   );
   for (const it of prepared) {
-    await q(`INSERT INTO "QuoteItem"("id","quoteId","productId","name","quantity","unitPriceCents","lineTotalCents","createdAt","updatedAt")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,now(),now())`,
-      [uuid(), id, it.productId || null, it.name || "Position", it.quantity, it.unitPriceCents, it.lineTotalCents]
+    await q(`INSERT INTO "QuoteItem"("id","quoteId","productId","name","quantity","unitPriceCents","lineTotalCents","taxRate","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
+      [uuid(), id, it.productId || null, it.name || "Position", it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate]
     );
   }
   return Response.json({ ok:true, data:{ id, quoteNo } }, { status:201 });

@@ -20,6 +20,7 @@ export async function PUT(request, props) {
     const hourlyRateCents  = Number(body.hourlyRateCents || 0);
     const travelBaseCents  = Number(body.travelBaseCents || 0);
     const travelPerKmCents = Number(body.travelPerKmCents || 0);
+    const taxRate          = body.taxRate !== undefined && body.taxRate !== null ? Number(body.taxRate) : 19;
 
     const res = await q(
       `UPDATE "Product" SET
@@ -32,8 +33,9 @@ export async function PUT(request, props) {
          "hourlyRateCents"=$8,
          "travelBaseCents"=$9,
          "travelPerKmCents"=$10,
+         "taxRate"=$11,
          "updatedAt"=now()
-       WHERE "id"=$1 AND "userId"=$11`,
+       WHERE "id"=$1 AND "userId"=$12`,
       [
         id,
         name,
@@ -45,6 +47,7 @@ export async function PUT(request, props) {
         hourlyRateCents,
         travelBaseCents,
         travelPerKmCents,
+        taxRate,
         userId
       ]
     );
