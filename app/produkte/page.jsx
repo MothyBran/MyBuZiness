@@ -54,11 +54,14 @@ export default function ProductsPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [editRow, setEditRow] = useState(null);
+  const [settings, setSettings] = useState(null);
 
   async function load() {
     setLoading(true);
     const js = await fetch("/api/products", { cache:"no-store" }).then(r=>r.json()).catch(()=>({ data:[] }));
+    const sJs = await fetch("/api/settings", { cache:"no-store" }).then(r=>r.json()).catch(()=>({}));
     setRows(js.data || []);
+    setSettings(sJs.data || null);
     setLoading(false);
   }
   useEffect(()=>{ load(); }, []);
@@ -135,8 +138,8 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {showNew && <ProductModal title="Neuer Eintrag" onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
-      {editRow && <ProductModal title="Eintrag bearbeiten" initial={editRow} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); load(); }} />}
+      {showNew && <ProductModal title="Neuer Eintrag" settings={settings} onClose={()=>setShowNew(false)} onSaved={()=>{ setShowNew(false); load(); }} />}
+      {editRow && <ProductModal title="Eintrag bearbeiten" settings={settings} initial={editRow} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); load(); }} />}
     </main>
   );
 }
@@ -182,12 +185,16 @@ function ProductDetails({ row }) {
   );
 }
 
-function ProductModal({ title, initial, onClose, onSaved }) {
+function ProductModal({ title, initial, onClose, onSaved, settings }) {
   const [name, setName] = useState(initial?.name || "");
   const [sku, setSku] = useState(initial?.sku || "");
   const [kind, setKind] = useState(initial?.kind || "product"); // product | service | travel
   const [categoryCode, setCategoryCode] = useState(initial?.categoryCode || "");
   const [description, setDescription] = useState(initial?.description || "");
+
+  const vatExempt = settings?.kleinunternehmer === true;
+  const defaultTaxRate = vatExempt ? "0" : (settings?.taxRateDefault !== undefined ? String(settings.taxRateDefault) : "19");
+  const [taxRate, setTaxRate] = useState(initial?.taxRate !== undefined ? String(initial.taxRate) : defaultTaxRate);
 
   // Preise (string-Eingabe, robust)
   const [priceInput, setPriceInput] = useState(initial ? fromCents(initial.priceCents || 0) : "");
@@ -197,6 +204,9 @@ function ProductModal({ title, initial, onClose, onSaved }) {
 
   async function save() {
     if (!name.trim()) return await alertMsg("Bitte Bezeichnung angeben.");
+
+    let tRate = Number(taxRate.replace(",", "."));
+    if (isNaN(tRate)) tRate = 19;
 
     const body = {
       name: name.trim(),
@@ -208,6 +218,7 @@ function ProductModal({ title, initial, onClose, onSaved }) {
       hourlyRateCents: toCents(hourlyInput || 0),
       travelBaseCents: toCents(travelBaseInput || 0),
       travelPerKmCents: toCents(travelPerKmInput || 0),
+      taxRate: tRate,
     };
 
     const url = initial ? `/api/products/${initial.id}` : "/api/products";
@@ -278,6 +289,13 @@ function ProductModal({ title, initial, onClose, onSaved }) {
               <input style={input} inputMode="decimal" value={travelPerKmInput} onChange={e=>setTravelPerKmInput(e.target.value)} onBlur={e=>setTravelPerKmInput(fromCents(toCents(e.target.value)))} placeholder="z. B. 0,45" />
             </Field>
           </div>
+        )}
+
+        {/* Steuer */}
+        {!vatExempt && (
+          <Field label="Umsatzsteuer (%)">
+            <input style={input} inputMode="decimal" value={taxRate} onChange={e=>setTaxRate(e.target.value)} placeholder="z. B. 19" />
+          </Field>
         )}
 
         {/* Zeile 4 */}
