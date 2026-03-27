@@ -8,6 +8,7 @@ import ViewportManager from "./components/ViewportManager";
 import ThemeManager from "./components/ThemeManager";
 import { DialogProvider } from "./components/DialogProvider";
 import { getUser } from "@/lib/auth";
+import { headers } from "next/headers";
 
 export const metadata = {
   title: "My BuZiness",
@@ -16,6 +17,8 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   const user = await getUser();
+  const headersList = await headers();
+  const isAdminRoute = headersList.get("x-is-admin-route") === "true";
 
   return (
     <html lang="de">
@@ -26,7 +29,11 @@ export default async function RootLayout({ children }) {
         <ViewportManager />
         <ThemeManager />
         <DialogProvider>
-        {user ? (
+        {isAdminRoute ? (
+          <main className="admin-shell" style={{ minHeight: "100vh" }}>
+            {children}
+          </main>
+        ) : user ? (
           <>
             {/* Desktop Sidebar (Fixed) */}
             <Sidebar user={user} />
