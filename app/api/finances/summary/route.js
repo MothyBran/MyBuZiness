@@ -47,15 +47,34 @@ async function sumReceipts(from, to) {
   const sql = `
     SELECT
       COALESCE(SUM("grossCents"),0)::int AS rec_gross,
-      COALESCE(SUM("netCents"),0)::int   AS rec_net
+      COALESCE(SUM("netCents"),0)::int   AS rec_net,
+      COUNT(*)::int AS rec_count,
+      COUNT(DISTINCT "date")::int AS work_days_count
     FROM "Receipt"
     WHERE "date" >= $1 AND "date" < $2
   `;
   try {
     const { rows } = await q(sql, [from, to]);
-    return rows[0] || { rec_gross:0, rec_net:0 };
+    return rows[0] || { rec_gross:0, rec_net:0, rec_count:0, work_days_count:0 };
   } catch {
-    return { rec_gross:0, rec_net:0 };
+    return { rec_gross:0, rec_net:0, rec_count:0, work_days_count:0 };
+  }
+}
+
+/* ---------- Count Invoices (Periode) ---------- */
+async function countInvoices(from, to) {
+  const sql = `
+    SELECT COUNT(*)::int AS inv_count
+    FROM "Invoice"
+    WHERE "issueDate" >= $1 AND "issueDate" < $2
+      AND "status" != 'storniert'
+      AND "status" != 'canceled'
+  `;
+  try {
+    const { rows } = await q(sql, [from, to]);
+    return rows[0] || { inv_count: 0 };
+  } catch {
+    return { inv_count: 0 };
   }
 }
 
@@ -141,15 +160,19 @@ export async function GET(req) {
 
     // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts; Ausgaben = FinanceTx(expense)
     async function buildPeriod({ from, to }) {
-      const [tx, rec] = await Promise.all([
+      const [tx, rec, inv] = await Promise.all([
         sumFinanceTx(from, to),
-        sumReceipts(from, to)
+        sumReceipts(from, to),
+        countInvoices(from, to)
       ]);
       const incomeCents = (tx.inc_gross || 0) + (rec.rec_gross || 0);
       const expenseCents = (tx.exp_gross || 0);
       return {
         incomeCents,
         expenseCents,
+        receiptsCount: rec.rec_count || 0,
+        workDaysCount: rec.work_days_count || 0,
+        invoicesCount: inv.inv_count || 0,
         adds: { receiptsGross: rec.rec_gross || 0, invoicesGross: 0 }
       };
     }
@@ -188,7 +211,13 @@ export async function GET(req) {
         last7:  { incomeCents: p7.incomeCents,      expenseCents: p7.expenseCents },
         last30: { incomeCents: p30.incomeCents,     expenseCents: p30.expenseCents },
         mtd:    { incomeCents: pMtd.incomeCents,    expenseCents: pMtd.expenseCents },
-        selected: { incomeCents: pSelected.incomeCents, expenseCents: pSelected.expenseCents }
+        selected: {
+          incomeCents: pSelected.incomeCents,
+          expenseCents: pSelected.expenseCents,
+          receiptsCount: pSelected.receiptsCount,
+          workDaysCount: pSelected.workDaysCount,
+          invoicesCount: pSelected.invoicesCount
+        }
       },
       adds: {
         today:  pToday.adds,
