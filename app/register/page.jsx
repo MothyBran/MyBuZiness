@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -60,7 +61,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, licenseKey }),
       });
       const data = await res.json();
 
@@ -92,6 +93,20 @@ export default function RegisterPage() {
         )}
 
         <div className="field">
+          <label className="label">Lizenzschlüssel</label>
+          <input
+            className="input"
+            type="text"
+            value={licenseKey}
+            onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+            required
+            autoFocus
+            placeholder="XXX-XXX-XXX"
+            style={{ textTransform: "uppercase", fontFamily: "monospace", letterSpacing: "1px" }}
+          />
+        </div>
+
+        <div className="field">
           <label className="label">Name / Firmenname</label>
           <input
             className="input"
@@ -99,7 +114,6 @@ export default function RegisterPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            autoFocus
             placeholder="z.B. Max Mustermann"
           />
         </div>

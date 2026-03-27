@@ -6,11 +6,22 @@ import { chromium } from 'playwright';
   const page = await context.newPage();
 
   try {
+    // Navigate to admin to create a license key
+    await page.goto('http://localhost:3000/admin/login');
+    await page.waitForTimeout(500);
+    await page.locator('input[type="password"]').fill('admin123');
+    await page.getByRole('button', { name: /Anmelden/i }).click();
+    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: '+ Neuen Schlüssel generieren' }).click();
+    await page.waitForTimeout(1000);
+    const licenseKey = await page.locator('table tbody tr:first-child td:first-child').innerText();
+
     // Navigate to register and create test user
     await page.goto('http://localhost:3000/register');
     await page.waitForTimeout(500);
     const testEmail = `test-${Date.now()}@example.com`;
-    await page.locator('input[type="text"]').fill('Test User');
+    await page.locator('input[placeholder="XXX-XXX-XXX"]').fill(licenseKey);
+    await page.locator('input[placeholder="z.B. Max Mustermann"]').fill('Test User');
     await page.locator('input[type="email"]').fill(testEmail);
     await page.locator('input[type="password"]').nth(0).fill('Password123!');
     await page.locator('input[type="password"]').nth(1).fill('Password123!');
