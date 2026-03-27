@@ -135,7 +135,7 @@ export async function POST(request) {
           ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
          VALUES
           ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-        [uuid(), id, it.productId || null, (it.name || "Position").trim(), toInt(it.quantity||0), toInt(it.unitPriceCents||0), toInt(it.baseCents||0), line, it.taxRate !== undefined ? Number(it.taxRate) : 19, userId]
+        [uuid(), id, it.productId || null, (it.name || "Position").trim(), toInt(it.quantity||0), toInt(it.unitPriceCents||0), toInt(it.baseCents||0), line, it.taxRate !== undefined ? Number(it.taxRate) : 19]
       );
     }
     await q("COMMIT");
