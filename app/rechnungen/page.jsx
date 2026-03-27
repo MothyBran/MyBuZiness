@@ -310,6 +310,7 @@ export default function InvoicesPage() {
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
+        .table thead { background-color: var(--panel-2); }
         .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 

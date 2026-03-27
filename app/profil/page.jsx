@@ -140,7 +140,7 @@ export default function ProfilPage() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
+              <button type="submit" className="btn btn-primary" disabled={saving} style={{ background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent", cursor: "pointer", padding: "10px 12px", borderRadius: 8 }}>
                 {saving ? "Wird gespeichert..." : "Änderungen speichern"}
               </button>
             </div>

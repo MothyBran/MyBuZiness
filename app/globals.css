@@ -342,6 +342,10 @@ a:hover { color: var(--brand); }
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
 }
+
+.table thead {
+  background-color: var(--panel-2); /* Ensures the background covers the whole scroll area even if th shrinks */
+}
 .table tbody td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);

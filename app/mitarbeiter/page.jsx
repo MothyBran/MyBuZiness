@@ -106,7 +106,7 @@ export default function MitarbeiterPage() {
         <div>
           <button
             className="btn btn-primary"
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent" }}
             onClick={() => { setErrorMsg(""); setIsModalOpen(true); }}
           >
             <UserPlus size={18} /> Mitarbeiter hinzufügen
@@ -217,7 +217,7 @@ export default function MitarbeiterPage() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
                 <button type="button" className="btn-ghost" onClick={() => setIsModalOpen(false)}>Abbrechen</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
+                <button type="submit" className="btn btn-primary" disabled={saving} style={{ background: "var(--color-primary,#0aa)", color: "#fff", border: "1px solid transparent" }}>
                   {saving ? "Speichern..." : "Speichern"}
                 </button>
               </div>
