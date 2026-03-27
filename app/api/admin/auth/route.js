@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { cookies } from "next/headers";
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+// Ensure we always read the fresh process.env inside the request
+// because Next.js sometimes caches module-level constants if not careful.
 
 const SECRET_KEY = new TextEncoder().encode(
   process.env.JWT_SECRET || "default_dev_secret_key_change_me_in_prod"
@@ -10,6 +11,7 @@ const SECRET_KEY = new TextEncoder().encode(
 
 export async function POST(request) {
   try {
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
     const { password } = await request.json();
 
     if (password !== ADMIN_PASSWORD) {
