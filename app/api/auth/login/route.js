@@ -53,6 +53,34 @@ export async function POST(request) {
       );
     }
 
+    // Check License Status (only for main user, employee inherits)
+    let isExpired = false;
+    let expiresAt = null;
+    let licenseKind = "lifetime";
+
+    if (user.role !== 'employee') {
+      const licenseRes = await q(`SELECT kind, "expiresAt" FROM "License" WHERE "userId" = $1`, [user.id]);
+      if (licenseRes.rows.length > 0) {
+        const license = licenseRes.rows[0];
+        licenseKind = license.kind;
+        expiresAt = license.expiresAt;
+        if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
+          isExpired = true;
+        }
+      }
+    } else if (user.ownerId) {
+      // Employees inherit license status from their owner
+      const licenseRes = await q(`SELECT kind, "expiresAt" FROM "License" WHERE "userId" = $1`, [user.ownerId]);
+      if (licenseRes.rows.length > 0) {
+        const license = licenseRes.rows[0];
+        licenseKind = license.kind;
+        expiresAt = license.expiresAt;
+        if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
+          isExpired = true;
+        }
+      }
+    }
+
     // Create Session
     const token = await signToken({
       id: user.id,
@@ -60,6 +88,9 @@ export async function POST(request) {
       name: user.name,
       role: user.role || 'admin',
       ownerId: user.ownerId || null,
+      licenseKind,
+      expiresAt,
+      isExpired
     });
 
     const cookieStore = await cookies();

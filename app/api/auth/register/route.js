@@ -66,10 +66,18 @@ export async function POST(request) {
       [id, email, hashed, name || email.split("@")[0]]
     );
 
+    // Calculate expiration if trial
+    let expiresAt = null;
+    if (license.kind === "trial") {
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 14);
+      expiresAt = expirationDate.toISOString();
+    }
+
     // Mark License as used
     await q(
-      `UPDATE "License" SET "userId" = $1, "usedAt" = CURRENT_TIMESTAMP WHERE key = $2`,
-      [id, licenseKey]
+      `UPDATE "License" SET "userId" = $1, "usedAt" = CURRENT_TIMESTAMP, "expiresAt" = $3 WHERE key = $2`,
+      [id, licenseKey, expiresAt]
     );
 
     // Create Default Settings
