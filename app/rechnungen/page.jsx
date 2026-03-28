@@ -727,9 +727,7 @@ function PrintArea({ row, settings, currency, customer }) {
           <div className="ph-left">
             {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
             {firmLineLeft && <div className="ph-fromline">{firmLineLeft}</div>}
-            <div className="ph-sep" />
             <div className="ph-recipient">
-              <div className="ph-rec-label">Empfänger</div>
               <div className="ph-rec-name">{custName}</div>
               {custStreet && <div>{custStreet}</div>}
               {(custZip || custCity) && <div>{custZip} {custCity}</div>}
@@ -835,11 +833,10 @@ function PrintArea({ row, settings, currency, customer }) {
           margin-top: 4px;
           white-space: nowrap;
           font-size: clamp(6px, 4cqi, 10pt);
+          text-decoration: underline;
         }
-        .ph-sep{ height: 1px; background:#222; margin: 8px 0 12px; }
 
-        .ph-recipient{ margin: 0 0 10px; }
-        .ph-rec-label{ font-size:10pt; color:#555; }
+        .ph-recipient{ margin: 8px 0 10px; }
         .ph-rec-name{ font-size:12pt; font-weight:700; }
 
         .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
