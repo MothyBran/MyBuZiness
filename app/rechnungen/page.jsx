@@ -260,7 +260,7 @@ export default function InvoicesPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
