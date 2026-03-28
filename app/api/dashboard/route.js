@@ -16,8 +16,6 @@ async function loadSettings(userId) {
     kleinunternehmer: !!row?.kleinunternehmer,
     primaryColor: row?.primaryColor || "#0aa",
     secondaryColor: row?.secondaryColor || "#0f766e",
-    fontFamily: row?.fontFamily || `Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial`,
-    fontColor: row?.fontColor || "#111111",
     logoUrl: logo,
     company: {
       name: row?.companyName || "",

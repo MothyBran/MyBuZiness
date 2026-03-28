@@ -163,7 +163,7 @@ export default function BerichtPrintPage({ params }) {
             padding-bottom: 5mm;
           }
         }
-        body { background: #f8fafc; color: var(--color-text, #1e293b); font-family: ${settings.fontFamily || "sans-serif"}; }
+        body { background: #f8fafc; color: var(--color-text, #1e293b); }
 
         .print-area {
           max-width: 210mm; /* A4 */

@@ -19,15 +19,6 @@ const btnPrimary = { padding: "10px 12px", borderRadius: 8, background: "var(--c
 const btnGhost = { padding: "10px 12px", borderRadius: 8, background: "transparent", color: "var(--color-primary,#0aa)", border: "1px solid var(--color-primary,#0aa)", cursor: "pointer" };
 
 const currencies = ["EUR", "CHF", "USD", "GBP"];
-const fonts = [
-  { value: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif", label: "System" },
-  { value: "Inter, system-ui, Arial, sans-serif", label: "Inter" },
-  { value: "Roboto, system-ui, Arial, sans-serif", label: "Roboto" },
-  { value: "'Open Sans', system-ui, Arial, sans-serif", label: "Open Sans" },
-  { value: "Lato, system-ui, Arial, sans-serif", label: "Lato" },
-  { value: "Poppins, system-ui, Arial, sans-serif", label: "Poppins" },
-];
-
 /* ---------- Seite ---------- */
 export default function SettingsPage() {
   const { confirm: confirmMsg, alert: alertMsg } = useDialog();
@@ -64,8 +55,6 @@ export default function SettingsPage() {
   const [logoUrl, setLogoUrl] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#06b6d4");
   const [secondaryColor, setSecondaryColor] = useState("#0ea5e9");
-  const [fontFamily, setFontFamily] = useState(fonts[0].value);
-  const [textColor, setTextColor] = useState("#0f172a");
 
   const samplePreview = useMemo(() => ({
     companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
@@ -107,26 +96,20 @@ export default function SettingsPage() {
       setLogoUrl(s.logoUrl || "");
       setPrimaryColor(s.primaryColor || "#06b6d4");
       setSecondaryColor(s.secondaryColor || "#0ea5e9");
-      setFontFamily(s.fontFamily || fonts[0].value);
-      setTextColor(s.textColor || "#0f172a");
       setLoading(false);
 
       // Live anwenden
       applyTheme({
         primaryColor: s.primaryColor || "#06b6d4",
-        secondaryColor: s.secondaryColor || "#0ea5e9",
-        textColor: s.textColor || "#0f172a",
-        fontFamily: s.fontFamily || fonts[0].value
+        secondaryColor: s.secondaryColor || "#0ea5e9"
       });
     })();
   }, []);
 
-  function applyTheme({ primaryColor, secondaryColor, textColor, fontFamily }) {
+  function applyTheme({ primaryColor, secondaryColor }) {
     const root = document.documentElement;
     if (primaryColor) root.style.setProperty("--color-primary", primaryColor);
     if (secondaryColor) root.style.setProperty("--color-secondary", secondaryColor);
-    if (textColor) root.style.setProperty("--color-text", textColor);
-    if (fontFamily) document.body.style.fontFamily = fontFamily;
   }
 
   function handleViewportChange(mode) {
@@ -164,7 +147,7 @@ export default function SettingsPage() {
       // Steuerdaten
       vatId, kleinunternehmer, taxRateDefault,
       // Branding
-      logoUrl, primaryColor, secondaryColor, fontFamily, textColor
+      logoUrl, primaryColor, secondaryColor
     };
     const res = await fetch("/api/settings", {
       method: "PUT",
@@ -176,7 +159,7 @@ export default function SettingsPage() {
     if (!js?.ok) return await alertMsg(js?.error || "Speichern fehlgeschlagen.");
 
     // Anwendung sofort aktualisieren
-    applyTheme({ primaryColor, secondaryColor, textColor, fontFamily });
+    applyTheme({ primaryColor, secondaryColor });
     await alertMsg("Einstellungen gespeichert.");
   }
 
@@ -356,12 +339,6 @@ export default function SettingsPage() {
             </div>
           </Field>
 
-          <Field label="Schriftart">
-            <select style={input} value={fontFamily} onChange={e=>setFontFamily(e.target.value)}>
-              {fonts.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-          </Field>
-
           <Field label="Primärfarbe">
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <input type="color" value={primaryColor} onChange={e=>setPrimaryColor(e.target.value)} />
@@ -375,19 +352,12 @@ export default function SettingsPage() {
               <input style={input} value={secondaryColor} onChange={e=>setSecondaryColor(e.target.value)} />
             </div>
           </Field>
-
-          <Field label="Schriftfarbe">
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)} />
-              <input style={input} value={textColor} onChange={e=>setTextColor(e.target.value)} />
-            </div>
-          </Field>
         </div>
 
         {/* Live-Vorschau */}
         <div style={{ marginTop:16 }}>
           <h3 className="subtle" style={{ margin:"0 0 8px 0", fontSize:16 }}>Vorschau</h3>
-          <BrandPreview settings={{ ...samplePreview, primaryColor, secondaryColor, fontFamily, textColor }} />
+          <BrandPreview settings={{ ...samplePreview, primaryColor, secondaryColor }} />
         </div>
 
         <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:16 }}>
@@ -411,7 +381,7 @@ function BrandPreview({ settings }) {
   const {
     companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
     bankInstitution, bankRecipient, bankIban, bankBic,
-    kleinunternehmer, currency, logoUrl, primaryColor, secondaryColor, fontFamily, textColor
+    kleinunternehmer, currency, logoUrl, primaryColor, secondaryColor
   } = settings;
 
   return (
@@ -433,7 +403,7 @@ function BrandPreview({ settings }) {
         {logoUrl ? <img src={logoUrl} style={{ width:40, height:40, objectFit:"contain", filter:"drop-shadow(0 2px 4px rgba(0,0,0,.2))" }} alt="Logo" /> : null}
         <div style={{ fontWeight: 800, letterSpacing: .2 }}>{companyName || "Firmenname"}</div>
       </div>
-        <div style={{ padding: 14, fontFamily, color: textColor, background: "var(--panel)" }}>
+        <div style={{ padding: 14, color: "var(--text)", background: "var(--panel)" }}>
         <div style={{ display:"grid", gap:4 }}>
           <div><b>Inhaber:</b> {ownerName || "—"}</div>
           <div><b>Adresse:</b> {address1 || "—"} {address2 ? `, ${address2}` : ""}</div>

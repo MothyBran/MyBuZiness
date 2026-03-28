@@ -21,13 +21,6 @@ export default function ThemeManager() {
             root.style.setProperty("--brand-600", s.secondaryColor);
             root.style.setProperty("--color-secondary", s.secondaryColor);
           }
-          if (s.textColor) {
-            root.style.setProperty("--text", s.textColor);
-            root.style.setProperty("--color-text", s.textColor);
-          }
-          if (s.fontFamily) {
-            document.body.style.fontFamily = s.fontFamily;
-          }
         }
       } catch (e) {
         // ignore
