@@ -344,19 +344,19 @@ export default function ReceiptsPage(){
               <col style={{ width: "160px" }} />
               <col style={{ width: "120px" }} />
               <col style={{ width: "140px", textAlign: "right" }} />
-              <col />
+              <col className="hide-sm" />
             </colgroup>
             <thead>
               <tr>
                 <th style={{ paddingRight: "16px" }}>Nr.</th>
                 <th style={{ paddingRight: "16px" }}>Datum</th>
                 <th style={{ textAlign:"right" }}>Betrag</th>
-                <th />
+                <th className="hide-sm" />
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={3} className="muted">Lade…</td></tr>}
-              {!loading && filteredRows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
+              {loading && <tr><td colSpan={4} className="muted">Lade…</td></tr>}
+              {!loading && filteredRows.length===0 && <tr><td colSpan={4} className="muted">Keine Belege vorhanden.</td></tr>}
 
               {!loading && filteredRows.map(r=>{
                 const isOpen = expandedId===r.id;
@@ -366,7 +366,7 @@ export default function ReceiptsPage(){
                       <td className="ellipsis nowrap" style={{ paddingRight: "16px" }}>#{r.receiptNo || "—"}</td>
                       <td className="nowrap" style={{ paddingRight: "16px" }}>{fmtDEDate(r.date)}</td>
                       <td className="nowrap" style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
-                      <td />
+                      <td className="hide-sm" />
                     </tr>
 
                     {isOpen && (
@@ -576,6 +576,9 @@ export default function ReceiptsPage(){
         .h5{ font-size:16px; font-weight:800 }
         .row-clickable{ cursor:pointer }
         .ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+        .hide-sm{ }
+        @media (max-width: 760px){ .hide-sm{ display:none } }
 
         .card.table-card .table-wrap{ overflow-x:auto }
         .table{ width:100%; border-collapse:collapse; min-width:560px }
