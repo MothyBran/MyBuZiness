@@ -330,15 +330,15 @@ a:hover { color: var(--brand); }
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
-  background-color: var(--panel-2); /* Make header background span entire table width when expanding beyond colgroup */
+  background-color: var(--panel-2); /* Provides full-width header background when table expands */
 }
 .table tbody {
-  background-color: var(--panel); /* Reset tbody background */
+  background-color: var(--panel); /* Ensures standard rows inherit the correct default panel color */
 }
 .table thead th {
   text-align: left;
   padding: 0.75rem 1rem;
-  background-color: transparent; /* Rely on table's background color */
+  background-color: transparent; /* Relies on .table background for full coverage */
   color: var(--text-weak);
   font-weight: 600;
   font-size: 0.75rem;
@@ -355,7 +355,6 @@ a:hover { color: var(--brand); }
   border-bottom: 1px solid var(--border);
   font-size: 0.875rem;
   color: var(--text);
-  background-color: var(--panel); /* Ensure cells maintain their own background */
 }
 .table tbody tr:last-child td { border-bottom: none; }
 .tr-hover tbody tr:hover td { background-color: var(--panel-2); }
