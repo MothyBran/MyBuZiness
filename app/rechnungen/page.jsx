@@ -2,7 +2,7 @@
 import { useDialog } from "../components/DialogProvider";
 
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Barcode from "react-barcode";
 import BarcodeScannerModal from "../components/BarcodeScannerModal";
 
