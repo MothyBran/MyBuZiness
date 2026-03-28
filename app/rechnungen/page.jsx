@@ -225,7 +225,7 @@ export default function InvoicesPage() {
 
                           {/* Positionsliste */}
                           <div className="table-wrap positions">
-                            <table className="table table-fixed" style={{ minWidth: 760 }}>
+                            <table className="table table-fixed" style={{ minWidth: 500 }}>
                               <thead>
                                 <tr>
                                   <th style={{ width: "50%" }}>Bezeichnung</th>
@@ -313,7 +313,7 @@ export default function InvoicesPage() {
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
         .table{ width:100%; border-collapse:collapse; min-width:600px }
-        /* table background logic inherited from globals.css */
+        .table thead { background-color: var(--panel-2); }
         .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
@@ -323,7 +323,8 @@ export default function InvoicesPage() {
         .st-dot.done{ background:#10b981 }
         .st-dot.canceled{ background:#9ca3af }
 
-        .details-cell{ background:var(--panel-2) }
+        /* Prevent details-cell from expanding parent table width on mobile */
+        .details-cell { background:var(--panel-2); max-width: 0; }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
