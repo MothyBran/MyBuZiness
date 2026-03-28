@@ -330,15 +330,15 @@ a:hover { color: var(--brand); }
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
-  background-color: var(--panel-2); /* Provides full-width header background when table expands */
+  background-color: var(--panel-2); /* Volle Header-Hintergrundbreite garantieren bei overflow */
 }
 .table tbody {
-  background-color: var(--panel); /* Ensures standard rows inherit the correct default panel color */
+  background-color: var(--panel); /* Normaler Row-Hintergrund */
 }
 .table thead th {
   text-align: left;
   padding: 0.75rem 1rem;
-  background-color: transparent; /* Relies on .table background for full coverage */
+  background-color: transparent;
   color: var(--text-weak);
   font-weight: 600;
   font-size: 0.75rem;
