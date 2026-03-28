@@ -1,8 +1,13 @@
 // app/api/invoices/nextNo/route.js
 import { initDb, q } from "@/lib/db";
+import { getUser } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const session = await getUser();
+    if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const uId = session.role === "employee" && session.ownerId ? session.ownerId : session.id;
+
     await initDb();
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
@@ -14,8 +19,8 @@ export async function GET() {
     const row = (await q(
       `SELECT COALESCE(MAX( (regexp_match("invoiceNo", $1))[1]::int ), 0) AS last
          FROM "Invoice"
-        WHERE "invoiceNo" ~ $1`,
-      [pattern]
+        WHERE "userId" = $2 AND "invoiceNo" ~ $1`,
+      [pattern, uId]
     )).rows[0];
 
     const next = Number(row?.last || 0) + 1;
