@@ -168,8 +168,9 @@ export default function InvoicesPage() {
               <col style={{ width: "40px" }} />
               <col style={{ width: "140px" }} />
               <col className="hide-sm" style={{ width: "120px" }} />
-              <col />
+              <col style={{ width: "240px" }} />
               <col style={{ width: "140px", textAlign: "right" }} />
+              <col className="hide-sm" />
             </colgroup>
             <thead>
               <tr>
@@ -178,12 +179,13 @@ export default function InvoicesPage() {
                 <th className="hide-sm" style={{ paddingRight: "16px" }}>Datum</th>
                 <th style={{ paddingRight: "16px" }}>Kunde</th>
                 <th style={{ textAlign: "right" }}>Betrag</th>
+                <th className="hide-sm" />
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={5} className="muted">Lade…</td></tr>}
+              {loading && <tr><td colSpan={6} className="muted">Lade…</td></tr>}
               {!loading && filteredRows.length === 0 && (
-                <tr><td colSpan={5} className="muted">Keine Rechnungen vorhanden.</td></tr>
+                <tr><td colSpan={6} className="muted">Keine Rechnungen vorhanden.</td></tr>
               )}
 
               {!loading && filteredRows.map((r) => {
@@ -195,18 +197,19 @@ export default function InvoicesPage() {
                 const customer = customers.find(c => String(c.id) === String(r.customerId));
 
                 return (
-                  <>
-                    <tr key={r.id} className="row-clickable" onClick={() => toggleExpand(r.id)}>
+                  <React.Fragment key={r.id}>
+                    <tr className="row-clickable" onClick={() => toggleExpand(r.id)}>
                       <td style={{ paddingRight: "8px" }}><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
                       <td className="nowrap" style={{ paddingRight: "16px" }}>#{r.invoiceNo || "-"}</td>
                       <td className="hide-sm nowrap" style={{ paddingRight: "16px" }}>{dateStr}</td>
-                      <td style={{ paddingRight: "16px" }}>{r.customerName || customer?.name || "—"}</td>
+                      <td className="nowrap ellipsis" style={{ paddingRight: "16px" }}>{r.customerName || customer?.name || "—"}</td>
                       <td className="nowrap" style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
+                      <td className="hide-sm" />
                     </tr>
 
                     {isOpenRow && (
-                      <tr key={r.id + "-details"}>
-                        <td colSpan={5} className="details-cell">
+                      <tr>
+                        <td colSpan={6} className="details-cell">
                           <div className="detail-head">
                             <div>
                               <div className="muted">Rechnung</div>
