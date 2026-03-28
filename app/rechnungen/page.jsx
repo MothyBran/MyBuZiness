@@ -167,7 +167,7 @@ export default function InvoicesPage() {
             <colgroup>
               <col style={{ width: "40px" }} />
               <col style={{ width: "140px" }} />
-              <col style={{ width: "120px" }} />
+              <col className="hide-sm" style={{ width: "120px" }} />
               <col />
               <col style={{ width: "140px", textAlign: "right" }} />
             </colgroup>
