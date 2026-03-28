@@ -30,7 +30,7 @@ export async function GET(request) {
     // Fetch licenses with user details if used
     const result = await q(`
       SELECT
-        l."id", l."key", l."userId", l."createdAt", l."usedAt",
+        l."id", l."key", l."userId", l."createdAt", l."usedAt", l."kind", l."expiresAt",
         u."name" as "userName", u."email" as "userEmail"
       FROM "License" l
       LEFT JOIN "User" u ON l."userId" = u."id"
@@ -52,13 +52,14 @@ export async function POST(request) {
 
     await initDb();
 
+    const { kind = "lifetime" } = await request.json().catch(() => ({}));
     const newId = uuid();
     const newKey = generateKey();
 
     await q(`
-      INSERT INTO "License" ("id", "key", "userId", "createdAt", "usedAt")
-      VALUES ($1, $2, NULL, CURRENT_TIMESTAMP, NULL)
-    `, [newId, newKey]);
+      INSERT INTO "License" ("id", "key", "userId", "createdAt", "usedAt", "kind", "expiresAt")
+      VALUES ($1, $2, NULL, CURRENT_TIMESTAMP, NULL, $3, NULL)
+    `, [newId, newKey, kind]);
 
     return NextResponse.json({ ok: true, key: newKey });
   } catch (error) {

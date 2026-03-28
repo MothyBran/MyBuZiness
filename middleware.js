@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/logout",
+  "/api/auth/renew-license",
   "/api/admin/auth",
   "/brand-logo.png",
   "/logo.png",
@@ -48,6 +49,28 @@ export async function middleware(request) {
 
   if (user && isAuthPage) {
     // Logged in, trying to access login/register -> Redirect to dashboard
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  // License expiration check
+  let isExpired = false;
+  if (user) {
+    if (user.isExpired) {
+      isExpired = true;
+    } else if (user.expiresAt && new Date(user.expiresAt) < new Date()) {
+      isExpired = true;
+    }
+  }
+
+  if (user && isExpired && pathname !== "/lizenz-erneuern" && !pathname.startsWith("/api/auth/logout") && pathname !== "/api/auth/renew-license") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/lizenz-erneuern";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && !isExpired && pathname === "/lizenz-erneuern") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

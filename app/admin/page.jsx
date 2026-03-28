@@ -8,6 +8,7 @@ export default function AdminDashboardPage() {
   const [licenses, setLicenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [licenseKind, setLicenseKind] = useState("lifetime");
   const [error, setError] = useState(null);
   const router = useRouter();
 
@@ -39,7 +40,11 @@ export default function AdminDashboardPage() {
   async function handleGenerateLicense() {
     setGenerating(true);
     try {
-      const res = await fetch("/api/admin/licenses", { method: "POST" });
+      const res = await fetch("/api/admin/licenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: licenseKind })
+      });
       const data = await res.json();
       if (data.ok) {
         await fetchLicenses();
@@ -78,18 +83,34 @@ export default function AdminDashboardPage() {
       </header>
 
       <main style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto", width: "100%", flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <h2 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Lizenzverwaltung</h2>
             <p style={{ color: "var(--muted)", margin: 0 }}>Verwalten und generieren Sie Lizenzschlüssel für die Registrierung.</p>
           </div>
-          <button
-            onClick={handleGenerateLicense}
-            className="btn btn--primary"
-            disabled={generating}
-          >
-            {generating ? "Generiere..." : "+ Neuen Schlüssel generieren"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <select
+              value={licenseKind}
+              onChange={(e) => setLicenseKind(e.target.value)}
+              style={{
+                padding: "0.5rem",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--background)",
+                color: "var(--text)"
+              }}
+            >
+              <option value="lifetime">Lifetime</option>
+              <option value="trial">14 Tage Test</option>
+            </select>
+            <button
+              onClick={handleGenerateLicense}
+              className="btn btn--primary"
+              disabled={generating}
+            >
+              {generating ? "Generiere..." : "+ Neuen Schlüssel generieren"}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -108,23 +129,36 @@ export default function AdminDashboardPage() {
               <thead>
                 <tr>
                   <th style={{ textAlign: "left" }}>Lizenzschlüssel</th>
+                  <th style={{ textAlign: "left" }}>Typ</th>
                   <th style={{ textAlign: "left" }}>Status</th>
                   <th style={{ textAlign: "left" }}>Benutzer</th>
                   <th style={{ textAlign: "left" }}>Erstellt am</th>
                   <th style={{ textAlign: "left" }}>Registriert am</th>
+                  <th style={{ textAlign: "left" }}>Ablaufdatum</th>
                 </tr>
               </thead>
               <tbody>
-                {licenses.map(lic => (
+                {licenses.map(lic => {
+                  const isExpired = lic.expiresAt && new Date(lic.expiresAt) < new Date();
+                  return (
                   <tr key={lic.id}>
                     <td style={{ fontFamily: "monospace", fontSize: "1.1rem" }}>{lic.key}</td>
+                    <td>
+                      {lic.kind === "trial" ? (
+                        <span style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", padding: "0.25rem 0.5rem", borderRadius: "999px", fontSize: "0.875rem" }}>14 Tage Trial</span>
+                      ) : (
+                        <span style={{ background: "rgba(59,130,246,0.1)", color: "var(--accent)", padding: "0.25rem 0.5rem", borderRadius: "999px", fontSize: "0.875rem" }}>Lifetime</span>
+                      )}
+                    </td>
                     <td>
                       {lic.userId ? (
                         <span style={{
                           display: "inline-block", padding: "0.25rem 0.5rem", borderRadius: "999px",
-                          background: "rgba(34,197,94,0.1)", color: "var(--success)", fontSize: "0.875rem"
+                          background: isExpired ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                          color: isExpired ? "var(--error)" : "var(--success)",
+                          fontSize: "0.875rem"
                         }}>
-                          Verwendet
+                          {isExpired ? "Abgelaufen" : "Verwendet"}
                         </span>
                       ) : (
                         <span style={{
@@ -147,8 +181,9 @@ export default function AdminDashboardPage() {
                     </td>
                     <td>{new Date(lic.createdAt).toLocaleString("de-DE")}</td>
                     <td>{lic.usedAt ? new Date(lic.usedAt).toLocaleString("de-DE") : <span style={{ color: "var(--muted)" }}>-</span>}</td>
+                    <td>{lic.expiresAt ? new Date(lic.expiresAt).toLocaleString("de-DE") : <span style={{ color: "var(--muted)" }}>-</span>}</td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           )}
