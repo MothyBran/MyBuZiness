@@ -10,17 +10,23 @@ export async function GET() {
     const uId = session.role === "employee" && session.ownerId ? session.ownerId : session.id;
 
     await initDb();
-    // Höchste Ziffernfolge aus receiptNo ziehen, +1
-    const row = (await q(
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const prefix = `BN-${yy}${mm}-`;
+
+    const last = await q(
       `SELECT COALESCE(MAX(
           NULLIF(substring("receiptNo" from '\\d+$'), '')::bigint
         ), 0)::bigint AS last
        FROM "Receipt"
-       WHERE "userId" = $1`, [uId]
-    )).rows[0];
+       WHERE "userId" = $1 AND "receiptNo" LIKE $2`,
+      [uId, `${prefix}%`]
+    );
 
-    const next = Number(row?.last || 0) + 1;
-    return new Response(JSON.stringify({ ok: true, nextNo: String(next) }), {
+    const nextNum = Number(last.rows[0]?.last || 0) + 1;
+
+    return new Response(JSON.stringify({ ok: true, nextNo: String(nextNum) }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });

@@ -106,13 +106,15 @@ export async function POST(request) {
       const mm = String(now.getMonth() + 1).padStart(2, "0");
       const prefix = `BN-${yy}${mm}-`;
 
-      const last = await q(`SELECT "receiptNo" FROM "Receipt" WHERE "userId"=$1 AND "receiptNo" LIKE $2 ORDER BY "receiptNo" DESC LIMIT 1`, [userId, `${prefix}%`]);
-      let nextNum = 1;
-      if (last.rows.length > 0 && last.rows[0].receiptNo) {
-        const lastStr = last.rows[0].receiptNo;
-        const lastNum = parseInt(lastStr.split("-").pop() || "0", 10);
-        if (!isNaN(lastNum)) nextNum = lastNum + 1;
-      }
+      const last = await q(
+        `SELECT COALESCE(MAX(
+            NULLIF(substring("receiptNo" from '\\d+$'), '')::bigint
+          ), 0)::bigint AS last
+         FROM "Receipt"
+         WHERE "userId" = $1 AND "receiptNo" LIKE $2`,
+        [userId, `${prefix}%`]
+      );
+      const nextNum = Number(last.rows[0]?.last || 0) + 1;
       receiptNo = `${prefix}${String(nextNum).padStart(3, "0")}`;
     }
 
