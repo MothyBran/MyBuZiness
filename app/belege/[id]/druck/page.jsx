@@ -68,7 +68,7 @@ export default function ReceiptPrintPage({ params }) {
           .print-area { margin: 0 auto; padding: 4mm; width: 80mm; max-width: 80mm; box-shadow: none; border: none; font-size: 10pt; line-height: 1.2; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
-        body { background: #f8fafc; color: var(--color-text, #1e293b); font-family: ${settings.fontFamily || "sans-serif"}; }
+        body { background: #f8fafc; color: var(--color-text, #1e293b); }
         .print-area {
           width: 80mm; max-width: 80mm; margin: 2rem auto; padding: 4mm;
           background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);

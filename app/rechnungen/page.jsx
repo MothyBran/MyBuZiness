@@ -719,7 +719,6 @@ function PrintArea({ row, settings, currency, customer }) {
 
   return (
     <div className="print-area" style={{
-      fontFamily: firm.fontFamily || "inherit",
       "--color-primary": firm.primaryColor || "var(--brand, #14b8a6)"
     }}>
       <div className="print-page">
