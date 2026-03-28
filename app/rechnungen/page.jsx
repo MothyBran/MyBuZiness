@@ -225,7 +225,7 @@ export default function InvoicesPage() {
 
                           {/* Positionsliste */}
                           <div className="table-wrap positions">
-                            <table className="table table-fixed" style={{ minWidth: 500 }}>
+                            <table className="table table-fixed inner-table" style={{ minWidth: 500 }}>
                               <thead>
                                 <tr>
                                   <th style={{ width: "50%" }}>Bezeichnung</th>
@@ -323,8 +323,8 @@ export default function InvoicesPage() {
         .st-dot.done{ background:#10b981 }
         .st-dot.canceled{ background:#9ca3af }
 
-        /* Prevent details-cell from expanding parent table width on mobile */
-        .details-cell { background:var(--panel-2); max-width: 0; }
+        /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
+        .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }

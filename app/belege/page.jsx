@@ -390,7 +390,7 @@ export default function ReceiptsPage(){
 
                           {!!details[r.id]?.data?.items?.length && (
                             <div className="table-wrap positions">
-                              <table className="table table-fixed" style={{ minWidth:500 }}>
+                              <table className="table table-fixed inner-table" style={{ minWidth:500 }}>
                                 <thead>
                                   <tr>
                                     <th style={{ width:"50%" }}>Bezeichnung</th>
@@ -585,8 +585,8 @@ export default function ReceiptsPage(){
         .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
         .table-fixed{ table-layout:fixed }
 
-        /* Prevent details-cell from expanding parent table width on mobile */
-        .details-cell{ background:var(--panel-2); max-width: 0; }
+        /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
+        .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0 6px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .actions .danger{ color:#c00; border-color:#c00 }
