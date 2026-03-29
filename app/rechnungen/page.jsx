@@ -731,10 +731,15 @@ function PrintArea({ row, settings, currency, customer }) {
       "--color-primary": firm.primaryColor || "var(--brand, #14b8a6)"
     }}>
       <div className="print-page">
+        {/* Top Logo and Company Name */}
+        <div className="ph-top-logo">
+          {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
+          {firm.companyName && <div className="ph-top-company">{firm.companyName}</div>}
+        </div>
+
         {/* Kopf */}
         <div className="ph-head">
           <div className="ph-left">
-            {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
             {firmLineLeft && <div className="ph-fromline">{firmLineLeft}</div>}
             <div className="ph-recipient">
               <div className="ph-rec-name">{custName}</div>
@@ -835,17 +840,19 @@ function PrintArea({ row, settings, currency, customer }) {
         .ph-head{ display:flex; justify-content:space-between; gap:18px; }
         .ph-left{ flex:1; min-width: 55%; }
         .ph-right{ text-align:right; min-width: 35%; }
-        .ph-logo{ max-height: 48px; margin-bottom: 8px; }
+        .ph-top-logo{ display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+        .ph-top-company{ font-size: 16pt; font-weight: 800; color: #333; }
+        .ph-logo{ max-height: 80px; }
         .ph-left { container-type: inline-size; }
         .ph-fromline {
-          font-weight: 700;
+          font-weight: normal;
           margin-top: 4px;
           white-space: nowrap;
           font-size: clamp(6px, 4cqi, 10pt);
           text-decoration: underline;
         }
 
-        .ph-recipient{ margin: 8px 0 10px; }
+        .ph-recipient{ margin: 2px 0 10px; }
         .ph-rec-name{ font-size:12pt; font-weight:700; }
 
         .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
