@@ -210,53 +210,55 @@ export default function InvoicesPage() {
                     {isOpenRow && (
                       <tr>
                         <td colSpan={6} className="details-cell">
-                          <div className="detail-head">
-                            <div>
-                              <div className="muted">Rechnung</div>
-                              <div className="h5">#{r.invoiceNo || "-"}</div>
-                              <div className="muted">Status: <strong>{stLabel}</strong></div>
+                          <div className="details-content-wrapper">
+                            <div className="detail-head">
+                              <div>
+                                <div className="muted">Rechnung</div>
+                                <div className="h5">#{r.invoiceNo || "-"}</div>
+                                <div className="muted">Status: <strong>{stLabel}</strong></div>
+                              </div>
+                              <div className="actions">
+                                <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); onPrint(r); }}>🖨️ Druckansicht</button>
+                                <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>✏️ Korrigieren</button>
+                                <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
+                              </div>
                             </div>
-                            <div className="actions">
-                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); onPrint(r); }}>🖨️ Druckansicht</button>
-                              <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>✏️ Korrigieren</button>
-                              <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
-                            </div>
-                          </div>
 
-                          {/* Positionsliste */}
-                          <div className="table-wrap positions">
-                            <table className="table table-fixed" style={{ minWidth: 760 }}>
-                              <thead>
-                                <tr>
-                                  <th style={{ width: "50%" }}>Bezeichnung</th>
-                                  <th style={{ width: "10%" }}>Menge</th>
-                                  <th style={{ width: "20%" }}>Einzelpreis</th>
-                                  <th style={{ width: "20%" }}>Summe</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(!r.items || r.items.length === 0) && (
-                                  <tr><td colSpan={4} className="muted">Keine Positionen.</td></tr>
-                                )}
-                                {Array.isArray(r.items) && r.items.map((it, idx) => (
-                                  <tr key={idx}>
-                                    <td>{it.name || "—"}</td>
-                                    <td>{toInt(it.quantity || 0)}</td>
-                                    <td>{money(toInt(it.unitPriceCents || 0), r.currency || currency)}</td>
-                                    <td>{money(toInt(it.lineTotalCents || 0), r.currency || currency)}</td>
+                            {/* Positionsliste */}
+                            <div className="table-wrap positions">
+                              <table className="table table-fixed inner-table" style={{ minWidth: 500 }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: "50%" }}>Bezeichnung</th>
+                                    <th style={{ width: "10%" }}>Menge</th>
+                                    <th style={{ width: "20%" }}>Einzelpreis</th>
+                                    <th style={{ width: "20%" }}>Summe</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody>
+                                  {(!r.items || r.items.length === 0) && (
+                                    <tr><td colSpan={4} className="muted">Keine Positionen.</td></tr>
+                                  )}
+                                  {Array.isArray(r.items) && r.items.map((it, idx) => (
+                                    <tr key={idx}>
+                                      <td>{it.name || "—"}</td>
+                                      <td>{toInt(it.quantity || 0)}</td>
+                                      <td>{money(toInt(it.unitPriceCents || 0), r.currency || currency)}</td>
+                                      <td>{money(toInt(it.lineTotalCents || 0), r.currency || currency)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
 
-                          <div className="totals">
-                            Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
-                          </div>
+                            <div className="totals">
+                              Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
+                            </div>
 
-                          {printFor?.row?.id === r.id && (
-                            <PrintArea row={r} settings={settings} currency={currency} customer={customer} />
-                          )}
+                            {printFor?.row?.id === r.id && (
+                              <PrintArea row={r} settings={settings} currency={currency} customer={customer} />
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -323,7 +325,9 @@ export default function InvoicesPage() {
         .st-dot.done{ background:#10b981 }
         .st-dot.canceled{ background:#9ca3af }
 
-        .details-cell{ background:var(--panel-2) }
+        /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
+        .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; padding: 0 !important; }
+        .details-content-wrapper { display: grid; padding: 10px; }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .totals{ text-align:right; padding:6px 8px 10px; font-weight:800 }
