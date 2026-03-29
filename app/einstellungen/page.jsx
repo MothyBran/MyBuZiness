@@ -31,6 +31,7 @@ export default function SettingsPage() {
 
   // Firmendaten
   const [companyName, setCompanyName] = useState("");
+  const [slogan, setSlogan] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
@@ -72,6 +73,7 @@ export default function SettingsPage() {
 
       // Firmendaten
       setCompanyName(s.companyName || "");
+      setSlogan(s.slogan || "");
       setOwnerName(s.ownerName || "");
       setAddress1(s.address1 || "");
       setAddress2(s.address2 || "");
@@ -142,7 +144,7 @@ export default function SettingsPage() {
     setSaving(true);
     const payload = {
       // Firmendaten
-      companyName, ownerName, address1, address2, postalCode, city, phone, email, website,
+      companyName, slogan, ownerName, address1, address2, postalCode, city, phone, email, website,
       currency, bankAccount, bankInstitution, bankRecipient, bankIban, bankBic,
       // Steuerdaten
       vatId, kleinunternehmer, taxRateDefault,
@@ -252,8 +254,9 @@ export default function SettingsPage() {
         <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Firmendaten</h2>
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <Field label="Firmenname"><input style={input} value={companyName} onChange={e=>setCompanyName(e.target.value)} /></Field>
-          <Field label="Inhaber"><input style={input} value={ownerName} onChange={e=>setOwnerName(e.target.value)} /></Field>
+          <Field label="Slogan (im Rechnungskopf)"><input style={input} value={slogan} onChange={e=>setSlogan(e.target.value)} /></Field>
 
+          <Field label="Inhaber"><input style={input} value={ownerName} onChange={e=>setOwnerName(e.target.value)} /></Field>
           <Field label="Adresszeile 1"><input style={input} value={address1} onChange={e=>setAddress1(e.target.value)} /></Field>
           <Field label="Adresszeile 2 (optional)"><input style={input} value={address2} onChange={e=>setAddress2(e.target.value)} /></Field>
 
