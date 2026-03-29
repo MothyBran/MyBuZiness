@@ -341,37 +341,34 @@ export default function ReceiptsPage(){
         <div className="table-wrap" style={{ border: "none" }}>
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "140px", textAlign: "right" }} />
-              <col className="hide-sm" />
+              <col style={{ width: "auto" }} />
+              <col style={{ width: "90px" }} />
+              <col style={{ width: "100px", textAlign: "right" }} />
             </colgroup>
             <thead>
               <tr>
-                <th style={{ paddingRight: "16px" }}>Nr.</th>
-                <th style={{ paddingRight: "16px" }}>Datum</th>
+                <th style={{ paddingRight: "8px" }}>Nr.</th>
+                <th style={{ paddingRight: "8px" }}>Datum</th>
                 <th style={{ textAlign:"right" }}>Betrag</th>
-                <th className="hide-sm" />
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={4} className="muted">Lade…</td></tr>}
-              {!loading && filteredRows.length===0 && <tr><td colSpan={4} className="muted">Keine Belege vorhanden.</td></tr>}
+              {loading && <tr><td colSpan={3} className="muted">Lade…</td></tr>}
+              {!loading && filteredRows.length===0 && <tr><td colSpan={3} className="muted">Keine Belege vorhanden.</td></tr>}
 
               {!loading && filteredRows.map(r=>{
                 const isOpen = expandedId===r.id;
                 return (
                   <React.Fragment key={r.id}>
                     <tr className="row-clickable" onClick={()=>toggleExpand(r.id)}>
-                      <td className="ellipsis nowrap" style={{ paddingRight: "16px" }}>#{r.receiptNo || "—"}</td>
-                      <td className="nowrap" style={{ paddingRight: "16px" }}>{fmtDEDate(r.date)}</td>
+                      <td className="ellipsis nowrap" style={{ paddingRight: "8px" }}>#{r.receiptNo || "—"}</td>
+                      <td className="nowrap" style={{ paddingRight: "8px" }}>{fmtDEDate(r.date)}</td>
                       <td className="nowrap" style={{ textAlign:"right", fontWeight:700 }}>{money(r.grossCents, r.currency || currency)}</td>
-                      <td className="hide-sm" />
                     </tr>
 
                     {isOpen && (
                       <tr>
-                        <td colSpan={4} className="details-cell">
+                        <td colSpan={3} className="details-cell">
                           <div className="details-content-wrapper">
                             <div className="detail-head">
                               <div>
@@ -583,9 +580,16 @@ export default function ReceiptsPage(){
         @media (max-width: 760px){ .hide-sm{ display:none } }
 
         .card.table-card .table-wrap{ overflow-x:auto }
-        .table{ width:100%; border-collapse:collapse; min-width:560px }
-        .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
+        .table{ width:100%; border-collapse:collapse; min-width:100%; background-color: var(--panel-2); }
+        .table thead { background-color: transparent; }
+        .table tbody { background-color: var(--panel); }
+        .table th { background-color: transparent; border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; text-align: left; }
+        .table td { border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; }
         .table-fixed{ table-layout:fixed }
+
+        @media (max-width: 760px) {
+          .table th, .table td { padding: 8px 4px; font-size: 13px; }
+        }
 
         /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
         .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; padding: 0 !important; }

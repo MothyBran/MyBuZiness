@@ -165,27 +165,25 @@ export default function InvoicesPage() {
         <div className="table-wrap" style={{ border: "none" }}>
           <table className="table table-fixed">
             <colgroup>
-              <col style={{ width: "40px" }} />
-              <col style={{ width: "140px" }} />
-              <col className="hide-sm" style={{ width: "120px" }} />
-              <col style={{ width: "240px" }} />
-              <col style={{ width: "140px", textAlign: "right" }} />
-              <col className="hide-sm" />
+              <col style={{ width: "24px" }} />
+              <col style={{ width: "80px" }} />
+              <col style={{ width: "80px" }} />
+              <col style={{ width: "auto" }} />
+              <col style={{ width: "90px", textAlign: "right" }} />
             </colgroup>
             <thead>
               <tr>
                 <th title="Status" style={{ paddingRight: "8px" }}>🚦</th>
-                <th style={{ paddingRight: "16px" }}>Nr.</th>
-                <th className="hide-sm" style={{ paddingRight: "16px" }}>Datum</th>
-                <th style={{ paddingRight: "16px" }}>Kunde</th>
+                <th style={{ paddingRight: "8px" }}>Nr.</th>
+                <th style={{ paddingRight: "8px" }}>Datum</th>
+                <th style={{ paddingRight: "8px" }}>Kunde</th>
                 <th style={{ textAlign: "right" }}>Betrag</th>
-                <th className="hide-sm" />
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6} className="muted">Lade…</td></tr>}
+              {loading && <tr><td colSpan={5} className="muted">Lade…</td></tr>}
               {!loading && filteredRows.length === 0 && (
-                <tr><td colSpan={6} className="muted">Keine Rechnungen vorhanden.</td></tr>
+                <tr><td colSpan={5} className="muted">Keine Rechnungen vorhanden.</td></tr>
               )}
 
               {!loading && filteredRows.map((r) => {
@@ -200,16 +198,15 @@ export default function InvoicesPage() {
                   <React.Fragment key={r.id}>
                     <tr className="row-clickable" onClick={() => toggleExpand(r.id)}>
                       <td style={{ paddingRight: "8px" }}><span className={`st-dot ${st}`} aria-label={`Status: ${stLabel}`} title={stLabel} /></td>
-                      <td className="nowrap" style={{ paddingRight: "16px" }}>#{r.invoiceNo || "-"}</td>
-                      <td className="hide-sm nowrap" style={{ paddingRight: "16px" }}>{dateStr}</td>
-                      <td className="nowrap ellipsis" style={{ paddingRight: "16px" }}>{r.customerName || customer?.name || "—"}</td>
+                      <td className="nowrap" style={{ paddingRight: "8px" }}>#{r.invoiceNo || "-"}</td>
+                      <td className="nowrap" style={{ paddingRight: "8px" }}>{dateStr}</td>
+                      <td className="nowrap ellipsis" style={{ paddingRight: "8px" }}>{r.customerName || customer?.name || "—"}</td>
                       <td className="nowrap" style={{ textAlign: "right", fontWeight: 700 }}>{money(r.grossCents, r.currency || currency)}</td>
-                      <td className="hide-sm" />
                     </tr>
 
                     {isOpenRow && (
                       <tr>
-                        <td colSpan={6} className="details-cell">
+                        <td colSpan={5} className="details-cell">
                           <div className="details-content-wrapper">
                             <div className="detail-head">
                               <div>
@@ -314,10 +311,18 @@ export default function InvoicesPage() {
         /* Detail-Positionsliste: horizontales Scrollen erlaubt, aber innerhalb der Card */
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
-        .table{ width:100%; border-collapse:collapse; min-width:600px }
-        .table thead { background-color: var(--panel-2); }
-        .table th,.table td{ border-bottom:1px solid var(--border); padding:10px; vertical-align:middle }
+        .table{ width:100%; border-collapse:collapse; min-width:100%; background-color: var(--panel-2); }
+        .table thead { background-color: transparent; }
+        .table tbody { background-color: var(--panel); }
+        .table th { background-color: transparent; border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; text-align: left; }
+        .table td { border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; }
         .table-fixed{ table-layout:fixed }
+
+        @media (max-width: 760px) {
+          .table th, .table td { padding: 8px 4px; font-size: 13px; }
+          .nowrap { white-space: nowrap; }
+          .ellipsis { overflow: hidden; text-overflow: ellipsis; }
+        }
 
         .st-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#f59e0b }
         .st-dot.open{ background:#f59e0b }
