@@ -166,10 +166,10 @@ export default function InvoicesPage() {
           <table className="table table-fixed">
             <colgroup>
               <col style={{ width: "24px" }} />
-              <col style={{ width: "80px" }} />
-              <col style={{ width: "80px" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "95px" }} />
               <col style={{ width: "auto" }} />
-              <col style={{ width: "90px", textAlign: "right" }} />
+              <col style={{ width: "100px", textAlign: "right" }} />
             </colgroup>
             <thead>
               <tr>
@@ -311,7 +311,7 @@ export default function InvoicesPage() {
         /* Detail-Positionsliste: horizontales Scrollen erlaubt, aber innerhalb der Card */
         .details-cell .table-wrap.positions{ overflow-x:auto }
 
-        .table{ width:100%; border-collapse:collapse; min-width:100%; background-color: var(--panel-2); }
+        .table{ width:100%; border-collapse:collapse; min-width:500px; background-color: var(--panel-2); }
         .table thead { background-color: transparent; }
         .table tbody { background-color: var(--panel); }
         .table th { background-color: transparent; border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; text-align: left; }
@@ -319,7 +319,7 @@ export default function InvoicesPage() {
         .table-fixed{ table-layout:fixed }
 
         @media (max-width: 760px) {
-          .table th, .table td { padding: 8px 4px; font-size: 13px; }
+          .table th, .table td { padding: 10px 6px; font-size: 13px; }
           .nowrap { white-space: nowrap; }
           .ellipsis { overflow: hidden; text-overflow: ellipsis; }
         }
