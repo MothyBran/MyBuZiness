@@ -342,8 +342,8 @@ export default function ReceiptsPage(){
           <table className="table table-fixed">
             <colgroup>
               <col style={{ width: "auto" }} />
-              <col style={{ width: "90px" }} />
-              <col style={{ width: "100px", textAlign: "right" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "120px", textAlign: "right" }} />
             </colgroup>
             <thead>
               <tr>
@@ -580,7 +580,7 @@ export default function ReceiptsPage(){
         @media (max-width: 760px){ .hide-sm{ display:none } }
 
         .card.table-card .table-wrap{ overflow-x:auto }
-        .table{ width:100%; border-collapse:collapse; min-width:100%; background-color: var(--panel-2); }
+        .table{ width:100%; border-collapse:collapse; min-width:400px; background-color: var(--panel-2); }
         .table thead { background-color: transparent; }
         .table tbody { background-color: var(--panel); }
         .table th { background-color: transparent; border-bottom:1px solid var(--border); padding:10px; vertical-align:middle; text-align: left; }
@@ -588,7 +588,7 @@ export default function ReceiptsPage(){
         .table-fixed{ table-layout:fixed }
 
         @media (max-width: 760px) {
-          .table th, .table td { padding: 8px 4px; font-size: 13px; }
+          .table th, .table td { padding: 10px 8px; font-size: 13px; }
         }
 
         /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
