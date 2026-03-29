@@ -69,8 +69,6 @@ export default function InvoicesPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
-  const [printFor, setPrintFor] = useState(null);
-
   const [q, setQ] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
@@ -108,11 +106,6 @@ export default function InvoicesPage() {
     if (!res || !res.ok) { await alertMsg("Löschen fehlgeschlagen."); return; }
     if (expandedId === id) setExpandedId(null);
     load();
-  }
-
-  function onPrint(row){
-    setPrintFor({ row, settings });
-    setTimeout(()=> window.print(), 50);
   }
 
   const filteredRows = useMemo(() => {
@@ -215,7 +208,7 @@ export default function InvoicesPage() {
                                 <div className="muted">Status: <strong>{stLabel}</strong></div>
                               </div>
                               <div className="actions">
-                                <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); onPrint(r); }}>🖨️ Druckansicht</button>
+                                <a style={S.ghost} href={`/rechnungen/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
                                 <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>✏️ Korrigieren</button>
                                 <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
                               </div>
@@ -226,7 +219,8 @@ export default function InvoicesPage() {
                               <table className="table table-fixed inner-table" style={{ minWidth: 500 }}>
                                 <thead>
                                   <tr>
-                                    <th style={{ width: "50%" }}>Bezeichnung</th>
+                                    <th style={{ width: "10%" }}>Pos.</th>
+                                    <th style={{ width: "40%" }}>Bezeichnung</th>
                                     <th style={{ width: "10%" }}>Menge</th>
                                     <th style={{ width: "20%" }}>Einzelpreis</th>
                                     <th style={{ width: "20%" }}>Summe</th>
@@ -234,10 +228,11 @@ export default function InvoicesPage() {
                                 </thead>
                                 <tbody>
                                   {(!r.items || r.items.length === 0) && (
-                                    <tr><td colSpan={4} className="muted">Keine Positionen.</td></tr>
+                                    <tr><td colSpan={5} className="muted">Keine Positionen.</td></tr>
                                   )}
                                   {Array.isArray(r.items) && r.items.map((it, idx) => (
                                     <tr key={idx}>
+                                      <td>{idx + 1}.</td>
                                       <td>{it.name || "—"}</td>
                                       <td>{toInt(it.quantity || 0)}</td>
                                       <td>{money(toInt(it.unitPriceCents || 0), r.currency || currency)}</td>
@@ -251,10 +246,6 @@ export default function InvoicesPage() {
                             <div className="totals">
                               Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                             </div>
-
-                            {printFor?.row?.id === r.id && (
-                              <PrintArea row={r} settings={settings} currency={currency} customer={customer} />
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -384,14 +375,6 @@ export default function InvoicesPage() {
           .w-full{ flex-basis: 100%; max-width: 100%; }
         }
 
-        /* ===== Druck: nur print-area ausgeben ===== */
-        @media print{
-          @page { margin: 0; }
-          body { background: white !important; margin: 0; padding: 0; }
-          body *{ visibility: hidden !important; }
-          .print-area, .print-area *{ visibility: visible !important; }
-          .print-area{ position: absolute; left:0; top:0; width:100%; padding:0 !important; margin:0 !important; }
-        }
       `}</style>
     </main>
   );
@@ -622,17 +605,19 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
             <table className="table table-fixed">
               <thead>
                 <tr>
-                  <th style={{ width: "50%" }}>Produkt/Dienstleistung</th>
+                  <th style={{ width: "10%" }}>Pos.</th>
+                  <th style={{ width: "40%" }}>Produkt/Dienstleistung</th>
                   <th style={{ width: "14%" }}>Menge</th>
                   <th style={{ width: "18%" }}>Einzelpreis</th>
                   <th style={{ width: "18%" }}>Summe</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((r) => {
+                {items.map((r, idx) => {
                   const sum = toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0);
                   return (
                     <tr key={r.id}>
+                      <td>{idx + 1}.</td>
                       <td>
                         <select value={r.productId} onChange={(e) => onPickProduct(r.id, e.target.value)} style={{ ...S.input, width: "100%", maxWidth: "100%" }}>
                           <option value="">— Produkt wählen —</option>
@@ -706,173 +691,6 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
           <button className="btn" style={S.btn} onClick={save}>{isEdit ? "Speichern" : "Anlegen"}</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ───────── Drucklayout ───────── */
-function PrintArea({ row, settings, currency, customer }) {
-  const firm = settings || {};
-  const dueTxt = row.dueDate ? new Date(row.dueDate).toLocaleDateString("de-DE") : null;
-
-  const custName   = customer?.name || row.customerName || "";
-  const custStreet = customer?.addressStreet || row.customerStreet || "";
-  const custZip    = customer?.addressZip || row.customerZip || "";
-  const custCity   = customer?.addressCity || row.customerCity || "";
-
-  const firmLineLeft = [
-    (firm.companyName || "").trim(),
-    (firm.address1 || "").trim(),
-    [firm.postalCode, firm.city].filter(Boolean).join(" ")
-  ].filter(Boolean).join(" • ");
-
-  return (
-    <div className="print-area" style={{
-      "--color-primary": firm.primaryColor || "var(--brand, #14b8a6)"
-    }}>
-      <div className="print-page">
-        {/* Top Logo and Company Name */}
-        <div className="ph-top-logo">
-          {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
-          <div>
-            {firm.companyName && <div className="ph-top-company">{firm.companyName}</div>}
-            {firm.slogan && <div className="ph-top-slogan">{firm.slogan}</div>}
-          </div>
-        </div>
-
-        {/* Kopf */}
-        <div className="ph-head">
-          <div className="ph-left">
-            {firmLineLeft && <div className="ph-fromline">{firmLineLeft}</div>}
-            <div className="ph-recipient">
-              <div className="ph-rec-name">{custName}</div>
-              {custStreet && <div>{custStreet}</div>}
-              {(custZip || custCity) && <div>{custZip} {custCity}</div>}
-            </div>
-          </div>
-
-          <div className="ph-right">
-            <div className="ph-title">RECHNUNG</div>
-            <div>Nr.: <strong>{row.invoiceNo}</strong></div>
-            <div>Datum: <strong>{row.issueDate ? new Date(row.issueDate).toLocaleDateString("de-DE") : ""}</strong></div>
-            {row.invoiceNo && (
-              <div style={{ marginTop: "10px", textAlign: "right" }}>
-                <Barcode value={row.invoiceNo} width={1.5} height={40} displayValue={false} margin={0} />
-              </div>
-            )}
-            {(firm.email || firm.phone) && (
-              <div className="ph-contact">
-                {firm.email && <div>{firm.email}</div>}
-                {firm.phone && <div>{firm.phone}</div>}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Positionen */}
-        <table className="ph-table">
-          <thead>
-            <tr>
-              <th className="ta-left">Bezeichnung</th>
-              <th>Menge</th>
-              <th>Einzelpreis</th>
-              <th>Summe</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Array.isArray(row.items) && row.items.map((it, idx)=>(
-              <tr key={idx}>
-                <td className="ta-left">{it.name || ""}</td>
-                <td>{toInt(it.quantity || 0)}</td>
-                <td>{money(toInt(it.unitPriceCents || 0), row.currency || currency)}</td>
-                <td>{money(toInt(it.lineTotalCents || 0), row.currency || currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Zahlungsinfo/Hinweis */}
-        <div className="ph-note">
-          {dueTxt
-            ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
-            : <>Bitte überweisen Sie den Gesamtbetrag mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
-          }
-        </div>
-
-        {/* Summen */}
-        <div className="ph-totals">
-          <div>Netto: <strong>{money(row.netCents, row.currency || currency)}</strong></div>
-          {firm.kleinunternehmer ? (
-            <div style={{ fontSize: "9pt", margin: "4px 0", color: "#555" }}>
-              Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.
-            </div>
-          ) : (
-            <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
-          )}
-          <div className="ph-total">Gesamt: <strong>{money(row.grossCents, row.currency || currency)}</strong></div>
-        </div>
-
-        {/* Fußzeile – Bank/Steuer */}
-        <div className="ph-footer">
-          <div className="ph-footer-col">
-            {(firm.bankInstitution || firm.bankRecipient || firm.bankIban || firm.bankBic || firm.bankAccount) && (
-              <span>
-                <strong>Bankverbindung:</strong>{" "}
-                {firm.bankInstitution || firm.bankRecipient || firm.bankIban || firm.bankBic
-                  ? `Institut: ${firm.bankInstitution || "-"} | Empfänger: ${firm.bankRecipient || "-"} | IBAN: ${firm.bankIban || "-"} | BIC: ${firm.bankBic || "-"}`
-                  : firm.bankAccount.replace(/\n/g, " | ")}
-              </span>
-            )}
-          </div>
-          <div className="ph-footer-col" style={{ textAlign: "right" }}>
-            {firm.vatId && <span><strong>USt-ID:</strong> {firm.vatId}</span>}
-          </div>
-        </div>
-      </div>
-
-      <style jsx>{`
-        .print-page{ padding: 24px 28px; padding-bottom: 0px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; display: flex; flex-direction: column; box-sizing: border-box; }
-        @media print {
-          .print-page { min-height: 100vh; position: relative; }
-          .ph-footer { position: fixed; bottom: 0; left: 0; right: 0; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; }
-          /* Add bottom margin to the page when printing so content doesn't underlap fixed footer */
-          @page { margin-bottom: 60px; }
-        }
-        .ph-footer{ border-top: 1px solid #ddd; margin-top: 40px; padding-top: 16px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; }
-        .ph-footer-col{ line-height: 1.5; }
-        .ph-head{ display:flex; justify-content:space-between; gap:18px; }
-        .ph-left{ flex:1; min-width: 55%; }
-        .ph-right{ text-align:right; min-width: 35%; }
-        .ph-top-logo{ display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-        .ph-top-company{ font-size: 16pt; font-weight: 800; color: #333; }
-        .ph-top-slogan{ font-size: 11pt; color: #666; margin-top: 2px; }
-        .ph-logo{ max-height: 80px; }
-        .ph-left { container-type: inline-size; }
-        .ph-fromline {
-          font-weight: normal;
-          margin-top: 4px;
-          white-space: nowrap;
-          font-size: clamp(6px, 4cqi, 10pt);
-          text-decoration: underline;
-        }
-
-        .ph-recipient{ margin: 2px 0 10px; }
-        .ph-rec-name{ font-size:12pt; font-weight:700; }
-
-        .ph-title{ font-size: 18pt; font-weight: 800; margin-bottom: 6px; }
-        .ph-contact{ margin-top: 10px; }
-
-        .ph-table{ width:100%; border-collapse: collapse; margin-top: 16px; }
-        .ph-table th, .ph-table td{ border-bottom: 1px solid #ddd; padding: 8px; text-align:right; }
-        .ph-table .ta-left{ text-align:left; }
-
-        .ph-note{ margin: 14px 0; }
-
-        .ph-totals{ margin-top: 12px; text-align: right; }
-        .ph-total{ font-size: 14pt; font-weight: 800; margin-top: 6px; }
-
-        .ph-footer{ border-top: 1px solid #ddd; margin-top: 18px; padding-top: 10px; font-size: 10pt; color:#333; }
-      `}</style>
     </div>
   );
 }
