@@ -372,58 +372,60 @@ export default function ReceiptsPage(){
                     {isOpen && (
                       <tr>
                         <td colSpan={4} className="details-cell">
-                          <div className="detail-head">
-                            <div>
-                              <div className="muted">Beleg</div>
-                              <div className="h5">#{r.receiptNo || "—"}</div>
-                              {!!r.note && <div className="muted">Notiz: <strong>{r.note}</strong></div>}
+                          <div className="details-content-wrapper">
+                            <div className="detail-head">
+                              <div>
+                                <div className="muted">Beleg</div>
+                                <div className="h5">#{r.receiptNo || "—"}</div>
+                                {!!r.note && <div className="muted">Notiz: <strong>{r.note}</strong></div>}
+                              </div>
+                              <div className="actions">
+                                <a className="btn-ghost" href={`/belege/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
+                                <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); openEdit(r); }}>✏️ Bearbeiten</button>
+                                <button className="btn-ghost danger" onClick={(e)=>{ e.stopPropagation(); onDelete(r.id); }}>❌ Löschen</button>
+                              </div>
                             </div>
-                            <div className="actions">
-                              <a className="btn-ghost" href={`/belege/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
-                              <button className="btn-ghost" onClick={(e)=>{ e.stopPropagation(); openEdit(r); }}>✏️ Bearbeiten</button>
-                              <button className="btn-ghost danger" onClick={(e)=>{ e.stopPropagation(); onDelete(r.id); }}>❌ Löschen</button>
+
+                            {details[r.id]?.loading && <div className="muted" style={{padding:"6px 0"}}>Details laden…</div>}
+                            {details[r.id]?.err && !details[r.id].loading && <div style={{ color:"#b91c1c" }}>Fehler: {details[r.id].err}</div>}
+
+                            {!!details[r.id]?.data?.items?.length && (
+                              <div className="table-wrap positions">
+                                <table className="table table-fixed inner-table" style={{ minWidth:500 }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ width:"50%" }}>Bezeichnung</th>
+                                      <th style={{ width:"10%" }}>Menge</th>
+                                      <th style={{ width:"20%" }}>Einzelpreis</th>
+                                      <th style={{ width:"20%" }}>Summe</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {details[r.id].data.items.map((it,i)=>{
+                                      const qty = toInt(it.quantity||0);
+                                      const unit= toInt(it.unitPriceCents||0);
+                                      const base= toInt(it.baseCents||0);
+                                      const line= toInt(it.lineTotalCents ?? ((qty*unit)+base));
+                                      return (
+                                        <tr key={i}>
+                                          <td className="ellipsis">
+                                            {it.name || "—"}
+                                            {base > 0 && <div style={{ fontSize:11, opacity:0.7 }}>inkl. Grundpreis: {money(base, currency)}</div>}
+                                          </td>
+                                          <td>{qty}</td>
+                                          <td>{money(unit, currency)}</td>
+                                          <td>{money(line, r.currency || currency)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            <div className="totals">
+                              Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                             </div>
-                          </div>
-
-                          {details[r.id]?.loading && <div className="muted" style={{padding:"6px 0"}}>Details laden…</div>}
-                          {details[r.id]?.err && !details[r.id].loading && <div style={{ color:"#b91c1c" }}>Fehler: {details[r.id].err}</div>}
-
-                          {!!details[r.id]?.data?.items?.length && (
-                            <div className="table-wrap positions">
-                              <table className="table table-fixed inner-table" style={{ minWidth:500 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ width:"50%" }}>Bezeichnung</th>
-                                    <th style={{ width:"10%" }}>Menge</th>
-                                    <th style={{ width:"20%" }}>Einzelpreis</th>
-                                    <th style={{ width:"20%" }}>Summe</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {details[r.id].data.items.map((it,i)=>{
-                                    const qty = toInt(it.quantity||0);
-                                    const unit= toInt(it.unitPriceCents||0);
-                                    const base= toInt(it.baseCents||0);
-                                    const line= toInt(it.lineTotalCents ?? ((qty*unit)+base));
-                                    return (
-                                      <tr key={i}>
-                                        <td className="ellipsis">
-                                          {it.name || "—"}
-                                          {base > 0 && <div style={{ fontSize:11, opacity:0.7 }}>inkl. Grundpreis: {money(base, currency)}</div>}
-                                        </td>
-                                        <td>{qty}</td>
-                                        <td>{money(unit, r.currency || currency)}</td>
-                                        <td>{money(line, r.currency || currency)}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-
-                          <div className="totals">
-                            Netto: {money(r.netCents, r.currency || currency)} · USt: {money(r.taxCents, r.currency || currency)} · Gesamt: {money(r.grossCents, r.currency || currency)}
                           </div>
                         </td>
                       </tr>
@@ -586,7 +588,8 @@ export default function ReceiptsPage(){
         .table-fixed{ table-layout:fixed }
 
         /* Zwingt die Detail-Zelle, die Elterntabelle NICHT aufzudehnen, sodass diese exakt ins Layout passt */
-        .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; }
+        .details-cell { background:var(--panel-2); max-width: 0; width: 100%; box-sizing: border-box; padding: 0 !important; }
+        .details-content-wrapper { display: grid; padding: 10px; }
         .detail-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0 6px }
         .actions{ display:flex; gap:8px; flex-wrap:wrap }
         .actions .danger{ color:#c00; border-color:#c00 }
