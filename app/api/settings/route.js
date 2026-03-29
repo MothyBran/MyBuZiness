@@ -12,6 +12,7 @@ async function fetchOne(userId) {
     `SELECT
        "id",
        COALESCE("companyName",'')       AS "companyName",
+       COALESCE("slogan",'')            AS "slogan",
        COALESCE("ownerName",'')         AS "ownerName",
        COALESCE("address1",'')          AS "address1",
        COALESCE("address2",'')          AS "address2",
@@ -72,6 +73,7 @@ export async function PUT(request) {
 
     const payload = {
       companyName: body.companyName ?? null,
+      slogan: body.slogan ?? null,
       ownerName,
       address1: body.address1 ?? null,
       address2: body.address2 ?? null,
@@ -100,12 +102,12 @@ export async function PUT(request) {
       const id = uuid();
       await q(
         `INSERT INTO "Settings" (
-           "id","companyName","ownerName","address1","address2","postalCode","city",
+           "id","companyName","slogan","ownerName","address1","address2","postalCode","city",
            "phone","email","website","bankAccount","bankInstitution","bankRecipient","bankIban","bankBic","vatId","kleinunternehmer","currency",
            "logoUrl","primaryColor","secondaryColor","taxRateDefault",
            "createdAt","updatedAt","userId"
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,
+           $1,$2,$24,$3,$4,$5,$6,$7,
            $8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
            now(), now(), $23
          )`,
@@ -114,13 +116,13 @@ export async function PUT(request) {
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.taxRateDefault,
-          userId
+          userId, payload.slogan
         ]
       );
     } else {
       await q(
         `UPDATE "Settings" SET
-           "companyName"=$2, "ownerName"=$3, "address1"=$4, "address2"=$5, "postalCode"=$6, "city"=$7,
+           "companyName"=$2, "slogan"=$24, "ownerName"=$3, "address1"=$4, "address2"=$5, "postalCode"=$6, "city"=$7,
            "phone"=$8, "email"=$9, "website"=$10, "bankAccount"=$11, "bankInstitution"=$12, "bankRecipient"=$13, "bankIban"=$14, "bankBic"=$15, "vatId"=$16, "kleinunternehmer"=$17, "currency"=$18,
            "logoUrl"=$19, "primaryColor"=$20, "secondaryColor"=$21,
            "taxRateDefault"=$22,
@@ -132,7 +134,7 @@ export async function PUT(request) {
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor,
           payload.taxRateDefault,
-          userId
+          userId, payload.slogan
         ]
       );
     }

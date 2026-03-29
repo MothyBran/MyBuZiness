@@ -734,7 +734,10 @@ function PrintArea({ row, settings, currency, customer }) {
         {/* Top Logo and Company Name */}
         <div className="ph-top-logo">
           {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
-          {firm.companyName && <div className="ph-top-company">{firm.companyName}</div>}
+          <div>
+            {firm.companyName && <div className="ph-top-company">{firm.companyName}</div>}
+            {firm.slogan && <div className="ph-top-slogan">{firm.slogan}</div>}
+          </div>
         </div>
 
         {/* Kopf */}
@@ -842,6 +845,7 @@ function PrintArea({ row, settings, currency, customer }) {
         .ph-right{ text-align:right; min-width: 35%; }
         .ph-top-logo{ display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
         .ph-top-company{ font-size: 16pt; font-weight: 800; color: #333; }
+        .ph-top-slogan{ font-size: 11pt; color: #666; margin-top: 2px; }
         .ph-logo{ max-height: 80px; }
         .ph-left { container-type: inline-size; }
         .ph-fromline {
