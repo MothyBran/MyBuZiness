@@ -29,7 +29,8 @@ export async function POST(request) {
     if (!user || user.role !== "admin") return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
     await initDb();
-    const { name, email } = await request.json();
+    let { name, email } = await request.json();
+    email = email?.toLowerCase();
 
     if (!email || !name) {
       return NextResponse.json({ ok: false, error: "Name und E-Mail sind erforderlich." }, { status: 400 });

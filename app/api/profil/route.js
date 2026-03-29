@@ -25,7 +25,8 @@ export async function PUT(request) {
     const user = await getUser();
     if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
-    const { name, email, password } = await request.json();
+    let { name, email, password } = await request.json();
+    email = email?.toLowerCase();
 
     if (!name || !email) {
       return NextResponse.json({ ok: false, error: "Name und E-Mail sind erforderlich." }, { status: 400 });

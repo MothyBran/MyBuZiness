@@ -6,7 +6,8 @@ import { cookies } from "next/headers";
 export async function POST(request) {
   try {
     await initDb();
-    const { email, password, name, licenseKey } = await request.json();
+    let { email, password, name, licenseKey } = await request.json();
+    email = email?.toLowerCase();
 
     if (!email || !password || !licenseKey) {
       return NextResponse.json(
