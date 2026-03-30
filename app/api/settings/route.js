@@ -34,6 +34,8 @@ async function fetchOne(userId) {
        COALESCE("secondaryColor",'#0ea5e9') AS "secondaryColor",
        /* NEU: Standard-Steuersatz, nur relevant wenn NICHT KU */
        COALESCE("taxRateDefault", 19)::int AS "taxRateDefault",
+       "dashboardConfig",
+       "receiptNoteDefault",
        "createdAt",
        "updatedAt"
      FROM "Settings"
@@ -94,6 +96,8 @@ export async function PUT(request) {
       primaryColor: body.primaryColor ?? "#06b6d4",
       secondaryColor: body.secondaryColor ?? "#0ea5e9",
       taxRateDefault, // NEU
+      dashboardConfig: body.dashboardConfig ?? {},
+      receiptNoteDefault: body.receiptNoteDefault ?? "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
     };
 
     const existing = await fetchOne(userId);
@@ -105,10 +109,12 @@ export async function PUT(request) {
            "id","companyName","slogan","ownerName","address1","address2","postalCode","city",
            "phone","email","website","bankAccount","bankInstitution","bankRecipient","bankIban","bankBic","vatId","kleinunternehmer","currency",
            "logoUrl","primaryColor","secondaryColor","taxRateDefault",
+           "dashboardConfig","receiptNoteDefault",
            "createdAt","updatedAt","userId"
          ) VALUES (
            $1,$2,$24,$3,$4,$5,$6,$7,
            $8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+           $25,$26,
            now(), now(), $23
          )`,
         [
@@ -116,7 +122,8 @@ export async function PUT(request) {
           payload.companyName, payload.ownerName, payload.address1, payload.address2, payload.postalCode, payload.city,
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.taxRateDefault,
-          userId, payload.slogan
+          userId, payload.slogan,
+          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault
         ]
       );
     } else {
@@ -126,6 +133,7 @@ export async function PUT(request) {
            "phone"=$8, "email"=$9, "website"=$10, "bankAccount"=$11, "bankInstitution"=$12, "bankRecipient"=$13, "bankIban"=$14, "bankBic"=$15, "vatId"=$16, "kleinunternehmer"=$17, "currency"=$18,
            "logoUrl"=$19, "primaryColor"=$20, "secondaryColor"=$21,
            "taxRateDefault"=$22,
+           "dashboardConfig"=$25, "receiptNoteDefault"=$26,
            "updatedAt"=now()
          WHERE "id" = $1 AND "userId" = $23`,
         [
@@ -134,7 +142,8 @@ export async function PUT(request) {
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor,
           payload.taxRateDefault,
-          userId, payload.slogan
+          userId, payload.slogan,
+          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault
         ]
       );
     }

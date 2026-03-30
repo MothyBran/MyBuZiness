@@ -28,6 +28,11 @@ export default function SchnellerfassungPage() {
   const [tempGivenCents, setTempGivenCents] = useState(0);
   const [tempPaymentMethod, setTempPaymentMethod] = useState("cash");
 
+  // Success Popups
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [createdReceiptId, setCreatedReceiptId] = useState(null);
+
   useEffect(() => {
     async function load() {
       try {
@@ -140,7 +145,7 @@ export default function SchnellerfassungPage() {
       currency,
       vatExempt: !!vatExempt,
       discountCents: totals.disc,
-      note: "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
+      note: settings?.receiptNoteDefault ?? "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
       items,
       givenCents,
       changeCents: change,
@@ -158,17 +163,75 @@ export default function SchnellerfassungPage() {
         alert("Speichern fehlgeschlagen: " + (js.error || "Unbekannter Fehler"));
         return;
       }
-      // Success, go back to dashboard
-      router.push("/");
+
+      const wasKassenModus = paymentMethod !== null || givenCents !== null;
+      setShowCart(false);
+      setShowPayment(false);
+
+      if (wasKassenModus && js.data?.id) {
+        setCreatedReceiptId(js.data.id);
+        setShowPrintModal(true);
+      } else {
+        setShowSuccessBanner(true);
+        setTimeout(() => {
+          setShowSuccessBanner(false);
+          router.push("/");
+        }, 2000);
+      }
     } catch (e) {
       alert("Speichern fehlgeschlagen.");
     }
+  };
+
+  const handlePrintYes = () => {
+    if (createdReceiptId) {
+      window.open(`/belege/${createdReceiptId}/druck`, '_blank');
+    }
+    setShowPrintModal(false);
+    router.push("/");
+  };
+
+  const handlePrintNo = () => {
+    setShowPrintModal(false);
+    router.push("/");
   };
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <Page>
+      {/* Banner */}
+      {showSuccessBanner && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          background: "var(--success, #10b981)",
+          color: "white",
+          padding: "16px",
+          textAlign: "center",
+          fontWeight: "bold",
+          zIndex: 9999,
+          animation: "slideDown 0.3s ease-out"
+        }}>
+          Beleg erfolgreich erstellt!
+        </div>
+      )}
+
+      {/* Print Modal */}
+      {showPrintModal && (
+        <div className="cart-overlay" style={{ zIndex: 110 }}>
+          <div className="cart-panel" style={{ width: "auto", maxWidth: "400px", padding: "24px", textAlign: "center", borderRadius: "var(--radius-lg)" }}>
+            <h2 style={{ marginTop: 0 }}>Beleg drucken?</h2>
+            <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "24px" }}>
+              <button className="btn btn--subtle" onClick={handlePrintNo}>Nein</button>
+              <button className="btn btn--primary" onClick={handlePrintYes}>Ja</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h1 className="page-title">Schnellerfassung</h1>
@@ -568,6 +631,11 @@ export default function SchnellerfassungPage() {
 
         @keyframes slideUp {
           from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+
+        @keyframes slideDown {
+          from { transform: translateY(-100%); }
           to { transform: translateY(0); }
         }
 

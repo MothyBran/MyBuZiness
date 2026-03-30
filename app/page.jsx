@@ -52,6 +52,7 @@ export default function HomePage() {
     customers: 0, products: 0, invoices: 0, receipts: 0,
   });
   const [currency, setCurrency] = useState("EUR");
+  const [dashboardConfig, setDashboardConfig] = useState({});
 
   const [latestReceipts, setLatestReceipts] = useState([]);
   const [latestInvoices, setLatestInvoices] = useState([]);
@@ -67,6 +68,8 @@ export default function HomePage() {
       // Dashboard
       const dash = await safeGet("/api/dashboard", { ok: true, data: {} });
       const d = dash?.data || {};
+
+      setDashboardConfig(d.settings?.dashboardConfig || cfg?.dashboardConfig || {});
 
       // Fallbacks
       const receipts = await safeGet("/api/receipts?limit=5", { ok: true, data: [] });
@@ -114,13 +117,13 @@ export default function HomePage() {
       <PageHeader title="Dashboard" />
 
       <div className="kpi-grid mb-6">
-        <KpiCard title="Heute" value={moneyFromCents(stats.today, currency)} icon="euro" tone="brand" />
-        <KpiCard title="Letzte 7 Tage" value={moneyFromCents(stats.last7, currency)} />
-        <KpiCard title="Letzte 30 Tage" value={moneyFromCents(stats.last30, currency)} />
-        <KpiCard title="Kunden" value={stats.customers} icon="user" />
-        <KpiCard title="Produkte" value={stats.products} icon="box" />
-        <KpiCard title="Rechnungen" value={stats.invoices} icon="file-text" />
-        <KpiCard title="Belege" value={stats.receipts} icon="receipt" />
+        {dashboardConfig.today?.visible !== false && <KpiCard title="Heute" value={moneyFromCents(stats.today, currency)} icon="euro" tone="brand" defaultCensored={dashboardConfig.today?.censored} />}
+        {dashboardConfig.last7?.visible !== false && <KpiCard title="Letzte 7 Tage" value={moneyFromCents(stats.last7, currency)} defaultCensored={dashboardConfig.last7?.censored} />}
+        {dashboardConfig.last30?.visible !== false && <KpiCard title="Letzte 30 Tage" value={moneyFromCents(stats.last30, currency)} defaultCensored={dashboardConfig.last30?.censored} />}
+        {dashboardConfig.customers?.visible !== false && <KpiCard title="Kunden" value={stats.customers} icon="user" defaultCensored={dashboardConfig.customers?.censored} />}
+        {dashboardConfig.products?.visible !== false && <KpiCard title="Produkte" value={stats.products} icon="box" defaultCensored={dashboardConfig.products?.censored} />}
+        {dashboardConfig.invoices?.visible !== false && <KpiCard title="Rechnungen" value={stats.invoices} icon="file-text" defaultCensored={dashboardConfig.invoices?.censored} />}
+        {dashboardConfig.receipts?.visible !== false && <KpiCard title="Belege" value={stats.receipts} icon="receipt" defaultCensored={dashboardConfig.receipts?.censored} />}
       </div>
 
       <PageGrid>
@@ -238,19 +241,30 @@ export default function HomePage() {
 }
 
 /* ========== Subcomponents ========== */
-function KpiCard({ title, value, tone, icon }) {
+function KpiCard({ title, value, tone, icon, defaultCensored = false }) {
+  const [showReal, setShowReal] = useState(false);
+
+  // If censored, but user clicked it, show it for 3 seconds
+  useEffect(() => {
+    if (showReal) {
+      const timer = setTimeout(() => setShowReal(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showReal]);
+
+  const displayValue = (defaultCensored && !showReal) ? "*****" : (value ?? 0);
+
   return (
-    <div className="card" style={{ padding: "1.25rem", position: "relative" }}>
+    <div className="card" style={{ padding: "1.25rem", position: "relative", cursor: defaultCensored ? "pointer" : "default" }} onClick={() => defaultCensored && setShowReal(true)}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div className="kpi-title">{title}</div>
           <div className="kpi-value" style={{ color: tone === "brand" ? "var(--brand)" : "inherit" }}>
-            {value ?? 0}
+            {displayValue}
           </div>
         </div>
         {icon && (
           <div className="kpi-icon">
-             {/* Using a simple placeholder if UI.Icon is not available or mapped */}
              <Icon name={icon} />
           </div>
         )}

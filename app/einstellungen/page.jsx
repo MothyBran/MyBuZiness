@@ -355,8 +355,9 @@ export default function SettingsPage() {
             { key: "invoices", label: "Rechnungen" },
             { key: "receipts", label: "Belege" }
           ].map(({ key, label }) => {
-            const isVisible = dashboardConfig[key]?.visible !== false; // Default true
-            const isCensored = dashboardConfig[key]?.censored === true; // Default false
+            const config = dashboardConfig || {};
+            const isVisible = config[key]?.visible !== false; // Default true
+            const isCensored = config[key]?.censored === true; // Default false
             return (
               <div key={key} style={{ padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel)" }}>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
