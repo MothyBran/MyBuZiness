@@ -46,8 +46,7 @@ export default function InstallPrompt() {
   async function installApp() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    console.log("Install choice:", choice?.outcome);
+    await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setOpen(false);
   }
