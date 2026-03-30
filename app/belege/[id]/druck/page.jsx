@@ -52,7 +52,6 @@ function ReceiptPrintContent({ params }) {
     }
   }
 
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>;
   useEffect(() => {
     if (data && autoPrint) {
       // Allow render to finish before printing
@@ -73,6 +72,7 @@ function ReceiptPrintContent({ params }) {
     }
   }, [autoPrint]);
 
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>;
   if (err || !data) return <div style={{ padding: "2rem", color: "red", textAlign: "center" }}>Fehler: {err || "Beleg nicht gefunden"}</div>;
 
   const curr = data.currency || "EUR";

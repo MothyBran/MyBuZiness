@@ -87,9 +87,8 @@ export default function InvoicePrintPage({ params }) {
           .no-print { display: none !important; }
           .print-scale-wrapper { transform: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
           .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; max-width: none !important; min-height: 0; position: relative; }
-          .ph-footer { position: fixed; bottom: 0; left: 0; right: 0; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; }
-          /* Add bottom margin to the page when printing so content doesn't underlap fixed footer */
-          @page { margin-bottom: 60px; }
+          .ph-footer { position: relative; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; margin-top: auto; }
+          /* No margin bottom so we don't trigger browser footers */
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           ::-webkit-scrollbar { display: none; }
         }
@@ -133,8 +132,8 @@ export default function InvoicePrintPage({ params }) {
           font-size: 1rem; cursor: pointer; font-weight: bold;
         }
 
-        .print-page{ padding: 24px 28px; padding-bottom: 0px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; display: flex; flex-direction: column; box-sizing: border-box; }
-        .ph-footer{ border-top: 1px solid #ddd; margin-top: 40px; padding-top: 16px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; }
+        .print-page{ padding: 24px 28px; padding-bottom: 0px; font: 12pt/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; display: flex; flex-direction: column; box-sizing: border-box; flex: 1; min-height: calc(100% - 40px); }
+        .ph-footer{ border-top: 1px solid #ddd; margin-top: auto; padding-top: 16px; font-size: 9pt; color:#333; display: flex; justify-content: space-between; gap: 16px; page-break-inside: avoid; margin-bottom: 12px; }
         .ph-footer-col{ line-height: 1.5; }
         .ph-head{ display:flex; justify-content:space-between; gap:18px; }
         .ph-left{ flex:1; min-width: 55%; }
