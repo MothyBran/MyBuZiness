@@ -1,6 +1,6 @@
 {
-  "name": "BuZiness",
-  "short_name": "BuZiness",
+  "name": "My BuZiness",
+  "short_name": "My BuZiness",
   "description": "Schnell erfassen, sicher verwalten.",
   "start_url": "/",
   "scope": "/",

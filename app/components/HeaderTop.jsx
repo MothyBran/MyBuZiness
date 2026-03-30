@@ -26,7 +26,7 @@ export default function HeaderTop({ user }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <Image src="/logo.png" alt="BuZiness Logo" width={80} height={80} priority style={{ borderRadius: 4 }} />
             <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <h1 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>BuZiness</h1>
+              <h1 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>My BuZiness</h1>
               <p className="subtle" style={{ marginTop: 2 }}>„Schnell erfassen, sicher verwalten.“</p>
             </div>
           </div>
