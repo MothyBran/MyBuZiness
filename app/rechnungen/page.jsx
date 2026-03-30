@@ -208,7 +208,7 @@ export default function InvoicesPage() {
                                 <div className="muted">Status: <strong>{stLabel}</strong></div>
                               </div>
                               <div className="actions">
-                                <a style={S.ghost} href={`/rechnungen/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>
+                                <a style={S.ghost} href={`/rechnungen/${r.id}/druck`} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>🖨️ Druckansicht</a>
                                 <button style={S.ghost} onClick={(e)=>{ e.stopPropagation(); setEditRow(r); }}>✏️ Korrigieren</button>
                                 <button style={S.danger} onClick={(e)=>{ e.stopPropagation(); deleteInvoice(r.id); }}>❌ Löschen</button>
                               </div>
