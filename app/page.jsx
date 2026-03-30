@@ -5,6 +5,19 @@ import { useEffect, useState } from "react";
 import { Page, PageHeader, Card, PageGrid, Col, Icon } from "./components/UI";
 
 /* -------- Utils -------- */
+function computeInvoiceStatus(row) {
+  const raw = String(row.status || "").toLowerCase();
+  if (raw === "storniert" || raw === "canceled") return "canceled";
+  if (raw === "done" || raw === "abgeschlossen") return "done";
+  const due = row.dueDate ? new Date(row.dueDate) : null;
+  if (due) {
+    const t0 = new Date(); t0.setHours(0,0,0,0);
+    const d0 = new Date(due); d0.setHours(0,0,0,0);
+    if (d0 < t0 && raw === "open") return "overdue";
+  }
+  return "open";
+}
+
 async function safeGet(url, fallback) {
   try {
     const r = await fetch(url, { cache: "no-store" });
@@ -183,11 +196,20 @@ export default function HomePage() {
                 const href = r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
                   : r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}`
                   : "/rechnungen";
+
+                const status = computeInvoiceStatus(r);
+                let statusColor = "";
+                if (status === "overdue") statusColor = "#ef4444";
+                else if (status === "open") statusColor = "#f59e0b";
+                else if (status === "done") statusColor = "#10b981";
+                else if (status === "canceled") statusColor = "#9ca3af";
+
                 return {
                   icon: "📄",
                   title: no,
                   meta: [dateStr, r.customerName].filter(Boolean).join(" · "),
                   href,
+                  statusColor,
                 };
               }}
             />
@@ -295,7 +317,11 @@ function List({ items, empty, mapItem }) {
             className="list-item"
             style={{ opacity: m.isOverdue ? 0.6 : 1 }}
           >
-            <div className="list-icon" style={{ backgroundColor: m.isOverdue ? "var(--muted)" : "var(--panel-2)", color: m.isOverdue ? "white" : "var(--text-weak)" }}>
+            <div className="list-icon" style={{
+              backgroundColor: m.isOverdue ? "var(--muted)" : "var(--panel-2)",
+              color: m.isOverdue ? "white" : "var(--text-weak)",
+              border: m.statusColor ? `2px solid ${m.statusColor}` : "none"
+            }}>
               {m.icon}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>

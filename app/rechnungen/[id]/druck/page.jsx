@@ -237,14 +237,6 @@ export default function InvoicePrintPage({ params }) {
             </tbody>
           </table>
 
-          {/* Zahlungsinfo/Hinweis */}
-          <div className="ph-note">
-            {dueTxt
-              ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
-              : <>Bitte überweisen Sie den Gesamtbetrag mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
-            }
-          </div>
-
           {/* Summen */}
           <div className="ph-totals">
             <div>Netto: <strong>{money(row.netCents, row.currency || currency)}</strong></div>
@@ -256,6 +248,14 @@ export default function InvoicePrintPage({ params }) {
               <div>USt: <strong>{money(row.taxCents, row.currency || currency)}</strong></div>
             )}
             <div className="ph-total">Gesamt: <strong>{money(row.grossCents, row.currency || currency)}</strong></div>
+          </div>
+
+          {/* Zahlungsinfo/Hinweis */}
+          <div className="ph-note">
+            {dueTxt
+              ? <>Bitte überweisen Sie den Gesamtbetrag bis zum <strong>{dueTxt}</strong> mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
+              : <>Bitte überweisen Sie den Gesamtbetrag mit dem Verwendungszweck: "{row.invoiceNo}" auf das unten aufgeführte Bankkonto.</>
+            }
           </div>
 
           {/* Fußzeile – Bank/Steuer */}

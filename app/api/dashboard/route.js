@@ -76,10 +76,11 @@ export async function GET() {
     // --- Recent Invoices inkl. Kundenname ---
     const recentInvoices = (await q(`
       SELECT i."id", i."invoiceNo", i."issueDate", i."grossCents", i."currency",
+             i."status", i."dueDate",
              i."createdAt", i."updatedAt", c."name" AS "customerName"
       FROM "Invoice" i
       LEFT JOIN "Customer" c ON c."id" = i."customerId"
-      WHERE i."userId"=$1 AND i."status" != 'canceled' AND i."status" != 'storniert'
+      WHERE i."userId"=$1
       ORDER BY i."createdAt" DESC NULLS LAST, i."issueDate" DESC NULLS LAST, i."id" DESC
       LIMIT 10
     `, [userId])).rows;
