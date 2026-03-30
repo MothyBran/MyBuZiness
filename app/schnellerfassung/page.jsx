@@ -185,7 +185,7 @@ export default function SchnellerfassungPage() {
 
   const handlePrintYes = () => {
     if (createdReceiptId) {
-      window.open(`/belege/${createdReceiptId}/druck`, '_blank');
+      window.open(`/belege/${createdReceiptId}/druck?autoPrint=true`, '_blank');
     }
     setShowPrintModal(false);
     router.push("/");

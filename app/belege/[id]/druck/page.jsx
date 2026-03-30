@@ -1,7 +1,8 @@
 // app/belege/[id]/druck/page.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import React from "react";
 import Barcode from "react-barcode";
 
@@ -16,7 +17,9 @@ function fmtDEDate(input){
   return isNaN(d) ? "—" : d.toLocaleDateString("de-DE");
 }
 
-export default function ReceiptPrintPage({ params }) {
+function ReceiptPrintContent({ params }) {
+  const searchParams = useSearchParams();
+  const autoPrint = searchParams.get('autoPrint') === 'true';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -50,6 +53,26 @@ export default function ReceiptPrintPage({ params }) {
   }
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>;
+  useEffect(() => {
+    if (data && autoPrint) {
+      // Allow render to finish before printing
+      const timer = setTimeout(() => {
+        window.print();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [data, autoPrint]);
+
+  useEffect(() => {
+    if (autoPrint) {
+      const handleAfterPrint = () => {
+        window.close();
+      };
+      window.addEventListener('afterprint', handleAfterPrint);
+      return () => window.removeEventListener('afterprint', handleAfterPrint);
+    }
+  }, [autoPrint]);
+
   if (err || !data) return <div style={{ padding: "2rem", color: "red", textAlign: "center" }}>Fehler: {err || "Beleg nicht gefunden"}</div>;
 
   const curr = data.currency || "EUR";
@@ -64,16 +87,27 @@ export default function ReceiptPrintPage({ params }) {
           margin: 0;
         }
         @media print {
-          body { background: white !important; color: black !important; margin: 0; padding: 0; }
+          html, body { height: auto !important; background: white !important; color: black !important; margin: 0; padding: 0; }
           .no-print { display: none !important; }
-          .print-area { margin: 0 auto; padding: 4mm; width: 80mm; max-width: 80mm; box-shadow: none; border: none; font-size: 10pt; line-height: 1.2; }
+          .print-scale-wrapper { transform: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
+          .print-area { margin: 0 auto; padding: 4mm; width: 80mm !important; max-width: 80mm !important; min-width: 80mm !important; box-shadow: none; border: none; font-size: 10pt; line-height: 1.2; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          ::-webkit-scrollbar { display: none; }
         }
-        body { background: #f8fafc; color: var(--color-text, #1e293b); }
+        body { background: #f8fafc; color: var(--color-text, #1e293b); margin: 0; }
+        .print-scale-wrapper {
+          display: flex;
+          justify-content: center;
+          width: 100%;
+          overflow-x: auto;
+          padding: 1rem;
+          box-sizing: border-box;
+        }
         .print-area {
-          width: 80mm; max-width: 80mm; margin: 2rem auto; padding: 4mm;
+          width: 80mm; min-width: 80mm; max-width: 80mm; margin: 0 auto; padding: 4mm;
           background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
           font-size: 10pt; line-height: 1.2;
+          box-sizing: border-box;
         }
         .header { margin-bottom: 1rem; border-bottom: 1px dashed #e2e8f0; padding-bottom: 0.5rem; text-align: center; }
         .logo { max-width: 60mm; max-height: 20mm; margin: 0 auto 10px; display: block; object-fit: contain; }
@@ -105,8 +139,11 @@ export default function ReceiptPrintPage({ params }) {
         }
       `}} />
 
-      <button className="no-print btn-print" onClick={() => window.print()}>🖨️ Jetzt drucken / als PDF speichern</button>
+      <div style={{ textAlign: "center" }}>
+        <button className="no-print btn-print" onClick={() => window.print()}>🖨️ Jetzt drucken / als PDF speichern</button>
+      </div>
 
+      <div className="print-scale-wrapper">
       <div className="print-area">
         <div className="header">
           {settings.logoUrl && <img src={settings.logoUrl} alt="Logo" className="logo" />}
@@ -228,6 +265,15 @@ export default function ReceiptPrintPage({ params }) {
         </div>
 
       </div>
+      </div>
     </>
+  );
+}
+
+export default function ReceiptPrintPage({ params }) {
+  return (
+    <Suspense fallback={<div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>}>
+      <ReceiptPrintContent params={params} />
+    </Suspense>
   );
 }
