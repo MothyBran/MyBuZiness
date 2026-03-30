@@ -2,7 +2,7 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-  connectionString: 'postgres://jules:jules@localhost:5432/mybuziness',
+  connectionString: 'postgres://postgres:postgres@localhost:5432/mybuziness',
   ssl: false,
 });
 

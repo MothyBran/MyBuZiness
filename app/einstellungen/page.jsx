@@ -321,6 +321,68 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Belege & Rechnungen */}
+      <section className="surface" style={{ marginTop:12 }}>
+        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Belege & Rechnungen</h2>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr" }}>
+          <Field label="Standard-Belegnotiz" hint="Wird vorausgefüllt bei neuen Belegen und Schnellerfassung.">
+            <input style={input} value={receiptNoteDefault} onChange={e=>setReceiptNoteDefault(e.target.value)} placeholder="Vielen Dank, ich freue mich auf deinen nächsten Besuch!" />
+          </Field>
+        </div>
+      </section>
+
+      {/* Dashboard Konfiguration */}
+      <section className="surface" style={{ marginTop:12 }}>
+        <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Dashboard Konfiguration</h2>
+        <div className="subtle" style={{ marginBottom: 16 }}>Wähle aus, welche Kacheln angezeigt werden sollen und ob die Werte standardmäßig zensiert (***) werden sollen. Zensierte Werte können per Klick kurzzeitig sichtbar gemacht werden.</div>
+        <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {[
+            { key: "today", label: "Heute" },
+            { key: "last7", label: "Letzte 7 Tage" },
+            { key: "last30", label: "Letzte 30 Tage" },
+            { key: "customers", label: "Kunden" },
+            { key: "products", label: "Produkte" },
+            { key: "invoices", label: "Rechnungen" },
+            { key: "receipts", label: "Belege" }
+          ].map(({ key, label }) => {
+            const isVisible = dashboardConfig[key]?.visible !== false; // Default true
+            const isCensored = dashboardConfig[key]?.censored === true; // Default false
+            return (
+              <div key={key} style={{ padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel)" }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={isVisible}
+                    onChange={(e) => {
+                      setDashboardConfig(prev => ({
+                        ...prev,
+                        [key]: { ...(prev[key] || {}), visible: e.target.checked }
+                      }));
+                    }}
+                  />
+                  Anzeigen
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", opacity: isVisible ? 1 : 0.5 }}>
+                  <input
+                    type="checkbox"
+                    disabled={!isVisible}
+                    checked={isCensored}
+                    onChange={(e) => {
+                      setDashboardConfig(prev => ({
+                        ...prev,
+                        [key]: { ...(prev[key] || {}), censored: e.target.checked }
+                      }));
+                    }}
+                  />
+                  Wert zensieren (***)
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Branding & Design */}
       <section className="surface" style={{ marginTop:12 }}>
         <h2 style={{ margin:"0 0 12px 0", fontSize:18 }}>Branding & Design</h2>
