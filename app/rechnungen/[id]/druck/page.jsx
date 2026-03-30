@@ -83,14 +83,15 @@ export default function InvoicePrintPage({ params }) {
       <style dangerouslySetInnerHTML={{__html: `
         @page { margin: 0; }
         @media print {
-          body { background: white !important; margin: 0; padding: 0; }
+          html, body { height: auto !important; background: white !important; margin: 0; padding: 0; }
           .no-print { display: none !important; }
           .print-scale-wrapper { transform: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
-          .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; max-width: none !important; min-height: 100vh; position: relative; }
+          .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; max-width: none !important; min-height: 0; position: relative; }
           .ph-footer { position: fixed; bottom: 0; left: 0; right: 0; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; }
           /* Add bottom margin to the page when printing so content doesn't underlap fixed footer */
           @page { margin-bottom: 60px; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          ::-webkit-scrollbar { display: none; }
         }
         body { background: #f8fafc; color: var(--color-text, #1e293b); margin: 0; overflow-x: hidden; }
 
@@ -161,7 +162,7 @@ export default function InvoicePrintPage({ params }) {
         .ph-table th, .ph-table td{ border-bottom: 1px solid #ddd; padding: 8px; text-align:right; }
         .ph-table .ta-left{ text-align:left; }
 
-        .ph-note{ margin: 14px 0; }
+        .ph-note{ margin-top: 3rem; margin-bottom: 14px; }
 
         .ph-totals{ margin-top: 12px; text-align: right; }
         .ph-total{ font-size: 14pt; font-weight: 800; margin-top: 6px; }
