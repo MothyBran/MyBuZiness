@@ -4,7 +4,7 @@ import { BRAND } from "@/lib/appBrand";
 
 export default function AppFooter() {
   return (
-    <footer style={wrap}>
+    <footer className="no-print" style={wrap}>
       {BRAND.footerNote && (
         <div style={bottomNote}>{BRAND.footerNote}</div>
       )}
