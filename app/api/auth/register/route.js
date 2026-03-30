@@ -17,6 +17,13 @@ export async function POST(request) {
     }
 
     // Server-side password strength validation
+    if (password.length > 72) {
+      return NextResponse.json(
+        { ok: false, error: "Das Passwort ist zu lang (maximal 72 Zeichen)." },
+        { status: 400 }
+      );
+    }
+
     let score = 0;
     if (password.length >= 8) score += 1;
     if (/[a-z]/.test(password)) score += 1;
