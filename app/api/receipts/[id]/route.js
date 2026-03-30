@@ -1,7 +1,6 @@
 // app/api/receipts/[id]/route.js
-import { initDb, q } from "@/lib/db";
+import { initDb, q, pool, uuid } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { randomUUID } from "crypto";
 
 const toInt = (v) => {
   const n = Number(v);
@@ -83,23 +82,27 @@ export async function DELETE(_req, { params }) {
  * Bearbeiten (PUT)
  */
 export async function PUT(req, { params }) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
     const { id } = await params;
     const body = await req.json().catch(()=> ({}));
 
+    await client.query("BEGIN");
+
     // Vorhandene Kopf-/Items holen (für Defaults & Summen) & Ownership Check
-    const head = (await q(
+    const head = (await client.query(
       `SELECT "vatExempt","currency","discountCents"
        FROM "Receipt" WHERE "id"=$1 AND "userId"=$2 LIMIT 1`,
       [id, userId]
     )).rows[0];
     if (!head) {
+      await client.query("ROLLBACK");
       return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     }
 
-    const existingItems = (await q(
+    const existingItems = (await client.query(
       `SELECT COALESCE("quantity",0) AS "quantity",
               COALESCE("unitPriceCents",0)::bigint AS "unitPriceCents",
               COALESCE("baseCents",0)::bigint AS "baseCents"
@@ -150,10 +153,8 @@ export async function PUT(req, { params }) {
     const grossCents = grossAfterDiscount;
     const netAfter = grossCents - taxCents;
 
-    await q("BEGIN");
-
     // Kopf aktualisieren
-    await q(
+    await client.query(
       `UPDATE "Receipt" SET
          "receiptNo"     = COALESCE($1,"receiptNo"),
          "date"          = COALESCE($2::date,"date"),
@@ -189,37 +190,42 @@ export async function PUT(req, { params }) {
 
     // Positionen ggf. ersetzen
     if (replaceItems) {
-      await q(`DELETE FROM "ReceiptItem" WHERE "receiptId"=$1`, [id]);
-      for (const it of body.items) {
-        const itemId = randomUUID();
+      await client.query(`DELETE FROM "ReceiptItem" WHERE "receiptId"=$1`, [id]);
+      const flat = [];
+      const rows = [];
+      for (let i = 0; i < body.items.length; i++) {
+        const it = body.items[i];
+        const itemId = uuid();
         const qty  = toInt(it.quantity || 0);
         const unit = toInt(it.unitPriceCents || 0);
         const base = toInt(it.baseCents || 0);
         const line = (qty * unit) + base;
-        await q(
-          `INSERT INTO "ReceiptItem"
-             ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
-           VALUES
-             ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(), now())`,
-          [
-            itemId,
-            id,
-            it.productId || null,
-            (it.name || "Position").trim(),
-            qty, unit, base, line,
-            it.taxRate !== undefined ? Number(it.taxRate) : 19
-          ]
-        );
+        const taxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
+
+        const offset = i * 9;
+        rows.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},$${offset + 8},$${offset + 9},now(),now())`);
+        flat.push(itemId, id, it.productId || null, (it.name || "Position").trim(), qty, unit, base, line, taxRate);
+      }
+
+      if (rows.length > 0) {
+          await client.query(
+            `INSERT INTO "ReceiptItem"
+               ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
+             VALUES ${rows.join(",")}`,
+            flat
+          );
       }
     }
 
-    await q("COMMIT");
+    await client.query("COMMIT");
     return Response.json({ ok:true, data:{ id } });
   } catch (e) {
-    try { await q("ROLLBACK"); } catch {}
+    try { await client.query("ROLLBACK"); } catch {}
     if (e.code === '23505' && e.constraint === 'Receipt_receiptNo_userId_key') {
       return new Response(JSON.stringify({ ok:false, error:"Diese Beleg-Nr. wird bereits verwendet. Bitte wähle eine andere." }), { status: 400 });
     }
     return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
+  } finally {
+    client.release();
   }
 }

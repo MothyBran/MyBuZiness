@@ -1,5 +1,5 @@
 // app/api/receipts/route.js
-import { initDb, q, uuid } from "@/lib/db";
+import { initDb, q, uuid, pool } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /** Integer-Helfer */
@@ -57,6 +57,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
@@ -80,16 +81,29 @@ export async function POST(request) {
     // Summen
     let totalGross = 0;
     let totalTax = 0;
+    const prepared = [];
     for (const it of items) {
-      let itemGross = (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
-      totalGross += itemGross;
+      const qty = toInt(it.quantity || 0);
+      const unit = toInt(it.unitPriceCents || 0);
+      const base = toInt(it.baseCents || 0);
+      const line = (qty * unit) + base;
+      totalGross += line;
 
       let itemTaxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
       if (vatExempt) itemTaxRate = 0;
 
-      const itemNet = Math.round(itemGross / (1 + (itemTaxRate / 100)));
-      const itemTax = itemGross - itemNet;
+      const itemNet = Math.round(line / (1 + (itemTaxRate / 100)));
+      const itemTax = line - itemNet;
       totalTax += itemTax;
+
+      prepared.push({
+          ...it,
+          quantity: qty,
+          unitPriceCents: unit,
+          baseCents: base,
+          lineTotalCents: line,
+          taxRate: itemTaxRate
+      });
     }
 
     const grossAfterDiscount = Math.max(0, totalGross - discountCents);
@@ -97,7 +111,7 @@ export async function POST(request) {
     const grossCents = grossAfterDiscount;
     const netAfter = grossCents - taxCents;
 
-    await q("BEGIN");
+    await client.query("BEGIN");
 
     if (!receiptNo) {
       // Auto-generate receipt number if not provided: BN-YYMM-XXX
@@ -106,7 +120,7 @@ export async function POST(request) {
       const mm = String(now.getMonth() + 1).padStart(2, "0");
       const prefix = `BN-${yy}${mm}-`;
 
-      const last = await q(
+      const last = await client.query(
         `SELECT COALESCE(MAX(
             NULLIF(substring("receiptNo" from '\\d+$'), '')::bigint
           ), 0)::bigint AS last
@@ -118,7 +132,7 @@ export async function POST(request) {
       receiptNo = `${prefix}${String(nextNum).padStart(3, "0")}`;
     }
 
-    await q(`
+    await client.query(`
       INSERT INTO "Receipt"
         ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId","givenCents","changeCents","paymentMethod")
       VALUES
@@ -126,27 +140,30 @@ export async function POST(request) {
       [id, receiptNo, date, vatExempt, currency, netAfter, taxCents, grossCents, discountCents, body.note || "", userId, givenCents, changeCents, paymentMethod]
     );
 
-    for (const it of items) {
-      const itemId = uuid();
-      const qty = toInt(it.quantity || 0);
-      const unit = toInt(it.unitPriceCents || 0);
-      const base = toInt(it.baseCents || 0);
-      const line = (qty * unit) + base;
-      await q(
+    if (prepared.length > 0) {
+      const flat = [];
+      const rows = [];
+      for (let i = 0; i < prepared.length; i++) {
+        const it = prepared[i];
+        const offset = i * 9;
+        rows.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},$${offset + 8},$${offset + 9},now(),now())`);
+        flat.push(uuid(), id, it.productId || null, (it.name || "Position").trim(), it.quantity, it.unitPriceCents, it.baseCents, it.lineTotalCents, it.taxRate);
+      }
+      await client.query(
         `INSERT INTO "ReceiptItem"
           ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","taxRate","createdAt","updatedAt")
-         VALUES
-          ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-        [uuid(), id, it.productId || null, (it.name || "Position").trim(), toInt(it.quantity||0), toInt(it.unitPriceCents||0), toInt(it.baseCents||0), line, it.taxRate !== undefined ? Number(it.taxRate) : 19]
+         VALUES ${rows.join(",")}`,
+        flat
       );
     }
-    await q("COMMIT");
+
+    await client.query("COMMIT");
 
     return new Response(JSON.stringify({ ok:true, data:{ id, receiptNo } }), {
       status: 201, headers: { "content-type":"application/json" }
     });
   } catch (e) {
-    try { await q("ROLLBACK"); } catch {}
+    try { await client.query("ROLLBACK"); } catch {}
     if (e.code === '23505' && e.constraint === 'Receipt_receiptNo_userId_key') {
       return new Response(JSON.stringify({ ok:false, error: "Diese Beleg-Nr. wird bereits verwendet. Bitte wähle eine andere." }), {
         status: 400, headers: { "content-type":"application/json" }
@@ -155,5 +172,7 @@ export async function POST(request) {
     return new Response(JSON.stringify({ ok:false, error: String(e) }), {
       status: e.message === "Unauthorized" ? 401 : 400, headers: { "content-type":"application/json" }
     });
+  } finally {
+    client.release();
   }
 }

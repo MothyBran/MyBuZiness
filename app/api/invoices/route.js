@@ -1,5 +1,5 @@
 // app/api/invoices/route.js
-import { initDb, q, uuid } from "@/lib/db";
+import { initDb, q, uuid, pool } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /** Helpers */
@@ -119,6 +119,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
@@ -134,7 +135,7 @@ export async function POST(request) {
     }
 
     // Einstellungen
-    const settings = (await q(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
+    const settings = (await client.query(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
@@ -148,7 +149,7 @@ export async function POST(request) {
       const mm = String(baseDate.getMonth() + 1).padStart(2, "0");
       const yymm = `${yy}${mm}`;
       const pattern = `^RN-${yymm}-(\\d{3})$`;
-      const row = (await q(
+      const row = (await client.query(
         `SELECT COALESCE(MAX( (regexp_match("invoiceNo", $1))[1]::int ), 0) AS last
            FROM "Invoice"
           WHERE "userId"=$2 AND "invoiceNo" ~ $1`,
@@ -164,7 +165,7 @@ export async function POST(request) {
     const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
     let productMap = new Map();
     if (prodIds.length) {
-      const prows = (await q(
+      const prows = (await client.query(
         `SELECT "id"::text AS id,
                 COALESCE("name",'') AS name,
                 COALESCE("kind",'product') AS kind,
@@ -236,7 +237,9 @@ export async function POST(request) {
 
     const dueDate = body.dueDate || null;
 
-    await q(
+    await client.query("BEGIN");
+
+    await client.query(
       `INSERT INTO "Invoice"
          ("id","invoiceNo","customerId","issueDate","dueDate","currency","netCents","taxCents","grossCents","taxRate","createdAt","updatedAt","userId")
        VALUES
@@ -259,7 +262,7 @@ export async function POST(request) {
     if (isOverdue) {
       // Check if an appointment already exists for this exact due date and invoice
       const apptTitle = `${invoiceNo} überfällig`;
-      const apptRes = await q(
+      const apptRes = await client.query(
         `SELECT "id" FROM "Appointment"
           WHERE "userId"=$1
             AND "date"=$2
@@ -271,12 +274,12 @@ export async function POST(request) {
 
       if (apptRes.rows.length === 0) {
         // Fetch customer name
-        const custRes = await q(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [customerId, userId]);
+        const custRes = await client.query(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [customerId, userId]);
         const customerName = custRes.rows[0]?.name || "";
 
         // Insert new appointment
         const apptNote = `Die Zahlung der Rechnung ${invoiceNo} ist überfällig, der Kunde muss benachrichtigt werden!`;
-        await q(
+        await client.query(
           `INSERT INTO "Appointment"
              ("id", "kind", "title", "date", "startAt", "status", "customerId", "customerName", "note", "userId", "createdAt", "updatedAt")
            VALUES
@@ -286,24 +289,36 @@ export async function POST(request) {
       }
     }
 
-    for (const it of prepared) {
-      await q(
+    if (prepared.length > 0) {
+      const flat = [];
+      const rows = [];
+      for (let i = 0; i < prepared.length; i++) {
+        const it = prepared[i];
+        const offset = i * 9;
+        rows.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},$${offset + 8},$${offset + 9},now(),now())`);
+        flat.push(uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate);
+      }
+      await client.query(
         `INSERT INTO "InvoiceItem"
            ("id","invoiceId","productId","name","description","quantity","unitPriceCents","lineTotalCents","taxRate","createdAt","updatedAt")
-         VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-        [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate]
+         VALUES ${rows.join(",")}`,
+        flat
       );
     }
+
+    await client.query("COMMIT");
 
     return new Response(JSON.stringify({ ok: true, data: { id, invoiceNo } }), {
       status: 201,
       headers: { "content-type": "application/json" },
     });
   } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
     return new Response(JSON.stringify({ ok: false, error: String(e) }), {
       status: e.message === "Unauthorized" ? 401 : 400,
       headers: { "content-type": "application/json" },
     });
+  } finally {
+    client.release();
   }
 }
