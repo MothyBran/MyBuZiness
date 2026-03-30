@@ -52,6 +52,10 @@ export default function SettingsPage() {
   const [kleinunternehmer, setKleinunternehmer] = useState(true);
   const [taxRateDefault, setTaxRateDefault] = useState(19); // nur relevant, wenn NICHT KU
 
+  // Dashboard & Misc
+  const [dashboardConfig, setDashboardConfig] = useState({});
+  const [receiptNoteDefault, setReceiptNoteDefault] = useState("");
+
   // Branding
   const [logoUrl, setLogoUrl] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#06b6d4");
@@ -93,6 +97,10 @@ export default function SettingsPage() {
       setVatId(s.vatId || "");
       setKleinunternehmer(!!s.kleinunternehmer);
       setTaxRateDefault(Number.isFinite(Number(s.taxRateDefault)) ? Number(s.taxRateDefault) : 19);
+
+      // Dashboard & Misc
+      setDashboardConfig(s.dashboardConfig || {});
+      setReceiptNoteDefault(s.receiptNoteDefault || "Vielen Dank, ich freue mich auf deinen nächsten Besuch!");
 
       // Branding
       setLogoUrl(s.logoUrl || "");
@@ -148,6 +156,8 @@ export default function SettingsPage() {
       currency, bankAccount, bankInstitution, bankRecipient, bankIban, bankBic,
       // Steuerdaten
       vatId, kleinunternehmer, taxRateDefault,
+      // Dashboard & Misc
+      dashboardConfig, receiptNoteDefault,
       // Branding
       logoUrl, primaryColor, secondaryColor
     };
