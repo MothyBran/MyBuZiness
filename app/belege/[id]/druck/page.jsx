@@ -60,6 +60,7 @@ export default function ReceiptPrintPage({ params }) {
       {/* Verstecke die normale UI beim Drucken */}
       <style dangerouslySetInnerHTML={{__html: `
         @page {
+          size: 80mm auto;
           margin: 0;
         }
         @media print {

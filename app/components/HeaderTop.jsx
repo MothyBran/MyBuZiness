@@ -19,7 +19,7 @@ export default function HeaderTop({ user }) {
 
   return (
     <>
-      <header className="hero" style={{ borderBottom: "1px solid var(--border)", marginBottom: 10 }}>
+      <header className="hero no-print" style={{ borderBottom: "1px solid var(--border)", marginBottom: 10 }}>
         <div className="container" style={{ paddingTop: 10, paddingBottom: 10 }}>
           
           {/* Logo + Überschrift */}

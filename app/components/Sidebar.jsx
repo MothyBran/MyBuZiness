@@ -30,7 +30,7 @@ export default function Sidebar({ user }) {
   }
 
   return (
-    <aside className="sidebar hide-mobile">
+    <aside className="sidebar hide-mobile no-print">
       <div className="sidebar__logo">
         <Link href="/" title="Dashboard">
           <Image
