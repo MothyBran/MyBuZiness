@@ -1,7 +1,7 @@
 // app/rechnungen/[id]/druck/page.jsx
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState } from "react";
 import Barcode from "react-barcode";
 
 function toInt(v) {
@@ -14,8 +14,7 @@ function money(cents, code = "EUR") {
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
 }
 
-export default function InvoicePrintPage(props) {
-  const params = use(props.params);
+export default function InvoicePrintPage({ params }) {
   const [data, setData] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [settings, setSettings] = useState({});
@@ -23,10 +22,10 @@ export default function InvoicePrintPage(props) {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (params?.id) {
-      load(params.id);
-    }
-  }, [params?.id]);
+    Promise.resolve(params).then(p => {
+      load(p.id);
+    });
+  }, [params]);
 
   async function load(id) {
     try {
@@ -86,19 +85,47 @@ export default function InvoicePrintPage(props) {
         @media print {
           body { background: white !important; margin: 0; padding: 0; }
           .no-print { display: none !important; }
+          .print-scale-wrapper { transform: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
           .print-area { box-shadow: none !important; margin: 0 !important; width: 100% !important; max-width: none !important; min-height: 100vh; position: relative; }
           .ph-footer { position: fixed; bottom: 0; left: 0; right: 0; padding-left: 28px; padding-right: 28px; padding-bottom: 12px; background: white; }
           /* Add bottom margin to the page when printing so content doesn't underlap fixed footer */
           @page { margin-bottom: 60px; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
-        body { background: #f8fafc; color: var(--color-text, #1e293b); margin: 0; }
+        body { background: #f8fafc; color: var(--color-text, #1e293b); margin: 0; overflow-x: hidden; }
+
+        .print-scale-wrapper {
+          display: flex;
+          justify-content: center;
+          width: 100%;
+          overflow-x: auto;
+          padding: 1rem;
+          box-sizing: border-box;
+        }
+
         .print-area {
-          background: white; margin: 2rem auto; max-width: 210mm; min-height: 297mm;
+          background: white;
+          width: 210mm;
+          min-width: 210mm;
+          min-height: 297mm;
           box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
           box-sizing: border-box;
           --color-primary: ${firm.primaryColor || "var(--brand, #14b8a6)"};
+          transform-origin: top center;
         }
+
+        @media screen and (max-width: 220mm) {
+          .print-scale-wrapper {
+             padding: 0;
+             margin-top: 1rem;
+          }
+          .print-area {
+             /* Scale down the A4 container so it fits on mobile screens */
+             transform: scale(calc(100vw / 210mm));
+             margin-bottom: calc(-297mm * (1 - (100vw / 210mm)));
+          }
+        }
+
         .btn-print {
           display: block; margin: 2rem auto; padding: 0.75rem 1.5rem;
           background: var(--color-primary, #0aa); color: white; border: none; border-radius: 0.5rem;
@@ -145,8 +172,9 @@ export default function InvoicePrintPage(props) {
         <button className="no-print btn-print" onClick={() => window.print()}>🖨️ Jetzt drucken / als PDF speichern</button>
       </div>
 
-      <div className="print-area">
-        <div className="print-page">
+      <div className="print-scale-wrapper">
+        <div className="print-area">
+          <div className="print-page">
           {/* Top Logo and Company Name */}
           <div className="ph-top-logo">
             {firm.logoUrl && <img src={firm.logoUrl} alt="Logo" className="ph-logo" />}
@@ -246,6 +274,7 @@ export default function InvoicePrintPage(props) {
               {firm.vatId && <span><strong>USt-ID:</strong> {firm.vatId}</span>}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </>
