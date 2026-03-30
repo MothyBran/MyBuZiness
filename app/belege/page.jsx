@@ -206,7 +206,7 @@ export default function ReceiptsPage(){
     setReceiptNo(`BN-${yy}${mm}-${nextNum}`);
     setDate(now.toISOString().slice(0,10));
     setDiscount("0");
-    setNote("");
+    setNote(settings?.receiptNoteDefault || "");
     setItems([{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }]);
     setIsOpen(true);
   }
@@ -374,7 +374,7 @@ export default function ReceiptsPage(){
                               <div>
                                 <div className="muted">Beleg</div>
                                 <div className="h5">#{r.receiptNo || "—"}</div>
-                                {!!r.note && <div className="muted">Notiz: <strong>{r.note}</strong></div>}
+                                {!!r.note && <div className="muted"><strong>{r.note}</strong></div>}
                               </div>
                               <div className="actions">
                                 <a className="btn-ghost" href={`/belege/${r.id}/druck`} target="_blank" rel="noopener">🖨️ Druckansicht</a>

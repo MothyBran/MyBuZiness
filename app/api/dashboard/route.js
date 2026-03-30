@@ -14,6 +14,7 @@ async function loadSettings(userId) {
   return {
     currencyDefault: currency,
     kleinunternehmer: !!row?.kleinunternehmer,
+    dashboardConfig: row?.dashboardConfig || {},
     primaryColor: row?.primaryColor || "#0aa",
     secondaryColor: row?.secondaryColor || "#0f766e",
     logoUrl: logo,

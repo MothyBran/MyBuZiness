@@ -215,7 +215,6 @@ export default function ReceiptPrintPage({ params }) {
 
         {data.note && (
           <div className="note">
-            <strong>Notiz:</strong><br/>
             {data.note}
           </div>
         )}
