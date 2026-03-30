@@ -1,5 +1,5 @@
 // app/api/invoices/[id]/route.js
-import { initDb, q, uuid } from "@/lib/db";
+import { initDb, q, uuid, pool } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /** Hilfsfunktionen */
@@ -29,6 +29,7 @@ export async function GET(_req, { params }) {
   try {
     const userId = await requireUser();
     await initDb();
+
     const { id } = await params;
     const inv = (await q(
       `SELECT i.*, c."name" AS "customerName",
@@ -54,18 +55,24 @@ export async function GET(_req, { params }) {
 }
 
 export async function PATCH(req, { params }) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
     const { id } = await params;
     const body = await req.json().catch(()=> ({}));
 
+    await client.query("BEGIN");
+
     // Verify ownership first to be safe
-    const existing = (await q(`SELECT * FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
-    if (!existing) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
+    const existing = (await client.query(`SELECT * FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId])).rows[0];
+    if (!existing) {
+      await client.query("ROLLBACK");
+      return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
+    }
 
     // Einstellungen für Steuer & Währung
-    const settings = (await q(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
+    const settings = (await client.query(`SELECT * FROM "Settings" WHERE "userId"=$1 ORDER BY "createdAt" ASC LIMIT 1`, [userId])).rows[0] || {};
     const vatExempt = !!settings.kleinunternehmer;
     const taxRateDefault = Number(settings.taxRateDefault ?? 19);
     const taxRate = vatExempt ? 0 : (Number.isFinite(taxRateDefault) ? taxRateDefault : 19);
@@ -118,7 +125,7 @@ export async function PATCH(req, { params }) {
     if (items) {
       const prodIds = items.map(it => it.productId).filter(Boolean).map(String);
       if (prodIds.length) {
-        const prows = (await q(
+        const prows = (await client.query(
           `SELECT "id"::text AS id,
                   COALESCE("name",'') AS name,
                   COALESCE("kind",'product') AS kind,
@@ -210,19 +217,31 @@ export async function PATCH(req, { params }) {
                "updatedAt"=now()
          WHERE "id"=$${keys.length+6} AND "userId"=$${keys.length+7}
       `;
-      const res = await q(sqlUpdate, [...vals, netAfterDiscount, taxCents, grossCents, taxRate, currency, id, userId]);
-      if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden oder Fehler beim Update." }), { status:404 });
+      const res = await client.query(sqlUpdate, [...vals, netAfterDiscount, taxCents, grossCents, taxRate, currency, id, userId]);
+      if (res.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden oder Fehler beim Update." }), { status:404 });
+      }
 
       // Items ersetzen
-      await q(`DELETE FROM "InvoiceItem" WHERE "invoiceId"=$1`, [id]);
-      for (const it of prepared) {
-        await q(
+      await client.query(`DELETE FROM "InvoiceItem" WHERE "invoiceId"=$1`, [id]);
+      if (prepared.length > 0) {
+        const flat = [];
+        const rows = [];
+        for (let i = 0; i < prepared.length; i++) {
+          const it = prepared[i];
+          const offset = i * 9;
+          rows.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},$${offset + 8},$${offset + 9},now(),now())`);
+          flat.push(uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate);
+        }
+        await client.query(
           `INSERT INTO "InvoiceItem"
              ("id","invoiceId","productId","name","description","quantity","unitPriceCents","lineTotalCents","taxRate","createdAt","updatedAt")
-           VALUES
-             ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-          [uuid(), id, it.productId, it.name, it.description, it.quantity, it.unitPriceCents, it.lineTotalCents, it.taxRate]
+           VALUES ${rows.join(",")}`,
+          flat
         );
+      }
+      for (const it of prepared) {
         generatedReceiptItems.push({
           productId: it.productId,
           name: it.name,
@@ -239,16 +258,19 @@ export async function PATCH(req, { params }) {
         const keys = Object.keys(patch);
         const sets = keys.map((k, i) => `"${k}"=$${i+1}`).join(", ");
         const vals = keys.map(k => patch[k]);
-        const res = await q(
+        const res = await client.query(
           `UPDATE "Invoice" SET ${sets}, "updatedAt"=now() WHERE "id"=$${keys.length+1} AND "userId"=$${keys.length+2}`,
           [...vals, id, userId]
         );
-        if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
+        if (res.rowCount === 0) {
+          await client.query("ROLLBACK");
+          return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status:404 });
+        }
       }
 
       if (shouldGenerateReceipt) {
         // Positionen aus Datenbank laden, da sie nicht mitgesendet wurden
-        const existingItems = (await q(`SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "createdAt" ASC`, [id])).rows;
+        const existingItems = (await client.query(`SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "createdAt" ASC`, [id])).rows;
         for (const it of existingItems) {
           const qty = toInt(it.quantity || 0);
           const unit = toInt(it.unitPriceCents || 0);
@@ -275,7 +297,7 @@ export async function PATCH(req, { params }) {
       // Check if an appointment already exists for this exact due date and invoice
       const apptTitle = `${resInvoiceNo} überfällig`;
       const noteContains = resInvoiceNo;
-      const apptRes = await q(
+      const apptRes = await client.query(
         `SELECT "id" FROM "Appointment"
           WHERE "userId"=$1
             AND "date"=$2
@@ -287,12 +309,12 @@ export async function PATCH(req, { params }) {
 
       if (apptRes.rows.length === 0) {
         // Fetch customer name
-        const custRes = await q(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [existing.customerId || patch.customerId, userId]);
+        const custRes = await client.query(`SELECT "name" FROM "Customer" WHERE "id"=$1 AND "userId"=$2`, [existing.customerId || patch.customerId, userId]);
         const customerName = custRes.rows[0]?.name || "";
 
         // Insert new appointment
         const apptNote = `Die Zahlung der Rechnung ${resInvoiceNo} ist überfällig, der Kunde muss benachrichtigt werden!`;
-        await q(
+        await client.query(
           `INSERT INTO "Appointment"
              ("id", "kind", "title", "date", "startAt", "status", "customerId", "customerName", "note", "userId", "createdAt", "updatedAt")
            VALUES
@@ -314,7 +336,7 @@ export async function PATCH(req, { params }) {
       const mm = String(now.getMonth() + 1).padStart(2, "0");
       const prefix = `BN-${yy}${mm}-`;
 
-      const last = await q(`SELECT "receiptNo" FROM "Receipt" WHERE "userId"=$1 AND "receiptNo" LIKE $2 ORDER BY "receiptNo" DESC LIMIT 1`, [userId, `${prefix}%`]);
+      const last = await client.query(`SELECT "receiptNo" FROM "Receipt" WHERE "userId"=$1 AND "receiptNo" LIKE $2 ORDER BY "receiptNo" DESC LIMIT 1`, [userId, `${prefix}%`]);
       let nextNum = 1;
       if (last.rows.length > 0 && last.rows[0].receiptNo) {
         const lastStr = last.rows[0].receiptNo;
@@ -325,7 +347,7 @@ export async function PATCH(req, { params }) {
       const receiptId = uuid();
 
       // In Receipt einfügen
-      await q(`
+      await client.query(`
         INSERT INTO "Receipt"
           ("id","receiptNo","date","vatExempt","currency","netCents","taxCents","grossCents","discountCents","createdAt","updatedAt","note","userId")
         VALUES
@@ -333,20 +355,31 @@ export async function PATCH(req, { params }) {
         [receiptId, receiptNo, resIssueDate || null, resTaxRate === 0 || vatExempt, resCurrency, resNetCents, resTaxCents, resGrossCents, resDiscountCents, note, userId]
       );
 
-      for (const it of generatedReceiptItems) {
-        await q(
+      if (generatedReceiptItems.length > 0) {
+        const flat = [];
+        const rows = [];
+        for (let i = 0; i < generatedReceiptItems.length; i++) {
+          const it = generatedReceiptItems[i];
+          const offset = i * 8;
+          rows.push(`($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},$${offset + 8},now(),now())`);
+          flat.push(uuid(), receiptId, it.productId || null, (it.name || "Position").trim(), it.quantity, it.unitPriceCents, it.baseCents, it.lineTotalCents);
+        }
+        await client.query(
           `INSERT INTO "ReceiptItem"
              ("id","receiptId","productId","name","quantity","unitPriceCents","baseCents","lineTotalCents","createdAt","updatedAt")
-           VALUES
-             ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())`,
-          [uuid(), receiptId, it.productId || null, (it.name || "Position").trim(), it.quantity, it.unitPriceCents, it.baseCents, it.lineTotalCents]
+           VALUES ${rows.join(",")}`,
+          flat
         );
       }
     }
 
+    await client.query("COMMIT");
     return Response.json({ ok:true });
   } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
     return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 400 });
+  } finally {
+    client.release();
   }
 }
 
