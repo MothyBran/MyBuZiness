@@ -1,9 +1,8 @@
 // app/rechnungen/[id]/druck/page.jsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, use } from "react";
 import Barcode from "react-barcode";
-import { useParams } from "next/navigation";
 
 function toInt(v) {
   const n = Number(v);
@@ -15,8 +14,8 @@ function money(cents, code = "EUR") {
   return `${n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
 }
 
-export default function InvoicePrintPage() {
-  const params = useParams();
+export default function InvoicePrintPage(props) {
+  const params = use(props.params);
   const [data, setData] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [settings, setSettings] = useState({});
