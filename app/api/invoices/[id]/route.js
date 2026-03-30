@@ -32,9 +32,9 @@ export async function GET(_req, { params }) {
     const { id } = await params;
     const inv = (await q(
       `SELECT i.*, c."name" AS "customerName",
-              c."street" AS "customerStreet",
-              c."zip" AS "customerZip",
-              c."city" AS "customerCity"
+              c."addressStreet" AS "customerStreet",
+              c."addressZip" AS "customerZip",
+              c."addressCity" AS "customerCity"
          FROM "Invoice" i
          JOIN "Customer" c ON c."id" = i."customerId"
         WHERE i."id"=$1 AND i."userId"=$2 LIMIT 1`,
