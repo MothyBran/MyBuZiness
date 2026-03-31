@@ -115,12 +115,16 @@ export default function TerminePage(){
   return (
     <Page>
       <PageHeader
-        title="Termine"
-        actions={
-          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+        title={
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            Termine
             <Button variant="ghost" onClick={() => setSettingsOpen(true)} title="Kalender Einstellungen" style={{ fontSize: "1.2rem", padding: "4px 8px" }}>
               ⚙️
             </Button>
+          </div>
+        }
+        actions={
+          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
             <div className="segmented-control" style={{ display: "flex", background: "var(--panel-2)", padding: 4, borderRadius: 8 }}>
               <button
                 onClick={() => setViewMode("calendar")}
