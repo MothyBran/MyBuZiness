@@ -36,6 +36,7 @@ async function fetchOne(userId) {
        COALESCE("taxRateDefault", 19)::int AS "taxRateDefault",
        "dashboardConfig",
        "receiptNoteDefault",
+       "appointmentSettings",
        "createdAt",
        "updatedAt"
      FROM "Settings"
@@ -98,6 +99,7 @@ export async function PUT(request) {
       taxRateDefault, // NEU
       dashboardConfig: body.dashboardConfig ?? {},
       receiptNoteDefault: body.receiptNoteDefault ?? "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
+      appointmentSettings: body.appointmentSettings ?? { workdays: [1,2,3,4,5], start: "08:00", end: "18:00" },
     };
 
     const existing = await fetchOne(userId);
@@ -109,12 +111,12 @@ export async function PUT(request) {
            "id","companyName","slogan","ownerName","address1","address2","postalCode","city",
            "phone","email","website","bankAccount","bankInstitution","bankRecipient","bankIban","bankBic","vatId","kleinunternehmer","currency",
            "logoUrl","primaryColor","secondaryColor","taxRateDefault",
-           "dashboardConfig","receiptNoteDefault",
+           "dashboardConfig","receiptNoteDefault","appointmentSettings",
            "createdAt","updatedAt","userId"
          ) VALUES (
            $1,$2,$24,$3,$4,$5,$6,$7,
            $8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-           $25,$26,
+           $25,$26,$27,
            now(), now(), $23
          )`,
         [
@@ -123,7 +125,7 @@ export async function PUT(request) {
           payload.phone, payload.email, payload.website, payload.bankAccount, payload.bankInstitution, payload.bankRecipient, payload.bankIban, payload.bankBic, payload.vatId, payload.kleinunternehmer, payload.currency,
           payload.logoUrl, payload.primaryColor, payload.secondaryColor, payload.taxRateDefault,
           userId, payload.slogan,
-          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault
+          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault, JSON.stringify(payload.appointmentSettings)
         ]
       );
     } else {
@@ -133,7 +135,7 @@ export async function PUT(request) {
            "phone"=$8, "email"=$9, "website"=$10, "bankAccount"=$11, "bankInstitution"=$12, "bankRecipient"=$13, "bankIban"=$14, "bankBic"=$15, "vatId"=$16, "kleinunternehmer"=$17, "currency"=$18,
            "logoUrl"=$19, "primaryColor"=$20, "secondaryColor"=$21,
            "taxRateDefault"=$22,
-           "dashboardConfig"=$25, "receiptNoteDefault"=$26,
+           "dashboardConfig"=$25, "receiptNoteDefault"=$26, "appointmentSettings"=$27,
            "updatedAt"=now()
          WHERE "id" = $1 AND "userId" = $23`,
         [
@@ -143,7 +145,7 @@ export async function PUT(request) {
           payload.logoUrl, payload.primaryColor, payload.secondaryColor,
           payload.taxRateDefault,
           userId, payload.slogan,
-          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault
+          JSON.stringify(payload.dashboardConfig), payload.receiptNoteDefault, JSON.stringify(payload.appointmentSettings)
         ]
       );
     }

@@ -69,6 +69,9 @@ export default function DayPage({ params }){
   const ymd = toYMD(unwrappedParams?.date || new Date());
   const dateObj = toDate(ymd);
 
+  const wochentage = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  const wochentag = wochentage[dateObj.getDay()];
+
   const [events, setEvents]   = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
@@ -76,6 +79,8 @@ export default function DayPage({ params }){
   const [openForm, setOpenForm]       = useState(false);
   const [formInitial, setFormInitial] = useState(null);
   const [customers, setCustomers]     = useState([]);
+  const [employees, setEmployees]     = useState([]);
+  const [settings, setSettings]       = useState(null);
 
   const prevYMD  = toYMD(addDays(dateObj, -1));
   const nextYMD  = toYMD(addDays(dateObj, +1));
@@ -105,6 +110,18 @@ export default function DayPage({ params }){
         const js = await r.json().catch(()=>({ data:[] }));
         setCustomers(Array.isArray(js?.data) ? js.data : []);
       }catch{ setCustomers([]); }
+      try{
+        const r = await fetch("/api/mitarbeiter", { cache:"no-store" });
+        const js = await r.json().catch(()=>({ data:[] }));
+        setEmployees(Array.isArray(js?.data) ? js.data : []);
+      }catch{ setEmployees([]); }
+      try{
+        const r = await fetch("/api/settings", { cache:"no-store" });
+        const js = await r.json().catch(()=>({ data:{} }));
+        if (js?.data?.appointmentSettings) {
+           setSettings(js.data.appointmentSettings);
+        }
+      }catch{}
     })();
   },[]);
 
@@ -131,7 +148,7 @@ export default function DayPage({ params }){
   return (
     <Page>
       <PageHeader
-        title={`Tagesansicht – ${fmtDE(ymd)}`}
+        title={`Tagesansicht – ${fmtDE(ymd)} (${wochentag})`}
         actions={
           <>
             <Link className="btn btn--ghost" href="/termine">← Monatsansicht</Link>
@@ -151,13 +168,24 @@ export default function DayPage({ params }){
               style={{ position:"relative", height: 24*ROW_H }}
             >
               {/* Stunden-Hintergrund */}
-              {Array.from({length:24}, (_,h)=>(
+              {Array.from({length:24}, (_,h)=>{
+                let isOutsideBusinessHours = false;
+                if (settings) {
+                   const dayOfWeek = dateObj.getDay();
+                   const [startH] = settings.start.split(':').map(Number);
+                   const [endH] = settings.end.split(':').map(Number);
+                   if (!settings.workdays.includes(dayOfWeek) || h < startH || h >= endH) {
+                       isOutsideBusinessHours = true;
+                   }
+                }
+                return (
                 <div
                   key={h}
                   style={{
                     position:"absolute", left:0, right:0, top: h*ROW_H, height: ROW_H,
                     borderTop: "1px solid var(--border)",
-                    borderBottom: h===23 ? "1px solid var(--border)" : undefined
+                    borderBottom: h===23 ? "1px solid var(--border)" : undefined,
+                    backgroundColor: isOutsideBusinessHours ? "var(--panel-2)" : "transparent"
                   }}
                   title={`${pad2(h)}:00`}
                 >
@@ -185,7 +213,7 @@ export default function DayPage({ params }){
                     />
                   </div>
                 </div>
-              ))}
+              )})}
 
               {/* Events-Layer */}
               <div
@@ -292,6 +320,7 @@ export default function DayPage({ params }){
         <AppointmentForm
           initial={formInitial}
           customers={customers}
+          employees={employees}
           onSaved={onSaved}
           onCancel={()=>setOpenForm(false)}
         />
