@@ -28,7 +28,7 @@ function timeFromMinutes(min){
 
 
 /* ===== Haupt-Form ===== */
-export default function AppointmentForm({ initial = null, customers = [], onSaved, onCancel }){
+export default function AppointmentForm({ initial = null, customers = [], employees = [], onSaved, onCancel }){
   const isEdit = !!initial?.id;
 
   const [kind,setKind]=useState(initial?.kind || "appointment");
@@ -39,11 +39,21 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
   });
   const [startAt,setStartAt]=useState(initial?.startAt?.slice(0,5) || "09:00");
   const [endAt,setEndAt]=useState(initial?.endAt?.slice(0,5) || "");
+  const [endDate,setEndDate]=useState(()=>{
+    if (initial?.endDate) {
+      const d = toDate(initial.endDate);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
+    const d = initial?.date ? toDate(initial.date) : new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  });
   const [customerId,setCustomerId]=useState(initial?.customerId || "");
   const [customerName,setCustomerName]=useState(initial?.customerName || "");
+  const [employeeId,setEmployeeId]=useState(initial?.employeeId || "");
   const [status,setStatus]=useState(initial?.status || "open");
   const [note,setNote]=useState(initial?.note || "");
   const [saving,setSaving]=useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(()=>{
     const found = customers.find(c=>String(c.id)===String(customerId));
@@ -61,9 +71,10 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
   async function submit(e){
     e.preventDefault();
+    setErrorMsg("");
     if (!title.trim()){ alert("Bezeichnung ist erforderlich."); return; }
     let finalEnd = endAt;
-    if (finalEnd){
+    if (kind !== "absence" && finalEnd){
       const mEnd = minutesFromTime(finalEnd);
       if (mEnd < endMin) finalEnd = timeFromMinutes(endMin);
     }
@@ -71,10 +82,12 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
     try{
       const payload = {
         kind, title, date,
-        startAt: startAt || "00:00",
-        endAt: finalEnd || null,
+        startAt: kind === "absence" ? null : (startAt || "00:00"),
+        endAt: kind === "absence" ? null : (finalEnd || null),
+        endDate: kind === "absence" ? endDate : null,
         customerId: customerId || null,
         customerName: customerName || null,
+        employeeId: employeeId || null,
         status, note
       };
       const url = isEdit ? `/api/appointments/${initial.id}` : `/api/appointments`;
@@ -82,12 +95,20 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
       const r = await fetch(url, {
         method, headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
       });
-      if(!r.ok) throw new Error(await r.text().catch(()=> "save_failed"));
+      if(!r.ok) {
+         const errData = await r.json().catch(()=>({}));
+         if (errData.error === "outside_business_hours") {
+            throw new Error("Der Termin liegt außerhalb der Geschäftszeiten.");
+         } else if (errData.error === "employee_absent") {
+            throw new Error("Der Mitarbeiter (oder das gesamte Unternehmen) ist in diesem Zeitraum abwesend.");
+         }
+         throw new Error("Speichern fehlgeschlagen.");
+      }
       await r.json().catch(()=> ({}));
       onSaved?.();
     }catch(err){
       console.error(err);
-      alert("Speichern fehlgeschlagen.");
+      setErrorMsg(err.message || "Speichern fehlgeschlagen.");
     }finally{
       setSaving(false);
     }
@@ -95,30 +116,48 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
 
   return (
     <form onSubmit={submit} className="form af-form">
+      {errorMsg && <div className="error" style={{ marginBottom: "1rem" }}>{errorMsg}</div>}
       <div className="af-wrap">
         {/* Zeile 1: Art | Datum */}
         <div className="af-row2">
           <label className="field">
             <span className="label">Art</span>
-            <select className="select af-control" value={kind} onChange={e=>setKind(e.target.value)}>
+            <select className="select af-control" value={kind} onChange={e=>{
+              setKind(e.target.value);
+              if(e.target.value === "absence") setTitle("Abwesend");
+              else if(title === "Abwesend") setTitle("");
+            }}>
               <option value="appointment">Termin</option>
               <option value="order">Auftrag</option>
+              <option value="absence">Abwesend</option>
             </select>
           </label>
 
           <label className="field">
-            <span className="label">Datum</span>
+            <span className="label">{kind === "absence" ? "Von" : "Datum"}</span>
             <input className="input af-control" type="date" value={date} onChange={e=>setDate(e.target.value)} />
           </label>
         </div>
 
         {/* Zeile 2: Bezeichnung */}
         <label className="field">
-          <span className="label">Bezeichnung {!customerId && "*"}</span>
-          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required={!customerId} />
+          <span className="label">Bezeichnung {!customerId && kind !== "absence" && "*"}</span>
+          <input className="input af-control" value={title} onChange={e=>setTitle(e.target.value)} required={!customerId && kind !== "absence"} />
+        </label>
+
+        {/* Zeile: Mitarbeiter */}
+        <label className="field">
+          <span className="label">Mitarbeiter {kind === "absence" ? "(Leer = Alle)" : "(Optional)"}</span>
+          <select className="select af-control" value={employeeId} onChange={e=>setEmployeeId(e.target.value)}>
+            <option value="">{kind === "absence" ? "Gesamtes Unternehmen" : "Eingeloggter Nutzer (Standard)"}</option>
+            {employees.map(emp => (
+              <option key={emp.id} value={emp.id}>{emp.name}</option>
+            ))}
+          </select>
         </label>
 
         {/* Zeile 3: Start | Ende | Status */}
+        {kind !== "absence" ? (
         <div className="af-row3">
           <label className="field">
             <span className="label">Start</span>
@@ -154,6 +193,22 @@ export default function AppointmentForm({ initial = null, customers = [], onSave
             </select>
           </label>
         </div>
+        ) : (
+        <div className="af-row2">
+          <label className="field">
+            <span className="label">Bis (einschließlich)</span>
+            <input className="input af-control" type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} min={date} required />
+          </label>
+          <label className="field">
+            <span className="label">Status</span>
+            <select className="select af-control" value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="open">offen</option>
+              <option value="cancelled">abgesagt</option>
+              <option value="done">abgeschlossen</option>
+            </select>
+          </label>
+        </div>
+        )}
 
         {/* Zeile 4: Kunde */}
         <label className="field">

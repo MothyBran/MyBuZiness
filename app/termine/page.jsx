@@ -50,8 +50,13 @@ export default function TerminePage(){
 
   const [createOpen, setCreateOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
+
+  const [appointmentSettings, setAppointmentSettings] = useState({ workdays: [1,2,3,4,5], start: "08:00", end: "18:00" });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(()=>{
     let alive = true;
@@ -66,7 +71,32 @@ export default function TerminePage(){
 
   useEffect(()=>{
     fetch("/api/customers").then(r=>r.json()).then(d=>setCustomers(d.data||[])).catch(()=>{});
+    fetch("/api/mitarbeiter").then(r=>r.json()).then(d=>setEmployees(d.data||[])).catch(()=>{});
+    fetch("/api/settings").then(r=>r.json()).then(d=>{
+      if (d?.data?.appointmentSettings) {
+        setAppointmentSettings(d.data.appointmentSettings);
+      }
+    }).catch(()=>{});
   },[]);
+
+  async function saveSettings(e) {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentSettings })
+      });
+      setSettingsOpen(false);
+      setRefreshKey(k=>k+1);
+    } catch(err) {
+      console.error(err);
+      alert("Fehler beim Speichern der Einstellungen");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   const days = useMemo(()=>{
     const first = startOfMonth(cursor);
@@ -88,6 +118,9 @@ export default function TerminePage(){
         title="Termine"
         actions={
           <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+            <Button variant="ghost" onClick={() => setSettingsOpen(true)} title="Kalender Einstellungen" style={{ fontSize: "1.2rem", padding: "4px 8px" }}>
+              ⚙️
+            </Button>
             <div className="segmented-control" style={{ display: "flex", background: "var(--panel-2)", padding: 4, borderRadius: 8 }}>
               <button
                 onClick={() => setViewMode("calendar")}
@@ -245,6 +278,70 @@ export default function TerminePage(){
           onSaved={()=>{ setCreateOpen(false); setRefreshKey(k=>k+1); }}
           onCancel={()=>setCreateOpen(false)}
         />
+      </Modal>
+
+      <Modal open={settingsOpen} onClose={()=>setSettingsOpen(false)} title="Kalender Einstellungen" footer={null}>
+        <form onSubmit={saveSettings} className="form">
+          <label className="field">
+            <span className="label">Arbeitstage</span>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+              {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+                const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+                const isSelected = appointmentSettings.workdays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      setAppointmentSettings(prev => ({
+                        ...prev,
+                        workdays: isSelected
+                          ? prev.workdays.filter(d => d !== day)
+                          : [...prev.workdays, day]
+                      }));
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      background: isSelected ? "var(--brand)" : "transparent",
+                      color: isSelected ? "#fff" : "var(--text)",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {dayNames[day]}
+                  </button>
+                );
+              })}
+            </div>
+          </label>
+          <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+            <label className="field" style={{ flex: 1 }}>
+              <span className="label">Geschäftszeit Beginn</span>
+              <input
+                type="time"
+                className="input"
+                value={appointmentSettings.start}
+                onChange={e => setAppointmentSettings({...appointmentSettings, start: e.target.value})}
+                required
+              />
+            </label>
+            <label className="field" style={{ flex: 1 }}>
+              <span className="label">Geschäftszeit Ende</span>
+              <input
+                type="time"
+                className="input"
+                value={appointmentSettings.end}
+                onChange={e => setAppointmentSettings({...appointmentSettings, end: e.target.value})}
+                required
+              />
+            </label>
+          </div>
+          <div style={{ marginTop: "1.5rem", display: "flex", justifyContent: "flex-end", gap: "1rem" }}>
+            <Button variant="ghost" type="button" onClick={() => setSettingsOpen(false)}>Abbrechen</Button>
+            <Button type="submit" disabled={savingSettings}>{savingSettings ? "Speichert..." : "Speichern"}</Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Monat/Jahr Picker Modal */}

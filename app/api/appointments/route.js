@@ -55,7 +55,7 @@ export async function GET(req) {
       args.push(`${month}-01`);
     }
 
-    if (kind && (kind === "appointment" || kind === "order")) {
+    if (kind && (kind === "appointment" || kind === "order" || kind === "absence")) {
       where.push(`"kind" = $${args.length + 1}`);
       args.push(kind);
     }
@@ -100,40 +100,83 @@ export async function POST(req) {
 
     // Minimal-Validierung
     const errors = [];
+    const isAbsence = payload?.kind === "absence";
     if (!payload?.title) errors.push("title");
     if (!payload?.date) errors.push("date");
-    if (!payload?.startAt) errors.push("startAt");
-    if (!payload?.kind || !["appointment","order"].includes(payload.kind)) errors.push("kind");
+    if (!isAbsence && !payload?.startAt) errors.push("startAt");
+    if (isAbsence && !payload?.endDate) errors.push("endDate");
+    if (!payload?.kind || !["appointment","order","absence"].includes(payload.kind)) errors.push("kind");
     if (errors.length) {
       return NextResponse.json({ error: "missing:" + errors.join("," ) }, { status: 400 });
     }
 
     // Werte normalisieren (leere Strings -> NULL)
-    const endAt        = payload.endAt || null;
+    const startAt      = isAbsence ? null : payload.startAt;
+    const endAt        = isAbsence ? null : (payload.endAt || null);
+    const endDate      = isAbsence ? payload.endDate : null;
     const customerId   = payload.customerId || null;
     const customerName = payload.customerName || null;
     const note         = payload.note || null;
     const status       = payload.status || "open";
+    const employeeId   = payload.employeeId || null;
 
     const client = await pool.connect();
     try {
+      // Check blockings
+      if (!isAbsence) {
+        // Business Hours Check
+        const { rows: settingsRows } = await client.query(`SELECT "appointmentSettings" FROM "Settings" WHERE "userId" = $1 LIMIT 1`, [userId]);
+        const settings = settingsRows[0]?.appointmentSettings || { workdays: [1,2,3,4,5], start: "08:00", end: "18:00" };
+
+        const dateObj = new Date(payload.date);
+        const dayOfWeek = dateObj.getDay() || 7; // 1=Mo, 7=Su
+        const [appStartH, appStartM] = startAt.split(':').map(Number);
+        const [appEndH, appEndM] = (endAt || startAt).split(':').map(Number);
+        const [busStartH, busStartM] = settings.start.split(':').map(Number);
+        const [busEndH, busEndM] = settings.end.split(':').map(Number);
+
+        const appStartMin = appStartH * 60 + appStartM;
+        const appEndMin = appEndH * 60 + appEndM;
+        const busStartMin = busStartH * 60 + busStartM;
+        const busEndMin = busEndH * 60 + busEndM;
+
+        if (!settings.workdays.includes(dayOfWeek) || appStartMin < busStartMin || appEndMin > busEndMin) {
+            return NextResponse.json({ error: "outside_business_hours" }, { status: 400 });
+        }
+
+        // Absence Check
+        const overlapQuery = `
+          SELECT id FROM "Appointment"
+          WHERE "userId" = $1 AND "kind" = 'absence'
+          AND ("employeeId" IS NULL OR "employeeId" = $2)
+          AND $3::date <= "endDate" AND $3::date >= "date"
+          LIMIT 1
+        `;
+        const { rows: overlappingAbsences } = await client.query(overlapQuery, [userId, employeeId, payload.date]);
+        if (overlappingAbsences.length > 0) {
+            return NextResponse.json({ error: "employee_absent" }, { status: 400 });
+        }
+      }
+
       // WICHTIG: id explizit via gen_random_uuid() erzeugen
       const { rows } = await client.query(
         `INSERT INTO "Appointment"
-          ("id","kind","title","date","startAt","endAt","customerId","customerName","note","status","userId")
-         VALUES (gen_random_uuid(), $1, $2, $3::date, $4::time, $5::time, $6, $7, $8, $9, $10)
+          ("id","kind","title","date","startAt","endAt","customerId","customerName","note","status","userId","employeeId","endDate")
+         VALUES (gen_random_uuid(), $1, $2, $3::date, $4::time, $5::time, $6, $7, $8, $9, $10, $11, $12::date)
          RETURNING *`,
         [
           payload.kind,
           payload.title,
           payload.date,
-          payload.startAt,
+          startAt,
           endAt,
           customerId,
           customerName,
           note,
           status,
-          userId
+          userId,
+          employeeId,
+          endDate
         ]
       );
       return NextResponse.json(rows[0], { status: 201 });

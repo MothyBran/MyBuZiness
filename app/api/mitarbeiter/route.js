@@ -5,16 +5,21 @@ import { hashPassword, getUser } from "@/lib/auth";
 export async function GET(request) {
   try {
     const user = await getUser();
-    if (!user || user.role !== "admin") return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
     await initDb();
+
+    let ownerId = user.id;
+    if (user.role === "employee" && user.ownerId) {
+        ownerId = user.ownerId;
+    }
 
     const res = await q(`
       SELECT id, name, email, "createdAt", "needsPasswordChange", "initialLoginCode"
       FROM "User"
       WHERE "ownerId" = $1 AND "role" = 'employee'
       ORDER BY "createdAt" DESC
-    `, [user.id]);
+    `, [ownerId]);
 
     return NextResponse.json({ ok: true, data: res.rows });
   } catch (e) {

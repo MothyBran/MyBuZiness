@@ -47,7 +47,7 @@ export async function PUT(req, { params }) {
 
     // erlaubte Felder; Times normalisieren
     const fields = [
-      "kind","title","date","startAt","endAt","customerId","customerName","note","status"
+      "kind","title","date","startAt","endAt","endDate","employeeId","customerId","customerName","note","status"
     ];
     const sets = [];
     const args = [];
@@ -69,6 +69,56 @@ export async function PUT(req, { params }) {
 
     const client = await pool.connect();
     try {
+      // If we are updating date, startAt, endAt, kind, or employeeId, we need to check constraints
+      // To keep it simple, fetch the current appointment data and merge with updates to validate
+      const { rows: currentRows } = await client.query(`SELECT * FROM "Appointment" WHERE "id" = $1 AND "userId" = $2`, [id, userId]);
+      if (!currentRows[0]) return NextResponse.json({ error: "not_found" }, { status: 404 });
+      const current = currentRows[0];
+
+      const merged = { ...current, ...payload };
+      const isAbsence = merged.kind === "absence";
+
+      if (!isAbsence) {
+        // Business Hours Check
+        const { rows: settingsRows } = await client.query(`SELECT "appointmentSettings" FROM "Settings" WHERE "userId" = $1 LIMIT 1`, [userId]);
+        const settings = settingsRows[0]?.appointmentSettings || { workdays: [1,2,3,4,5], start: "08:00", end: "18:00" };
+
+        const dateObj = new Date(merged.date);
+        const dayOfWeek = dateObj.getDay() || 7; // 1=Mo, 7=Su
+
+        const startToUse = toPgTime(payload.startAt) ?? current.startAt;
+        const endToUse = toPgTime(payload.endAt) ?? current.endAt ?? startToUse;
+
+        if (startToUse) {
+            const [appStartH, appStartM] = startToUse.split(':').map(Number);
+            const [appEndH, appEndM] = endToUse.split(':').map(Number);
+            const [busStartH, busStartM] = settings.start.split(':').map(Number);
+            const [busEndH, busEndM] = settings.end.split(':').map(Number);
+
+            const appStartMin = appStartH * 60 + appStartM;
+            const appEndMin = appEndH * 60 + appEndM;
+            const busStartMin = busStartH * 60 + busStartM;
+            const busEndMin = busEndH * 60 + busEndM;
+
+            if (!settings.workdays.includes(dayOfWeek) || appStartMin < busStartMin || appEndMin > busEndMin) {
+                return NextResponse.json({ error: "outside_business_hours" }, { status: 400 });
+            }
+        }
+
+        // Absence Check
+        const overlapQuery = `
+          SELECT id FROM "Appointment"
+          WHERE "userId" = $1 AND "kind" = 'absence' AND "id" != $4
+          AND ("employeeId" IS NULL OR "employeeId" = $2)
+          AND $3::date <= "endDate" AND $3::date >= "date"
+          LIMIT 1
+        `;
+        const { rows: overlappingAbsences } = await client.query(overlapQuery, [userId, merged.employeeId || null, merged.date, id]);
+        if (overlappingAbsences.length > 0) {
+            return NextResponse.json({ error: "employee_absent" }, { status: 400 });
+        }
+      }
+
       const { rows } = await client.query(
         `UPDATE "Appointment" SET ${sets.join(", ")} WHERE "id" = $${args.length + 1} AND "userId" = $${args.length + 2} RETURNING *`,
         [...args, id, userId]
