@@ -107,8 +107,26 @@ export default function TerminePage(){
 
   const byDate = useMemo(()=>{
     const map={};
-    for(const e of events){ const key=toYMD(e.date); (map[key] ||= []).push(e); }
-    Object.values(map).forEach(list => list.sort((a,b)=> (a.startAt??"").localeCompare(b.startAt??"")));
+    for(const e of events) {
+        const startYMD = toYMD(e.date);
+
+        if (e.kind === "absence" && e.endDate) {
+            let current = toDate(startYMD);
+            const end = toDate(toYMD(e.endDate));
+            while (current <= end) {
+                const key = toYMD(current);
+                (map[key] ||= []).push(e);
+                current.setDate(current.getDate() + 1);
+            }
+        } else {
+            (map[startYMD] ||= []).push(e);
+        }
+    }
+    Object.values(map).forEach(list => list.sort((a,b)=> {
+        if (a.kind === "absence" && b.kind !== "absence") return -1;
+        if (a.kind !== "absence" && b.kind === "absence") return 1;
+        return (a.startAt??"").localeCompare(b.startAt??"");
+    }));
     return map;
   },[events]);
 
@@ -210,12 +228,20 @@ export default function TerminePage(){
                         <div style={{ fontWeight:700, fontSize:"1.1em" }}>{d.getDate()}</div>
                         {isToday && <div style={{ fontSize: "0.7em", color: "var(--brand)", fontWeight: 700 }}>HEUTE</div>}
                       </div>
-                      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                        {list.slice(0,4).map(x=>(
-                          <Badge key={x.id} tone={x.kind==='order'?'warning':'info'}>
-                            {x.startAt ? x.startAt.slice(0,5) : "•"}
-                          </Badge>
-                        ))}
+                      <div style={{ display:"flex", flexDirection: "column", gap:4, overflow: "hidden" }}>
+                        {list.slice(0,4).map(x=>{
+                          const isAbsence = x.kind === "absence";
+                          const color = isAbsence ? "#EF4444" : (x.kind==='order' ? "#F59E0B" : "#3B82F6");
+                          return (
+                            <div
+                              key={x.id}
+                              style={{ width:"100%", padding:"2px 4px", background:color, color:"#fff", borderRadius:4, fontSize:10, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}
+                              title={`${isAbsence ? "Abwesend" : x.startAt?.slice(0,5)||"Ganztägig"} - ${x.title}`}
+                            >
+                              {isAbsence ? "🚫 Abwesend" : (x.startAt?.slice(0,5)||"Ganztägig") + " " + x.title}
+                            </div>
+                          );
+                        })}
                         {list.length>4 && <Badge tone="muted">+{list.length-4}</Badge>}
                       </div>
                     </Link>

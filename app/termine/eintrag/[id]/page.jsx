@@ -34,6 +34,7 @@ export default function EntryDetailPage({ params }){
 
   const [editOpen, setEditOpen] = useState(false);
   const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
 
   async function load(){
     setLoading(true); setError("");
@@ -60,6 +61,11 @@ export default function EntryDetailPage({ params }){
         const js = r && r.ok ? await r.json() : { data: [] };
         setCustomers(js?.data || []);
       }catch{ setCustomers([]); }
+      try{
+        const r = await fetch("/api/mitarbeiter", { cache:"no-store" }).catch(()=>null);
+        const js = r && r.ok ? await r.json() : { data: [] };
+        setEmployees(js?.data || []);
+      }catch{ setEmployees([]); }
     })();
   },[]);
 
@@ -117,12 +123,12 @@ export default function EntryDetailPage({ params }){
                   <div className="card" style={{ padding:12 }}>
                     <div className="muted">Art</div>
                     <div style={{ fontWeight:700, marginTop:4 }}>
-                      {data.kind === "order" ? "Auftrag" : "Termin"}
+                      {data.kind === "absence" ? "Abwesend" : (data.kind === "order" ? "Auftrag" : "Termin")}
                     </div>
                   </div>
                   <div className="card" style={{ padding:12 }}>
                     <div className="muted">Status</div>
-                    <div style={{ marginTop:4 }}><StatusPill status={statusLabel} /></div>
+                    <div style={{ marginTop:4 }}><StatusPill status={data.kind === "absence" ? "abwesend" : statusLabel} /></div>
                   </div>
                 </div>
 
@@ -131,30 +137,58 @@ export default function EntryDetailPage({ params }){
                   <div style={{ fontWeight:700, marginTop:4 }}>{data.title || "—"}</div>
                 </div>
 
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-                  <div className="card" style={{ padding:12 }}>
-                    <div className="muted">Datum</div>
-                    <div style={{ fontWeight:700, marginTop:4 }}>
-                      {fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}
-                    </div>
-                  </div>
-                  <div className="card" style={{ padding:12 }}>
-                    <div className="muted">Zeit</div>
-                    <div style={{ fontWeight:700, marginTop:4 }}>
-                      {data.startAt?.slice(0,5)}{data.endAt ? ` – ${data.endAt.slice(0,5)}` : ""}
-                    </div>
-                  </div>
-                  <div className="card" style={{ padding:12 }}>
-                    <div className="muted">Kunde</div>
-                    <div style={{ fontWeight:700, marginTop:4 }}>
-                      {data.customerId ? (
-                        <Link href={`/kunden?expand=${data.customerId}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
-                          {data.customerName || "—"}
-                        </Link>
-                      ) : (
-                        data.customerName || "—"
-                      )}
-                    </div>
+                <div style={{ display:"grid", gridTemplateColumns: data.kind === "absence" ? "1fr 1fr" : "1fr 1fr 1fr", gap:12 }}>
+                  {data.kind === "absence" ? (
+                    <>
+                      <div className="card" style={{ padding:12 }}>
+                        <div className="muted">Von</div>
+                        <div style={{ fontWeight:700, marginTop:4 }}>
+                          {fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}
+                        </div>
+                      </div>
+                      <div className="card" style={{ padding:12 }}>
+                        <div className="muted">Bis (einschließlich)</div>
+                        <div style={{ fontWeight:700, marginTop:4 }}>
+                          {data.endDate ? fmtDateDE(typeof data.endDate === "string" ? data.endDate.slice(0,10) : data.endDate) : "—"}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="card" style={{ padding:12 }}>
+                        <div className="muted">Datum</div>
+                        <div style={{ fontWeight:700, marginTop:4 }}>
+                          {fmtDateDE(typeof data.date === "string" ? data.date.slice(0,10) : data.date)}
+                        </div>
+                      </div>
+                      <div className="card" style={{ padding:12 }}>
+                        <div className="muted">Zeit</div>
+                        <div style={{ fontWeight:700, marginTop:4 }}>
+                          {data.startAt?.slice(0,5)}{data.endAt ? ` – ${data.endAt.slice(0,5)}` : ""}
+                        </div>
+                      </div>
+                      <div className="card" style={{ padding:12 }}>
+                        <div className="muted">Kunde</div>
+                        <div style={{ fontWeight:700, marginTop:4 }}>
+                          {data.customerId ? (
+                            <Link href={`/kunden?expand=${data.customerId}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
+                              {data.customerName || "—"}
+                            </Link>
+                          ) : (
+                            data.customerName || "—"
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="card" style={{ padding:12 }}>
+                  <div className="muted">Mitarbeiter</div>
+                  <div style={{ fontWeight:700, marginTop:4 }}>
+                    {data.employeeId
+                      ? (employees.find(e => e.id === data.employeeId)?.name || data.employeeId)
+                      : (data.kind === "absence" ? "Gesamtes Unternehmen" : "Eingeloggter Nutzer")}
                   </div>
                 </div>
 
@@ -184,12 +218,15 @@ export default function EntryDetailPage({ params }){
               date: typeof data.date === "string" ? data.date.slice(0,10) : new Date(data.date).toISOString().slice(0,10),
               startAt: data.startAt?.slice(0,5) || "09:00",
               endAt: data.endAt?.slice(0,5) || "",
+              endDate: data.endDate ? (typeof data.endDate === "string" ? data.endDate.slice(0,10) : new Date(data.endDate).toISOString().slice(0,10)) : null,
               customerId: data.customerId || "",
               customerName: data.customerName || "",
+              employeeId: data.employeeId || "",
               status: data.status || "open",
               note: data.note || "",
             }}
             customers={customers}
+            employees={employees}
             onSaved={onSavedEdit}
             onCancel={()=>setEditOpen(false)}
           />
