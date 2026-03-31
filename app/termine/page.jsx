@@ -107,8 +107,26 @@ export default function TerminePage(){
 
   const byDate = useMemo(()=>{
     const map={};
-    for(const e of events){ const key=toYMD(e.date); (map[key] ||= []).push(e); }
-    Object.values(map).forEach(list => list.sort((a,b)=> (a.startAt??"").localeCompare(b.startAt??"")));
+    for(const e of events) {
+        const startYMD = toYMD(e.date);
+
+        if (e.kind === "absence" && e.endDate) {
+            let current = toDate(startYMD);
+            const end = toDate(toYMD(e.endDate));
+            while (current <= end) {
+                const key = toYMD(current);
+                (map[key] ||= []).push(e);
+                current.setDate(current.getDate() + 1);
+            }
+        } else {
+            (map[startYMD] ||= []).push(e);
+        }
+    }
+    Object.values(map).forEach(list => list.sort((a,b)=> {
+        if (a.kind === "absence" && b.kind !== "absence") return -1;
+        if (a.kind !== "absence" && b.kind === "absence") return 1;
+        return (a.startAt??"").localeCompare(b.startAt??"");
+    }));
     return map;
   },[events]);
 
