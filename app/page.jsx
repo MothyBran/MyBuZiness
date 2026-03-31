@@ -128,18 +128,18 @@ export default function HomePage() {
 
   return (
     <>
+    {(company?.name || company?.phone || company?.email) && (
+      <div className="dashboard-banner">
+        {company.name && <span>{company.name}</span>}
+        {company.name && company.phone && <span className="separator">•</span>}
+        {company.phone && <span>{company.phone}</span>}
+        {(company.name || company.phone) && company.email && <span className="separator hide-mobile">•</span>}
+        {company.email && <span className="hide-mobile">{company.email}</span>}
+      </div>
+    )}
+
     <Page>
       <PageHeader title="Dashboard" />
-
-      {(company?.name || company?.phone || company?.email) && (
-        <div className="dashboard-banner">
-          {company.name && <span>{company.name}</span>}
-          {company.name && company.phone && <span className="separator">•</span>}
-          {company.phone && <span>{company.phone}</span>}
-          {(company.name || company.phone) && company.email && <span className="separator hide-mobile">•</span>}
-          {company.email && <span className="hide-mobile">{company.email}</span>}
-        </div>
-      )}
 
       <div className="kpi-grid mb-6">
         {dashboardConfig.today?.visible !== false && <KpiCard title="Heute" value={moneyFromCents(stats.today, currency)} icon="euro" tone="brand" defaultCensored={dashboardConfig.today?.censored} />}
