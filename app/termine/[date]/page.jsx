@@ -125,7 +125,9 @@ export default function DayPage({ params }){
     })();
   },[]);
 
-  const placed = useMemo(()=>placeInLanes(events), [events]);
+  const regularEvents = useMemo(()=>events.filter(e => e.kind !== "absence"), [events]);
+  const absenceEvents = useMemo(()=>events.filter(e => e.kind === "absence"), [events]);
+  const placed = useMemo(()=>placeInLanes(regularEvents), [regularEvents]);
 
   function openNewAt(hour){
     const start = `${pad2(hour)}:00`;
@@ -163,6 +165,35 @@ export default function DayPage({ params }){
         {/* Timeline */}
         <Col span={12}>
           <Card title="Zeitplan">
+            {absenceEvents.length > 0 && (
+              <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                {absenceEvents.map(ev => (
+                  <Link
+                    key={ev.id}
+                    href={`/termine/eintrag/${ev.id}`}
+                    className="card"
+                    style={{
+                      background: "rgba(239, 68, 68, 0.1)", // light red background
+                      borderLeft: "4px solid #EF4444",
+                      padding: "8px 12px",
+                      textDecoration: "none",
+                      color: "inherit",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px"
+                    }}
+                  >
+                    <div style={{ fontSize: 20 }}>🚫</div>
+                    <div>
+                      <div style={{ fontWeight: "bold" }}>Abwesend</div>
+                      <div className="muted" style={{ fontSize: "0.9em" }}>
+                        {ev.endDate ? `Bis ${fmtDE(ev.endDate)}` : "Ganztägig"} {ev.employeeName ? `· ${ev.employeeName}` : "· Gesamtes Unternehmen"}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
             <div
               ref={timelineRef}
               style={{ position:"relative", height: 24*ROW_H }}
@@ -278,11 +309,16 @@ export default function DayPage({ params }){
           <Card title={`Alle Einträge – ${fmtDE(ymd)}`}>
             {loading && <div className="muted">Lade…</div>}
             {!loading && error && <div className="error">{error}</div>}
-            {!loading && !error && placed.length===0 && <div className="muted">Keine Einträge.</div>}
-            {!loading && !error && placed.length>0 && (
+            {!loading && !error && events.length===0 && <div className="muted">Keine Einträge.</div>}
+            {!loading && !error && events.length>0 && (
               <div style={{ display:"grid", gap:8 }}>
-                {placed.map(ev=>{
-                  const timeTxt = `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${String(ev.endAt).slice(0,5)}`:""}`;
+                {events.sort((a,b) => {
+                    if (a.kind === "absence" && b.kind !== "absence") return -1;
+                    if (a.kind !== "absence" && b.kind === "absence") return 1;
+                    return (a.startAt??"").localeCompare(b.startAt??"");
+                }).map(ev=>{
+                  const isAbsence = ev.kind === "absence";
+                  const timeTxt = isAbsence ? "" : `${String(ev.startAt||"").slice(0,5)}${ev.endAt?`–${String(ev.endAt).slice(0,5)}`:""}`;
                   const status = ev.status==="cancelled" ? "abgesagt" : ev.status==="done" ? "abgeschlossen" : "offen";
                   return (
                     <Link
@@ -291,16 +327,16 @@ export default function DayPage({ params }){
                       className="card"
                       style={{ textDecoration:"none", padding:10, display:"grid", gridTemplateColumns:"auto 1fr auto", gap:10, alignItems:"center" }}
                     >
-                      <div style={{ fontSize:20 }}>{ev.kind==='order'?"🧾":"📅"}</div>
+                      <div style={{ fontSize:20 }}>{isAbsence ? "🚫" : (ev.kind==='order'?"🧾":"📅")}</div>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                           {ev.title || "(ohne Titel)"}
                         </div>
                         <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
+                          {isAbsence ? "Abwesend" : timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
                         </div>
                       </div>
-                      <StatusPill status={status} />
+                      {!isAbsence && <StatusPill status={status} />}
                     </Link>
                   );
                 })}

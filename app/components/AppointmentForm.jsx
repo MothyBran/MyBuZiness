@@ -199,18 +199,11 @@ export default function AppointmentForm({ initial = null, customers = [], employ
             <span className="label">Bis (einschließlich)</span>
             <input className="input af-control" type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} min={date} required />
           </label>
-          <label className="field">
-            <span className="label">Status</span>
-            <select className="select af-control" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="open">offen</option>
-              <option value="cancelled">abgesagt</option>
-              <option value="done">abgeschlossen</option>
-            </select>
-          </label>
         </div>
         )}
 
         {/* Zeile 4: Kunde */}
+        {kind !== "absence" && (
         <label className="field">
           <span className="label">Kunde (optional)</span>
           <select className="select af-control" value={customerId ?? ""} onChange={e=>setCustomerId(e.target.value)}>
@@ -218,6 +211,7 @@ export default function AppointmentForm({ initial = null, customers = [], employ
             {customers.map(c=> <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
+        )}
 
         {/* Zeile 5: Notiz */}
         <label className="field">
