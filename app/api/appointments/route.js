@@ -48,11 +48,22 @@ export async function GET(req) {
         args.push(todayYMD());
       }
     } else if (date) {
-      where.push(`"date" = $${args.length + 1}`);
+      where.push(`("date" = $${args.length + 1} OR ("kind" = 'absence' AND "date" <= $${args.length + 1} AND ("endDate" IS NULL OR "endDate" >= $${args.length + 1})))`);
       args.push(date);
     } else if (month) {
-      where.push(`date_trunc('month', "date") = date_trunc('month', $${args.length + 1}::date)`);
-      args.push(`${month}-01`);
+      // For month, we need any event that starts in the month OR is an absence that overlaps with the month
+      const startOfMonth = `${month}-01`;
+      // Next month to define the bound
+      const dateObj = new Date(startOfMonth);
+      dateObj.setMonth(dateObj.getMonth() + 1);
+      const startOfNextMonth = dateObj.toISOString().slice(0, 10);
+
+      where.push(`(
+        ("date" >= $${args.length + 1} AND "date" < $${args.length + 2}) OR
+        ("kind" = 'absence' AND "date" < $${args.length + 2} AND ("endDate" IS NULL OR "endDate" >= $${args.length + 1}))
+      )`);
+      args.push(startOfMonth);
+      args.push(startOfNextMonth);
     }
 
     if (kind && (kind === "appointment" || kind === "order" || kind === "absence")) {

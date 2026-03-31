@@ -242,14 +242,15 @@ export default function TerminePage(){
               <div style={{ display:"grid", gap:8 }}>
                 {events.map(ev=>{
                   const displayStatus = computeDisplayStatus(ev);
+                  const isAbsence = ev.kind === "absence";
                   return (
                     <div
                       key={ev.id}
                       className="card"
                       style={{ padding: 10, display:"grid", gridTemplateColumns:"auto 1fr auto", gap:10, alignItems:"center" }}
                     >
-                      <div style={{ fontSize:20 }} title={ev.kind==='order'?'Auftrag':'Termin'}>
-                        {ev.kind==='order' ? "🧾" : "📅"}
+                      <div style={{ fontSize:20 }} title={isAbsence ? 'Abwesend' : (ev.kind==='order'?'Auftrag':'Termin')}>
+                        {isAbsence ? "🚫" : (ev.kind==='order' ? "🧾" : "📅")}
                       </div>
                       <div style={{ minWidth:0 }}>
                         <div style={{ fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
@@ -259,13 +260,13 @@ export default function TerminePage(){
                         </div>
                         <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                           <Link href={`/termine/${(typeof ev.date==='string' && ev.date.length>10) ? ev.date.slice(0,10) : ev.date}`} style={{ color:"inherit", textDecoration:"none" }}>
-                            {formatDateDE(ev.date)} · {ev.startAt?.slice(0,5)}{ev.endAt?`–${ev.endAt.slice(0,5)}`:""}
+                            {formatDateDE(ev.date)} {isAbsence && ev.endDate ? ` - ${formatDateDE(ev.endDate)}` : ` · ${ev.startAt?.slice(0,5) || ""}${ev.endAt?`–${ev.endAt.slice(0,5)}`:""}`}
                           </Link>
                           {ev.customerName && <> · {ev.customerName}</>}
                         </div>
                       </div>
                       <div>
-                        <StatusPill status={displayStatus} />
+                        {!isAbsence && <StatusPill status={displayStatus} />}
                       </div>
                     </div>
                   );
