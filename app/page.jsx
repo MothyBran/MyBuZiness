@@ -66,6 +66,7 @@ export default function HomePage() {
   });
   const [currency, setCurrency] = useState("EUR");
   const [dashboardConfig, setDashboardConfig] = useState({});
+  const [company, setCompany] = useState({});
 
   const [latestReceipts, setLatestReceipts] = useState([]);
   const [latestInvoices, setLatestInvoices] = useState([]);
@@ -83,6 +84,7 @@ export default function HomePage() {
       const d = dash?.data || {};
 
       setDashboardConfig(d.settings?.dashboardConfig || cfg?.dashboardConfig || {});
+      setCompany(d.settings?.company || cfg?.company || {});
 
       // Fallbacks
       const receipts = await safeGet("/api/receipts?limit=5", { ok: true, data: [] });
@@ -128,6 +130,16 @@ export default function HomePage() {
     <>
     <Page>
       <PageHeader title="Dashboard" />
+
+      {(company?.name || company?.phone || company?.email) && (
+        <div className="dashboard-banner">
+          {company.name && <span>{company.name}</span>}
+          {company.name && company.phone && <span className="separator">•</span>}
+          {company.phone && <span>{company.phone}</span>}
+          {(company.name || company.phone) && company.email && <span className="separator hide-mobile">•</span>}
+          {company.email && <span className="hide-mobile">{company.email}</span>}
+        </div>
+      )}
 
       <div className="kpi-grid mb-6">
         {dashboardConfig.today?.visible !== false && <KpiCard title="Heute" value={moneyFromCents(stats.today, currency)} icon="euro" tone="brand" defaultCensored={dashboardConfig.today?.censored} />}
