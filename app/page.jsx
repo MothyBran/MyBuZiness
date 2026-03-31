@@ -128,17 +128,18 @@ export default function HomePage() {
 
   return (
     <>
-    {(company?.name || company?.phone || company?.email) && (
-      <div className="dashboard-banner">
-        {company.name && <span>{company.name}</span>}
-        {company.name && company.phone && <span className="separator">•</span>}
-        {company.phone && <span>{company.phone}</span>}
-        {(company.name || company.phone) && company.email && <span className="separator hide-mobile">•</span>}
-        {company.email && <span className="hide-mobile">{company.email}</span>}
-      </div>
-    )}
-
     <Page>
+      {(company?.name || company?.phone || company?.email) && (
+        <div className="dashboard-banner">
+          <div className="dashboard-banner-content">
+            {company.name && <span>{company.name}</span>}
+            {company.name && company.phone && <span className="separator">&nbsp;•&nbsp;</span>}
+            {company.phone && <span>{company.phone}</span>}
+            {(company.name || company.phone) && company.email && <span className="separator hide-mobile">&nbsp;•&nbsp;</span>}
+            {company.email && <span className="hide-mobile">{company.email}</span>}
+          </div>
+        </div>
+      )}
       <PageHeader title="Dashboard" />
 
       <div className="kpi-grid mb-6">
@@ -237,6 +238,46 @@ export default function HomePage() {
           margin-bottom: 1.5rem;
         }
         .mb-6 { margin-bottom: 1.5rem; }
+
+        .dashboard-banner {
+          background-color: var(--color-primary, #0aa);
+          color: #ffffff;
+          width: 100vw;
+          margin-left: calc(-50vw + 50%);
+          margin-right: calc(-50vw + 50%);
+          margin-top: -1.5rem;
+          margin-bottom: 1.5rem;
+          padding: 0.35rem 1rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 500;
+          font-size: 0.85rem;
+        }
+        @media (min-width: 769px) {
+          .dashboard-banner {
+            width: calc(100vw - 72px);
+            margin-left: calc(-50vw + 50% + 36px);
+            margin-right: calc(-50vw + 50% - 36px);
+          }
+        }
+        .dashboard-banner-content {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: center;
+        }
+        .dashboard-banner .separator {
+          opacity: 0.7;
+        }
+        @media (max-width: 600px) {
+          .dashboard-banner .hide-mobile {
+            display: none;
+          }
+        }
       `}</style>
     </Page>
 
