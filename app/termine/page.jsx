@@ -231,14 +231,16 @@ export default function TerminePage(){
                       <div style={{ display:"flex", flexDirection: "column", gap:4, overflow: "hidden" }}>
                         {list.slice(0,4).map(x=>{
                           const isAbsence = x.kind === "absence";
-                          const color = isAbsence ? "#EF4444" : (x.kind==='order' ? "#F59E0B" : "#3B82F6");
+                          const color = isAbsence ? "rgba(239, 68, 68, 0.1)" : (x.kind==='order' ? "#F59E0B" : "#3B82F6");
+                          const textColor = isAbsence ? "#EF4444" : "#fff";
+                          const borderLeft = isAbsence ? "3px solid #EF4444" : "none";
                           return (
                             <div
                               key={x.id}
-                              style={{ width:"100%", padding:"2px 4px", background:color, color:"#fff", borderRadius:4, fontSize:10, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}
-                              title={`${isAbsence ? "Abwesend" : x.startAt?.slice(0,5)||"Ganztägig"} - ${x.title}`}
+                              style={{ width:"100%", padding:"2px 4px", background:color, color:textColor, borderLeft:borderLeft, borderRadius:4, fontSize:10, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}
+                              title={isAbsence ? (x.title || "Abwesend") : `${x.startAt?.slice(0,5) || "Ganztägig"} - ${x.title}`}
                             >
-                              {isAbsence ? "🚫 Abwesend" : (x.startAt?.slice(0,5)||"Ganztägig") + " " + x.title}
+                              {isAbsence ? `🚫 ${x.title || "Abwesend"}` : (x.startAt?.slice(0,5)||"Ganztägig") + " " + x.title}
                             </div>
                           );
                         })}
