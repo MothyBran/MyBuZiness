@@ -98,34 +98,6 @@ export async function PUT(request) {
     const res = await q(updateQuery, params);
     const updatedUser = res.rows[0];
 
-    // Check License Status (only for main user, employee inherits)
-    let isExpired = false;
-    let expiresAt = null;
-    let licenseKind = "lifetime";
-
-    if (updatedUser.role !== 'employee') {
-      const licenseRes = await q(`SELECT kind, "expiresAt" FROM "License" WHERE "userId" = $1`, [updatedUser.id]);
-      if (licenseRes.rows.length > 0) {
-        const license = licenseRes.rows[0];
-        licenseKind = license.kind;
-        expiresAt = license.expiresAt;
-        if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
-          isExpired = true;
-        }
-      }
-    } else if (updatedUser.ownerId) {
-      // Employees inherit license status from their owner
-      const licenseRes = await q(`SELECT kind, "expiresAt" FROM "License" WHERE "userId" = $1`, [updatedUser.ownerId]);
-      if (licenseRes.rows.length > 0) {
-        const license = licenseRes.rows[0];
-        licenseKind = license.kind;
-        expiresAt = license.expiresAt;
-        if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
-          isExpired = true;
-        }
-      }
-    }
-
     // Refresh Session
     const token = await signToken({
       id: updatedUser.id,
@@ -133,9 +105,6 @@ export async function PUT(request) {
       name: updatedUser.name,
       role: updatedUser.role || 'admin',
       ownerId: updatedUser.ownerId || null,
-      licenseKind,
-      expiresAt,
-      isExpired
     });
 
     const cookieStore = await cookies();
