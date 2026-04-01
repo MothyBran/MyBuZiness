@@ -155,15 +155,18 @@ export async function POST(req) {
             return NextResponse.json({ error: "outside_business_hours" }, { status: 400 });
         }
 
-        // Absence Check
+        // Absence Check: Only consider open or completed absences, ignore cancelled.
+        // Also ensure company wide absences (employeeId IS NULL) block everyone,
+        // and employee specific absences only block that employee.
         const overlapQuery = `
           SELECT id FROM "Appointment"
           WHERE "userId" = $1 AND "kind" = 'absence'
-          AND ("employeeId" IS NULL OR "employeeId" = $2)
+          AND "status" != 'cancelled'
+          AND ("employeeId" IS NULL OR "employeeId" = $2::text)
           AND $3::date <= "endDate" AND $3::date >= "date"
           LIMIT 1
         `;
-        const { rows: overlappingAbsences } = await client.query(overlapQuery, [userId, employeeId, payload.date]);
+        const { rows: overlappingAbsences } = await client.query(overlapQuery, [userId, employeeId || null, payload.date]);
         if (overlappingAbsences.length > 0) {
             return NextResponse.json({ error: "employee_absent" }, { status: 400 });
         }
