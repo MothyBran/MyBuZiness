@@ -39,7 +39,7 @@ export default function TaxSection({ year, isKleinunternehmer }) {
   async function loadData() {
     setLoading(true);
     try {
-      const r = await fetch(`/api/finances/tax?year=${year}`);
+      const r = await fetch(`/api/finanzen/tax?year=${year}`);
       const j = await r.json();
       if (j.ok) {
         setData(j);
@@ -87,7 +87,7 @@ export default function TaxSection({ year, isKleinunternehmer }) {
         steuerklasse: form.steuerklasse
       };
 
-      const r = await fetch("/api/finances/tax", {
+      const r = await fetch("/api/finanzen/tax", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

@@ -36,7 +36,7 @@ export default function BerichtPrintPage({ params }) {
       const end = `${y}-12-31`;
 
       const [resTx, resSet, resRec, resInv] = await Promise.all([
-        fetch(`/api/finances/transactions?from=${start}&to=${end}&limit=5000`, { cache: "no-store" }),
+        fetch(`/api/finanzen/transactions?from=${start}&to=${end}&limit=5000`, { cache: "no-store" }),
         fetch("/api/settings", { cache: "no-store" }),
         fetch(`/api/receipts?limit=5000`, { cache: "no-store" }),
         fetch(`/api/invoices?limit=5000`, { cache: "no-store" })

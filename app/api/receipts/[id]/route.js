@@ -63,18 +63,31 @@ export async function GET(_req, { params }) {
 
 /** Löschen */
 export async function DELETE(_req, { params }) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
     const { id } = await params;
+
+    await client.query("BEGIN");
+
+    // Lösche etwaige verknüpfte Transaktionen in der Finanzen-Auswertung
+    await client.query(`DELETE FROM "FinanceTransaction" WHERE "receiptId"=$1 AND "userId"=$2`, [id, userId]);
+
     // rely on CASCADE for items
-    const res = await q(`DELETE FROM "Receipt" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
+    const res = await client.query(`DELETE FROM "Receipt" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
     if (res.rowCount === 0) {
+      await client.query("ROLLBACK");
       return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden" }), { status:404 });
     }
+
+    await client.query("COMMIT");
     return Response.json({ ok:true });
   } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
     return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: e.message === "Unauthorized" ? 401 : 400 });
+  } finally {
+    client.release();
   }
 }
 
