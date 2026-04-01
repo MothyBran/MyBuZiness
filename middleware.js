@@ -12,7 +12,10 @@ const PUBLIC_PATHS = [
   "/brand-logo.png",
   "/logo.png",
   "/manifest.json",
-  "/favicon.ico"
+  "/favicon.ico",
+  "/impressum",
+  "/datenschutz",
+  "/agb"
 ];
 
 export async function middleware(request) {
