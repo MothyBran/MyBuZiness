@@ -109,7 +109,8 @@ export async function PUT(req, { params }) {
         const overlapQuery = `
           SELECT id FROM "Appointment"
           WHERE "userId" = $1 AND "kind" = 'absence' AND "id" != $4
-          AND ("employeeId" IS NULL OR "employeeId" = $2)
+          AND "status" != 'cancelled'
+          AND ("employeeId" IS NULL OR "employeeId" = $2::text)
           AND $3::date <= "endDate" AND $3::date >= "date"
           LIMIT 1
         `;
