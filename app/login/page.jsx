@@ -214,6 +214,14 @@ export default function LoginPage() {
       <div style={{ marginTop: "1.5rem", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
         Noch kein Konto? <Link href="/register" style={{ color: "var(--brand)", fontWeight: 500 }}>Jetzt registrieren</Link>
       </div>
+
+      <div style={{ marginTop: "2rem", display: "flex", justifyContent: "center", gap: "1rem", fontSize: "0.75rem", color: "var(--muted)" }}>
+        <Link href="/impressum" style={{ color: "inherit", textDecoration: "none" }}>Impressum</Link>
+        <span>|</span>
+        <Link href="/datenschutz" style={{ color: "inherit", textDecoration: "none" }}>Datenschutz</Link>
+        <span>|</span>
+        <Link href="/agb" style={{ color: "inherit", textDecoration: "none" }}>AGB</Link>
+      </div>
     </div>
   );
 }

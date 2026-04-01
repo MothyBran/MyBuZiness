@@ -76,9 +76,25 @@ export default function Sidebar({ user }) {
         >
           <span className="sidebar__icon">🚪</span>
         </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "center", marginTop: "0.5rem" }}>
+          <Link href="/impressum" title="Impressum" className="sidebar__legal-link">Imp</Link>
+          <Link href="/datenschutz" title="Datenschutz" className="sidebar__legal-link">DSG</Link>
+          <Link href="/agb" title="AGB" className="sidebar__legal-link">AGB</Link>
+        </div>
       </div>
 
       <style jsx>{`
+        .sidebar__legal-link {
+          font-size: 0.6rem;
+          color: var(--muted);
+          text-decoration: none;
+          opacity: 0.7;
+          transition: opacity 0.2s ease;
+        }
+        .sidebar__legal-link:hover {
+          opacity: 1;
+        }
+
         .sidebar {
           position: fixed;
           top: 0;
