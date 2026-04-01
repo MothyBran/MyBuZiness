@@ -185,7 +185,7 @@ export default function DayPage({ params }){
                   >
                     <div style={{ fontSize: 20 }}>🚫</div>
                     <div>
-                      <div style={{ fontWeight: "bold" }}>Abwesend</div>
+                      <div style={{ fontWeight: "bold" }}>{ev.title || "Abwesend"}</div>
                       <div className="muted" style={{ fontSize: "0.9em" }}>
                         {ev.endDate ? `Bis ${fmtDE(ev.endDate)}` : "Ganztägig"} {ev.employeeName ? `· ${ev.employeeName}` : "· Gesamtes Unternehmen"}
                       </div>
@@ -333,7 +333,7 @@ export default function DayPage({ params }){
                           {ev.title || "(ohne Titel)"}
                         </div>
                         <div className="muted" style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {isAbsence ? "Abwesend" : timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
+                          {isAbsence ? (ev.endDate ? `Bis ${fmtDE(ev.endDate)}` : "Ganztägig") : timeTxt}{ev.customerName?` · ${ev.customerName}`:""}
                         </div>
                       </div>
                       {!isAbsence && <StatusPill status={status} />}

@@ -116,16 +116,37 @@ export default function AppointmentForm({ initial = null, customers = [], employ
 
   return (
     <form onSubmit={submit} className="form af-form">
-      {errorMsg && <div className="error" style={{ marginBottom: "1rem" }}>{errorMsg}</div>}
+      {errorMsg && (
+        <div style={{
+          backgroundColor: "#FEF08A",
+          color: "#854D0E",
+          padding: "10px",
+          borderRadius: "6px",
+          marginBottom: "1rem",
+          fontWeight: 500,
+          border: "1px solid #FDE047"
+        }}>
+          {errorMsg}
+        </div>
+      )}
       <div className="af-wrap">
         {/* Zeile 1: Art | Datum */}
         <div className="af-row2">
           <label className="field">
             <span className="label">Art</span>
             <select className="select af-control" value={kind} onChange={e=>{
-              setKind(e.target.value);
-              if(e.target.value === "absence") setTitle("Abwesend");
-              else if(title === "Abwesend") setTitle("");
+              const newKind = e.target.value;
+              setKind(newKind);
+              if (newKind === "absence") {
+                if (!employeeId) {
+                  setTitle("Geschlossen");
+                } else {
+                  const emp = employees.find(emp => String(emp.id) === String(employeeId));
+                  setTitle(emp ? `${emp.name} Abwesend` : "Abwesend");
+                }
+              } else if (title === "Geschlossen" || title.endsWith("Abwesend")) {
+                setTitle("");
+              }
             }}>
               <option value="appointment">Termin</option>
               <option value="order">Auftrag</option>
@@ -148,7 +169,18 @@ export default function AppointmentForm({ initial = null, customers = [], employ
         {/* Zeile: Mitarbeiter */}
         <label className="field">
           <span className="label">Mitarbeiter {kind === "absence" ? "(Leer = Alle)" : "(Optional)"}</span>
-          <select className="select af-control" value={employeeId} onChange={e=>setEmployeeId(e.target.value)}>
+          <select className="select af-control" value={employeeId} onChange={e=>{
+            const newEmpId = e.target.value;
+            setEmployeeId(newEmpId);
+            if (kind === "absence") {
+              if (!newEmpId) {
+                setTitle("Geschlossen");
+              } else {
+                const emp = employees.find(emp => String(emp.id) === String(newEmpId));
+                setTitle(emp ? `${emp.name} Abwesend` : "Abwesend");
+              }
+            }
+          }}>
             <option value="">{kind === "absence" ? "Gesamtes Unternehmen" : "Eingeloggter Nutzer (Standard)"}</option>
             {employees.map(emp => (
               <option key={emp.id} value={emp.id}>{emp.name}</option>
