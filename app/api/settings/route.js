@@ -1,7 +1,7 @@
 // app/api/settings/route.js
 import { initDb, q, uuid } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { requireUser, getUser } from "@/lib/auth";
 
 /**
  * Lädt genau EINEN Settings‑Datensatz (den ersten), und
@@ -62,47 +62,53 @@ export async function GET() {
 
 export async function PUT(request) {
   try {
-    const userId = await requireUser();
+    const user = await getUser();
+    if (!user) throw new Error("Unauthorized");
+    if (user.role === 'employee') {
+       return NextResponse.json({ ok: false, error: "Mitarbeiter dürfen keine Einstellungen ändern." }, { status: 403 });
+    }
+    const userId = user.ownerId || user.id;
+
     await initDb();
     const body = await request.json().catch(() => ({}));
+    const existing = await fetchOne(userId);
 
     // Akzeptiere weiterhin "owner" als Alias
-    const ownerName = body.ownerName ?? body.owner ?? null;
+    const ownerName = body.ownerName ?? body.owner ?? (existing ? existing.ownerName : null);
 
     // NEU: taxRateDefault (sicher als Integer)
-    let taxRateDefault = Number(body.taxRateDefault);
+    let taxRateDefault = body.taxRateDefault !== undefined ? Number(body.taxRateDefault) : (existing ? existing.taxRateDefault : 19);
     if (!Number.isFinite(taxRateDefault)) taxRateDefault = 19;
     taxRateDefault = Math.max(0, Math.trunc(taxRateDefault)); // keine Nachkommastellen
 
     const payload = {
-      companyName: body.companyName ?? null,
-      slogan: body.slogan ?? null,
+      companyName: body.companyName !== undefined ? body.companyName : (existing ? existing.companyName : null),
+      slogan: body.slogan !== undefined ? body.slogan : (existing ? existing.slogan : null),
       ownerName,
-      address1: body.address1 ?? null,
-      address2: body.address2 ?? null,
-      postalCode: body.postalCode ?? null,
-      city: body.city ?? null,
-      phone: body.phone ?? null,
-      email: body.email ?? null,
-      website: body.website ?? null,
-      bankAccount: body.bankAccount ?? null,
-      bankInstitution: body.bankInstitution ?? null,
-      bankRecipient: body.bankRecipient ?? null,
-      bankIban: body.bankIban ?? null,
-      bankBic: body.bankBic ?? null,
-      vatId: body.vatId ?? null,
-      kleinunternehmer: !!body.kleinunternehmer,
-      currency: body.currency ?? "EUR",
-      logoUrl: body.logoUrl ?? null,
-      primaryColor: body.primaryColor ?? "#06b6d4",
-      secondaryColor: body.secondaryColor ?? "#0ea5e9",
-      taxRateDefault, // NEU
-      dashboardConfig: body.dashboardConfig ?? {},
-      receiptNoteDefault: body.receiptNoteDefault ?? "Vielen Dank, ich freue mich auf deinen nächsten Besuch!",
-      appointmentSettings: body.appointmentSettings ?? { workdays: [1,2,3,4,5], start: "08:00", end: "18:00" },
+      address1: body.address1 !== undefined ? body.address1 : (existing ? existing.address1 : null),
+      address2: body.address2 !== undefined ? body.address2 : (existing ? existing.address2 : null),
+      postalCode: body.postalCode !== undefined ? body.postalCode : (existing ? existing.postalCode : null),
+      city: body.city !== undefined ? body.city : (existing ? existing.city : null),
+      phone: body.phone !== undefined ? body.phone : (existing ? existing.phone : null),
+      email: body.email !== undefined ? body.email : (existing ? existing.email : null),
+      website: body.website !== undefined ? body.website : (existing ? existing.website : null),
+      bankAccount: body.bankAccount !== undefined ? body.bankAccount : (existing ? existing.bankAccount : null),
+      bankInstitution: body.bankInstitution !== undefined ? body.bankInstitution : (existing ? existing.bankInstitution : null),
+      bankRecipient: body.bankRecipient !== undefined ? body.bankRecipient : (existing ? existing.bankRecipient : null),
+      bankIban: body.bankIban !== undefined ? body.bankIban : (existing ? existing.bankIban : null),
+      bankBic: body.bankBic !== undefined ? body.bankBic : (existing ? existing.bankBic : null),
+      vatId: body.vatId !== undefined ? body.vatId : (existing ? existing.vatId : null),
+      kleinunternehmer: body.kleinunternehmer !== undefined ? !!body.kleinunternehmer : (existing ? !!existing.kleinunternehmer : true),
+      currency: body.currency !== undefined ? body.currency : (existing ? existing.currency : "EUR"),
+      logoUrl: body.logoUrl !== undefined ? body.logoUrl : (existing ? existing.logoUrl : null),
+      primaryColor: body.primaryColor !== undefined ? body.primaryColor : (existing ? existing.primaryColor : "#06b6d4"),
+      secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : (existing ? existing.secondaryColor : "#0ea5e9"),
+      taxRateDefault,
+      dashboardConfig: body.dashboardConfig !== undefined ? body.dashboardConfig : (existing ? existing.dashboardConfig : {}),
+      receiptNoteDefault: body.receiptNoteDefault !== undefined ? body.receiptNoteDefault : (existing ? existing.receiptNoteDefault : "Vielen Dank, ich freue mich auf deinen nächsten Besuch!"),
+      appointmentSettings: body.appointmentSettings !== undefined ? body.appointmentSettings : (existing ? existing.appointmentSettings : { workdays: [1,2,3,4,5], start: "08:00", end: "18:00" }),
     };
 
-    const existing = await fetchOne(userId);
 
     if (!existing) {
       const id = uuid();
