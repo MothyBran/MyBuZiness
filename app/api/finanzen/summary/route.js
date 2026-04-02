@@ -48,15 +48,34 @@ async function sumReceipts(userId, from, to) {
   const sql = `
     SELECT
       COALESCE(SUM("grossCents"),0)::int AS rec_gross,
-      COALESCE(SUM("netCents"),0)::int   AS rec_net
+      COALESCE(SUM("netCents"),0)::int   AS rec_net,
+      COUNT(*)::int AS rec_count,
+      COUNT(DISTINCT "date")::int AS work_days_count
     FROM "Receipt"
     WHERE "userId"=$1 AND "date" >= $2 AND "date" < $3
   `;
   try {
     const { rows } = await q(sql, [userId, from, to]);
-    return rows[0] || { rec_gross:0, rec_net:0 };
+    return rows[0] || { rec_gross:0, rec_net:0, rec_count:0, work_days_count:0 };
   } catch {
-    return { rec_gross:0, rec_net:0 };
+    return { rec_gross:0, rec_net:0, rec_count:0, work_days_count:0 };
+  }
+}
+
+/* ---------- Count Invoices (Periode) ---------- */
+async function countInvoices(userId, from, to) {
+  const sql = `
+    SELECT COUNT(*)::int AS inv_count
+    FROM "Invoice"
+    WHERE "userId"=$1 AND "issueDate" >= $2 AND "issueDate" < $3
+      AND "status" != 'storniert'
+      AND "status" != 'canceled'
+  `;
+  try {
+    const { rows } = await q(sql, [userId, from, to]);
+    return rows[0] || { inv_count: 0 };
+  } catch {
+    return { inv_count: 0 };
   }
 }
 
@@ -114,11 +133,15 @@ async function euerYearWithDocs(userId) {
   return { incomeNet, expenseNet };
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
     const userId = await requireUser();
     await initDb();
     const settings = await getSettings(userId);
+
+    const { searchParams } = new URL(req.url);
+    const filterMonth = searchParams.get("month");
+    const filterYear = searchParams.get("year");
 
     // Perioden, die die Kacheln nutzen
     const P = {
@@ -128,23 +151,38 @@ export async function GET() {
       mtd:    periodBounds("mtd"),
     };
 
+    if (filterMonth && filterYear) {
+      const start = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10) - 1, 1));
+      const end = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10), 1));
+      P.selected = {
+        from: start.toISOString().slice(0, 10),
+        to: end.toISOString().slice(0, 10)
+      };
+    } else {
+      P.selected = P.mtd;
+    }
+
     // Hilfsbuilder: Einnahmen = FinanceTx(income) + Receipts; Ausgaben = FinanceTx(expense)
     async function buildPeriod({ from, to }) {
-      const [tx, rec] = await Promise.all([
+      const [tx, rec, inv] = await Promise.all([
         sumFinanceTx(userId, from, to),
-        sumReceipts(userId, from, to)
+        sumReceipts(userId, from, to),
+        countInvoices(userId, from, to)
       ]);
       const incomeCents = (tx.inc_gross || 0) + (rec.rec_gross || 0);
       const expenseCents = (tx.exp_gross || 0);
       return {
         incomeCents,
         expenseCents,
+        receiptsCount: rec.rec_count || 0,
+        workDaysCount: rec.work_days_count || 0,
+        invoicesCount: inv.inv_count || 0,
         adds: { receiptsGross: rec.rec_gross || 0, invoicesGross: 0 }
       };
     }
 
-    const [pToday, p7, p30, pMtd] = await Promise.all([
-      buildPeriod(P.today), buildPeriod(P.last7), buildPeriod(P.last30), buildPeriod(P.mtd)
+    const [pToday, p7, p30, pMtd, pSelected] = await Promise.all([
+      buildPeriod(P.today), buildPeriod(P.last7), buildPeriod(P.last30), buildPeriod(P.mtd), buildPeriod(P.selected)
     ]);
 
     // Zusätze für das Tabellenjahr (für Hinweiszeile unter der Liste)
@@ -177,12 +215,20 @@ export async function GET() {
         last7:  { incomeCents: p7.incomeCents,      expenseCents: p7.expenseCents },
         last30: { incomeCents: p30.incomeCents,     expenseCents: p30.expenseCents },
         mtd:    { incomeCents: pMtd.incomeCents,    expenseCents: pMtd.expenseCents },
+        selected: {
+          incomeCents: pSelected.incomeCents,
+          expenseCents: pSelected.expenseCents,
+          receiptsCount: pSelected.receiptsCount,
+          workDaysCount: pSelected.workDaysCount,
+          invoicesCount: pSelected.invoicesCount
+        }
       },
       adds: {
         today:  pToday.adds,
         last7:  p7.adds,
         last30: p30.adds,
         mtd:    pMtd.adds,
+        selected: pSelected.adds,
         ...additions
       },
       ust: { mtd: ust_mtd || { u19_net:0,u19_vat:0,u07_net:0,u07_vat:0,v19_vat:0,v07_vat:0,zahllast:0 } },

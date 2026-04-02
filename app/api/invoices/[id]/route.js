@@ -384,15 +384,30 @@ export async function PATCH(req, { params }) {
 }
 
 export async function DELETE(_req, { params }) {
+  const client = await pool.connect();
   try {
     const userId = await requireUser();
     await initDb();
     const { id } = await params;
+
+    await client.query("BEGIN");
+
+    // Lösche etwaige verknüpfte Transaktionen in der Finanzen-Auswertung
+    await client.query(`DELETE FROM "FinanceTransaction" WHERE "invoiceId"=$1 AND "userId"=$2`, [id, userId]);
+
     // rely on CASCADE for items
-    const res = await q(`DELETE FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
-    if (res.rowCount === 0) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
+    const res = await client.query(`DELETE FROM "Invoice" WHERE "id"=$1 AND "userId"=$2`, [id, userId]);
+    if (res.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
+    }
+
+    await client.query("COMMIT");
     return Response.json({ ok:true });
   } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
     return new Response(JSON.stringify({ ok:false, error:String(e) }), { status: 400 });
+  } finally {
+    client.release();
   }
 }

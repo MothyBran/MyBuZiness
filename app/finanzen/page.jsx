@@ -42,7 +42,7 @@ export default function FinanzenPage(){
   const [capFile, setCapFile] = useState(null);
 
   async function loadSummary(){
-    const r = await fetch(`/api/finances/summary?month=${filterMonth}&year=${filterYear}`, { cache: "no-store" });
+    const r = await fetch(`/api/finanzen/summary?month=${filterMonth}&year=${filterYear}`, { cache: "no-store" });
     const j = await r.json(); if (j.ok) setSummary(j);
   }
   async function loadRows(){
@@ -53,12 +53,12 @@ export default function FinanzenPage(){
     const start = new Date(fYear, fMonth - 1, 1).toISOString().slice(0, 10);
     const end = new Date(fYear, fMonth, 1).toISOString().slice(0, 10);
 
-    const r = await fetch(`/api/finances/transactions?from=${start}&to=${end}&limit=1000`, { cache:"no-store" });
+    const r = await fetch(`/api/finanzen/transactions?from=${start}&to=${end}&limit=1000`, { cache:"no-store" });
     const j = await r.json(); if (j.ok) setRows(j.rows || []);
     setLoading(false);
   }
   async function loadCats(){
-    const r = await fetch("/api/finances/categories", { cache:"no-store" });
+    const r = await fetch("/api/finanzen/categories", { cache:"no-store" });
     const j = await r.json(); setCats(j.data || []);
   }
 
@@ -90,7 +90,7 @@ export default function FinanzenPage(){
       paymentMethod: form.paymentMethod || null,
       documentId: documentId,
     };
-    const r = await fetch("/api/finances/transactions", {
+    const r = await fetch("/api/finanzen/transactions", {
       method: "POST", headers: { "Content-Type":"application/json" }, body: JSON.stringify(payload)
     });
     const j = await r.json();
@@ -104,7 +104,7 @@ export default function FinanzenPage(){
 
   async function removeRow(id){
     if(!await confirmMsg("Eintrag wirklich löschen?")) return;
-    const r = await fetch(`/api/finances/transactions/${id}`, { method:"DELETE" });
+    const r = await fetch(`/api/finanzen/transactions/${id}`, { method:"DELETE" });
     const j = await r.json(); if(!j.ok) return await alertMsg(j.error || "Löschen fehlgeschlagen.");
     if (expandedRowId === id) setExpandedRowId(null);
     await Promise.all([loadSummary(), loadRows()]);
