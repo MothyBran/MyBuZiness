@@ -152,12 +152,21 @@ export async function GET(req) {
     };
 
     if (filterMonth && filterYear) {
-      const start = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10) - 1, 1));
-      const end = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10), 1));
-      P.selected = {
-        from: start.toISOString().slice(0, 10),
-        to: end.toISOString().slice(0, 10)
-      };
+      if (filterMonth === "all") {
+        const start = new Date(Date.UTC(parseInt(filterYear, 10), 0, 1));
+        const end = new Date(Date.UTC(parseInt(filterYear, 10) + 1, 0, 1));
+        P.selected = {
+          from: start.toISOString().slice(0, 10),
+          to: end.toISOString().slice(0, 10)
+        };
+      } else {
+        const start = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10) - 1, 1));
+        const end = new Date(Date.UTC(parseInt(filterYear, 10), parseInt(filterMonth, 10), 1));
+        P.selected = {
+          from: start.toISOString().slice(0, 10),
+          to: end.toISOString().slice(0, 10)
+        };
+      }
     } else {
       P.selected = P.mtd;
     }
