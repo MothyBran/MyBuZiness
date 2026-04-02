@@ -35,6 +35,7 @@ export default function FinanzenPage(){
     vatRate: "19",
     bookedOn: toISODate(),
     categoryCode: "",
+    reference: "",
     note: "",
     paymentMethod: "bank",
   });
@@ -86,6 +87,7 @@ export default function FinanzenPage(){
       vatRate: form.vatRate==="" ? null : Number(form.vatRate),
       bookedOn: form.bookedOn,
       categoryCode: form.categoryCode || null,
+      reference: form.reference || null,
       note: form.note || null,
       paymentMethod: form.paymentMethod || null,
       documentId: documentId,
@@ -95,7 +97,7 @@ export default function FinanzenPage(){
     });
     const j = await r.json();
     if(!j.ok) return await alertMsg(j.error || "Speichern fehlgeschlagen.");
-    setForm({ kind:"expense", gross:"", vatRate:"19", bookedOn:toISODate(), categoryCode:"", note:"", paymentMethod:"bank" });
+    setForm({ kind:"expense", gross:"", vatRate:"19", bookedOn:toISODate(), categoryCode:"", reference:"", note:"", paymentMethod:"bank" });
     setCapFile(null);
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = "";
@@ -246,6 +248,10 @@ export default function FinanzenPage(){
             <input className="input" type="date" value={form.bookedOn} onChange={e=>setForm(f=>({...f, bookedOn:e.target.value}))}/>
           </label>
           <label className="field">
+            <span className="label">Bezeichnung</span>
+            <input className="input" placeholder="z. B. Büromaterial" value={form.reference} onChange={e=>setForm(f=>({...f, reference:e.target.value}))}/>
+          </label>
+          <label className="field">
             <span className="label">Kategorie</span>
             <select className="select" value={form.categoryCode} onChange={e=>setForm(f=>({...f, categoryCode:e.target.value}))}>
               <option value="">—</option>
@@ -264,7 +270,7 @@ export default function FinanzenPage(){
               <option value="other">Sonstiges</option>
             </select>
           </label>
-          <label className="field" style={{gridColumn:"1 / -1"}}>
+          <label className="field">
             <span className="label">Beleg (optional)</span>
             <input type="file" className="input" accept="image/*,application/pdf" capture="environment"
                  onChange={e=>setCapFile(e.target.files?.[0]||null)} />
@@ -309,7 +315,10 @@ export default function FinanzenPage(){
                   <tr style={{cursor: "pointer", background: expandedRowId === r.id ? "var(--panel, #f8fafc)" : "transparent"}} onClick={() => toggleRow(r.id)}>
                     <td style={td}>{r.bookedOn}</td>
                     <td style={td}>{r.kind}</td>
-                    <td style={td}>{r.categoryName || r.categoryCode || "-"}</td>
+                    <td style={td}>
+                      {r.categoryName || r.categoryCode || "-"}
+                      {r.reference && <div style={{fontSize: 12, color: "var(--muted, #6b7280)", marginTop: 2}}>{r.reference}</div>}
+                    </td>
                     {!summary?.settings?.kleinunternehmer && <td style={td}>{(r.vatRate==null || Number.isNaN(Number(r.vatRate)))? "—" : `${Number(r.vatRate)}%`}</td>}
                     <td style={td}>{centsToEUR(r.netCents)}</td>
                     {!summary?.settings?.kleinunternehmer && <td style={td}>{centsToEUR(r.vatCents)}</td>}
