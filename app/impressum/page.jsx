@@ -11,7 +11,7 @@ export default function ImpressumPage() {
         <h1 style={{ fontSize: "2rem", margin: 0 }}>Impressum</h1>
       </div>
 
-      <div className="card" style={{ padding: "2rem" }}>
+      <div className="card" style={{ padding: "2rem", lineHeight: 1.6 }}>
         <h2>Angaben gemäß § 5 TMG</h2>
         <p>
           <strong>My BuZiness (Musterfirma)</strong><br />
