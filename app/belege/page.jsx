@@ -79,7 +79,7 @@ function ReceiptsPageContent(){
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  const [expandedId, setExpandedId] = useState(searchParams.get("expand") || null);
+  const [expandedId, setExpandedId] = useState(null);
   const [details, setDetails] = useState({}); // {id:{loading, err, data}}
 
   // Produkte für Positions-Dropdown
@@ -96,7 +96,7 @@ function ReceiptsPageContent(){
   const [editRow, setEditRow] = useState(null);
 
   // Search state
-  const [q, setQ] = useState(searchParams.get("no") || "");
+  const [q, setQ] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
   // Formularfelder (Edit/New)
@@ -108,6 +108,23 @@ function ReceiptsPageContent(){
   const [items, setItems] = useState([
     { id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }
   ]);
+
+  // Handle URL search params dynamically so it works on soft navigations
+  useEffect(() => {
+    const no = searchParams.get("no");
+    if (no) setQ(no);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const expand = searchParams.get("expand");
+    if (expand && rows.some(r => r.id === expand) && expandedId !== expand) {
+      setExpandedId(expand);
+      if (!details[expand]) {
+        setDetails(prev => ({ ...prev, [expand]: { loading:true, err:"", data:null } }));
+        loadDetail(expand);
+      }
+    }
+  }, [searchParams, rows]);
 
   useEffect(()=>{ load(); },[]);
   async function load(){
@@ -122,13 +139,6 @@ function ReceiptsPageContent(){
       setRows(rowsData);
       setProducts(unpack(prodRes));
       setSettings(setRes?.data || setRes || null);
-
-      const expand = searchParams.get("expand");
-      if (expand && rowsData.some(r => r.id === expand)) {
-        setExpandedId(expand);
-        setDetails(prev => ({ ...prev, [expand]: { loading:true, err:"", data:null } }));
-        loadDetail(expand);
-      }
     }catch(e){ setErr(String(e?.message||e)); setRows([]); }
     finally{ setLoading(false); }
   }
