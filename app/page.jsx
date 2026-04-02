@@ -183,9 +183,10 @@ export default function HomePage() {
                 const no = r.receiptNo ?? r.no ?? r.number ?? r.title ?? "(ohne Nummer)";
                 const dateStr = r.date ? formatDateDE(r.date) : r.createdAt ? formatDateDE(r.createdAt) : "";
                 const vendor = r.vendor ?? r.supplier ?? r.supplierName ?? r.title ?? "";
-                const href = r.receiptNo ? `/belege?no=${encodeURIComponent(r.receiptNo)}`
+                let href = r.receiptNo ? `/belege?no=${encodeURIComponent(r.receiptNo)}`
                   : r.no ? `/belege?no=${encodeURIComponent(r.no)}`
                   : "/belege";
+                if (r.id) href += (href.includes("?") ? "&" : "?") + `expand=${r.id}`;
                 return {
                   icon: "🧾",
                   title: no,
@@ -206,9 +207,10 @@ export default function HomePage() {
               mapItem={(r) => {
                 const no = r.invoiceNo ?? r.no ?? r.number ?? "(ohne Nummer)";
                 const dateStr = r.issueDate ? formatDateDE(r.issueDate) : r.date ? formatDateDE(r.date) : r.createdAt ? formatDateDE(r.createdAt) : "";
-                const href = r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
+                let href = r.invoiceNo ? `/rechnungen?no=${encodeURIComponent(r.invoiceNo)}`
                   : r.no ? `/rechnungen?no=${encodeURIComponent(r.no)}`
                   : "/rechnungen";
+                if (r.id) href += (href.includes("?") ? "&" : "?") + `expand=${r.id}`;
 
                 const status = computeInvoiceStatus(r);
                 let statusColor = "";

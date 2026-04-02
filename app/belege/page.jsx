@@ -60,14 +60,26 @@ function fromCents(c) {
   return n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
 /* ───────── Page ───────── */
-export default function ReceiptsPage(){
+export default function ReceiptsPage() {
+  return (
+    <Suspense fallback={<div className="container p-4">Lade...</div>}>
+      <ReceiptsPageContent />
+    </Suspense>
+  );
+}
+
+function ReceiptsPageContent(){
+  const searchParams = useSearchParams();
   const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedId, setExpandedId] = useState(searchParams.get("expand") || null);
   const [details, setDetails] = useState({}); // {id:{loading, err, data}}
 
   // Produkte für Positions-Dropdown
@@ -84,7 +96,7 @@ export default function ReceiptsPage(){
   const [editRow, setEditRow] = useState(null);
 
   // Search state
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(searchParams.get("no") || "");
   const [showScanner, setShowScanner] = useState(false);
 
   // Formularfelder (Edit/New)
@@ -106,9 +118,17 @@ export default function ReceiptsPage(){
         safeGet("/api/products", []),
         safeGet("/api/settings", {})
       ]);
-      setRows(unpack(listRes));
+      const rowsData = unpack(listRes);
+      setRows(rowsData);
       setProducts(unpack(prodRes));
       setSettings(setRes?.data || setRes || null);
+
+      const expand = searchParams.get("expand");
+      if (expand && rowsData.some(r => r.id === expand)) {
+        setExpandedId(expand);
+        setDetails(prev => ({ ...prev, [expand]: { loading:true, err:"", data:null } }));
+        loadDetail(expand);
+      }
     }catch(e){ setErr(String(e?.message||e)); setRows([]); }
     finally{ setLoading(false); }
   }
