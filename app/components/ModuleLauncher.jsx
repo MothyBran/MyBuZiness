@@ -104,10 +104,34 @@ export default function ModuleLauncher({ open, onClose, id = "module-panel", use
               </button>
             </div>
           )}
+
+          <div className="ml-legal-links">
+            <Link href="/impressum" onClick={onClose}>Impressum</Link>
+            <span>|</span>
+            <Link href="/datenschutz" onClick={onClose}>Datenschutz</Link>
+            <span>|</span>
+            <Link href="/agb" onClick={onClose}>AGB</Link>
+          </div>
         </nav>
       </aside>
 
       <style jsx>{`
+        .ml-legal-links {
+          display: flex;
+          justify-content: center;
+          gap: 0.5rem;
+          margin-top: auto;
+          padding-top: 1rem;
+          font-size: 0.75rem;
+          color: var(--muted);
+        }
+        .ml-legal-links a {
+          color: inherit;
+          text-decoration: none;
+        }
+        .ml-legal-links a:hover {
+          text-decoration: underline;
+        }
         /* Hintergrund (über der Seite, Seite verschiebt sich NICHT) */
         .ml-scrim{
           position: fixed; inset: 0;
