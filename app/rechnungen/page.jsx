@@ -76,13 +76,25 @@ function InvoicesPageContent() {
   const [currency, setCurrency] = useState("EUR");
   const [vatExempt, setVatExempt] = useState(true);
 
-  const [expandedId, setExpandedId] = useState(searchParams.get("expand") || null);
+  const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
-  const [q, setQ] = useState(searchParams.get("no") || "");
+  const [q, setQ] = useState("");
   const [showScanner, setShowScanner] = useState(false);
+
+  useEffect(() => {
+    const no = searchParams.get("no");
+    if (no) setQ(no);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const expand = searchParams.get("expand");
+    if (expand && rows.some(r => r.id === expand) && expandedId !== expand) {
+      setExpandedId(expand);
+    }
+  }, [searchParams, rows]);
 
   async function load() {
     setLoading(true);
@@ -105,11 +117,6 @@ function InvoicesPageContent() {
       if (st?.data) setSettings(st.data);
       setCurrency(st?.data?.currency || "EUR");
       setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
-
-      const expand = searchParams.get("expand");
-      if (expand && rowsData.some(r => r.id === expand)) {
-        setExpandedId(expand);
-      }
     } finally {
       setLoading(false);
     }
