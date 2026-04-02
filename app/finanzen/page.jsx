@@ -50,9 +50,16 @@ export default function FinanzenPage(){
     setLoading(true);
     // Erzeuge Bounds für den Filter
     const fYear = parseInt(filterYear, 10);
-    const fMonth = parseInt(filterMonth, 10);
-    const start = new Date(fYear, fMonth - 1, 1).toISOString().slice(0, 10);
-    const end = new Date(fYear, fMonth, 1).toISOString().slice(0, 10);
+    let start, end;
+
+    if (filterMonth === "all") {
+      start = new Date(fYear, 0, 1).toISOString().slice(0, 10);
+      end = new Date(fYear + 1, 0, 1).toISOString().slice(0, 10);
+    } else {
+      const fMonth = parseInt(filterMonth, 10);
+      start = new Date(fYear, fMonth - 1, 1).toISOString().slice(0, 10);
+      end = new Date(fYear, fMonth, 1).toISOString().slice(0, 10);
+    }
 
     const r = await fetch(`/api/finanzen/transactions?from=${start}&to=${end}&limit=1000`, { cache:"no-store" });
     const j = await r.json(); if (j.ok) setRows(j.rows || []);
@@ -136,6 +143,7 @@ export default function FinanzenPage(){
             {Array.from({length: 12}, (_, i) => (
               <option key={i+1} value={String(i+1)}>{new Date(0, i).toLocaleString('de', {month: 'long'})}</option>
             ))}
+            <option value="all">Komplett</option>
           </select>
           <select className="select" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
             {Array.from({length: 5}, (_, i) => {
@@ -157,7 +165,7 @@ export default function FinanzenPage(){
       <div className="surface" style={{marginBottom: 24}}>
         <div style={{fontWeight: 600, fontSize: 16, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8}}>
           <Calendar size={18} className="subtle" />
-          Auswertung: {new Date(0, parseInt(filterMonth)-1).toLocaleString('de', {month: 'long'})} {filterYear}
+          Auswertung: {filterMonth === "all" ? "Komplettes Jahr" : new Date(0, parseInt(filterMonth)-1).toLocaleString('de', {month: 'long'})} {filterYear}
         </div>
         <div style={{display:"grid", gap: 20, gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
           <MiniStat title="Einnahmen" value={centsToEUR(summary?.periods?.selected?.incomeCents)} icon={<ArrowUpRight size={18} color="#065f46" />} color="#065f46" />
@@ -171,7 +179,7 @@ export default function FinanzenPage(){
       <div style={{display:"grid", gap: 20, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginBottom: 24}}>
         {/* USt-Auswertung (Gewählter Monat) */}
         <div className="surface" style={{borderStyle:"dashed"}}>
-          <div style={{fontWeight:800, marginBottom:10}}>Umsatzsteuer ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
+          <div style={{fontWeight:800, marginBottom:10}}>Umsatzsteuer ({filterMonth === "all" ? filterYear : `${String(filterMonth).padStart(2,'0')}/${filterYear}`})</div>
           {summary?.settings?.kleinunternehmer ? (
             <div className="subtle">Kleinunternehmerregelung aktiv – keine USt/VSt.</div>
           ) : (
@@ -286,7 +294,7 @@ export default function FinanzenPage(){
       {/* Tabelle */}
       <div className="surface" style={{padding:0, overflow:"hidden"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", padding:"16px 20px", background:"var(--panel, #f8fafc)", borderBottom:"1px solid var(--border, rgba(0,0,0,.06))"}}>
-          <div className="section-title" style={{margin:0}}>Transaktionen ({String(filterMonth).padStart(2,'0')}/{filterYear})</div>
+          <div className="section-title" style={{margin:0}}>Transaktionen ({filterMonth === "all" ? filterYear : `${String(filterMonth).padStart(2,'0')}/${filterYear}`})</div>
           <div className="subtle">Saldo: <b>{centsToEUR(totals.net)}</b> · Einnahmen {centsToEUR(totals.inc)} · Ausgaben {centsToEUR(totals.exp)}</div>
         </div>
         <div style={{overflowX:"auto"}}>
