@@ -54,8 +54,20 @@ const S = {
   danger:{ padding: "10px 12px", borderRadius: 12, background: "transparent", color: "#c00", border: "1px solid #c00", cursor: "pointer" },
 };
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
 /* ───────── Page ───────── */
 export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<div className="container p-4">Lade...</div>}>
+      <InvoicesPageContent />
+    </Suspense>
+  );
+}
+
+function InvoicesPageContent() {
+  const searchParams = useSearchParams();
   const { confirm: confirmMsg, alert: alertMsg } = useDialog();
   const [rows, setRows] = useState([]);
   const [products, setProducts] = useState([]);
@@ -64,12 +76,12 @@ export default function InvoicesPage() {
   const [currency, setCurrency] = useState("EUR");
   const [vatExempt, setVatExempt] = useState(true);
 
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedId, setExpandedId] = useState(searchParams.get("expand") || null);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(searchParams.get("no") || "");
   const [showScanner, setShowScanner] = useState(false);
 
   async function load() {
@@ -86,12 +98,18 @@ export default function InvoicesPage() {
       const cs = await custRes.json().catch(() => ({}));
       const st = setRes ? await setRes.json().catch(() => ({})) : null;
 
-      setRows(Array.isArray(list?.data) ? list.data : []);
+      const rowsData = Array.isArray(list?.data) ? list.data : [];
+      setRows(rowsData);
       setProducts(Array.isArray(pr?.data) ? pr.data : []);
       setCustomers(Array.isArray(cs?.data) ? cs.data : []);
       if (st?.data) setSettings(st.data);
       setCurrency(st?.data?.currency || "EUR");
       setVatExempt(typeof st?.data?.kleinunternehmer === "boolean" ? st.data.kleinunternehmer : true);
+
+      const expand = searchParams.get("expand");
+      if (expand && rowsData.some(r => r.id === expand)) {
+        setExpandedId(expand);
+      }
     } finally {
       setLoading(false);
     }
