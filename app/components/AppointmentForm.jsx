@@ -267,6 +267,7 @@ export default function AppointmentForm({ initial = null, customers = [], employ
         .af-wrap{
           width: 100%;
           max-width: 100%;        /* entfernt max-width 360px um Überlappen zu verhindern */
+          overflow-x: hidden;
           margin: 0 auto;
           box-sizing: border-box;
         }

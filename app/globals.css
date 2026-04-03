@@ -87,6 +87,7 @@ body {
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -188,6 +189,8 @@ a:hover { color: var(--brand); }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .card__header {
@@ -383,6 +386,7 @@ a:hover { color: var(--brand); }
   box-shadow: var(--shadow-2);
   display: flex; flex-direction: column;
   max-height: 90vh;
+  box-sizing: border-box;
 }
 .modal__header {
   padding: 1rem 1.5rem;
