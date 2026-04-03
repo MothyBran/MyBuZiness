@@ -62,15 +62,7 @@ function ReceiptPrintContent({ params }) {
     }
   }, [data, autoPrint]);
 
-  useEffect(() => {
-    if (autoPrint) {
-      const handleAfterPrint = () => {
-        window.close();
-      };
-      window.addEventListener('afterprint', handleAfterPrint);
-      return () => window.removeEventListener('afterprint', handleAfterPrint);
-    }
-  }, [autoPrint]);
+
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Lade Beleg…</div>;
   if (err || !data) return <div style={{ padding: "2rem", color: "red", textAlign: "center" }}>Fehler: {err || "Beleg nicht gefunden"}</div>;
