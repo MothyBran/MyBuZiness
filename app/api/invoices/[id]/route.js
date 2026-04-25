@@ -149,7 +149,7 @@ export async function PATCH(req, { params }) {
       const prepared = [];
 
       for (const raw of items) {
-        const qty = toInt(raw.quantity || 0);
+        const qty = Number(raw.quantity || 0);
         let unitGross = toInt(raw.unitPriceCents || 0); // Eingegebene Preise sind brutto
         let baseGross = 0;
         let name = (raw.name || "").trim();
@@ -170,7 +170,7 @@ export async function PATCH(req, { params }) {
            itemTaxRate = 0;
         }
 
-        const lineGross = baseGross + qty * unitGross;
+        const lineGross = baseGross + Math.round(qty * unitGross);
         totalGross += lineGross;
 
         const lineNet = Math.round(lineGross / (1 + (itemTaxRate / 100)));
@@ -247,7 +247,7 @@ export async function PATCH(req, { params }) {
           name: it.name,
           quantity: it.quantity,
           unitPriceCents: it.unitPriceCents,
-          baseCents: it.lineTotalCents - (it.quantity * it.unitPriceCents),
+          baseCents: it.lineTotalCents - Math.round(it.quantity * it.unitPriceCents),
           lineTotalCents: it.lineTotalCents,
           taxRate: it.taxRate
         });
@@ -272,7 +272,7 @@ export async function PATCH(req, { params }) {
         // Positionen aus Datenbank laden, da sie nicht mitgesendet wurden
         const existingItems = (await client.query(`SELECT * FROM "InvoiceItem" WHERE "invoiceId"=$1 ORDER BY "createdAt" ASC`, [id])).rows;
         for (const it of existingItems) {
-          const qty = toInt(it.quantity || 0);
+          const qty = Number(it.quantity || 0);
           const unit = toInt(it.unitPriceCents || 0);
           const lineTotal = toInt(it.lineTotalCents || 0);
           generatedReceiptItems.push({
@@ -280,7 +280,7 @@ export async function PATCH(req, { params }) {
             name: it.name,
             quantity: qty,
             unitPriceCents: unit,
-            baseCents: lineTotal - (qty * unit),
+            baseCents: lineTotal - Math.round(qty * unit),
             lineTotalCents: lineTotal
           });
         }

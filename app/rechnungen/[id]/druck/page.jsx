@@ -229,7 +229,7 @@ export default function InvoicePrintPage({ params }) {
                 <tr key={idx}>
                   <td className="ta-left">{idx + 1}.</td>
                   <td className="ta-left">{it.name || ""}</td>
-                  <td>{toInt(it.quantity || 0)}</td>
+                  <td>{Number(it.quantity || 0).toLocaleString("de-DE")}</td>
                   <td>{money(toInt(it.unitPriceCents || 0), row.currency || currency)}</td>
                   <td>{money(toInt(it.lineTotalCents || 0), row.currency || currency)}</td>
                 </tr>

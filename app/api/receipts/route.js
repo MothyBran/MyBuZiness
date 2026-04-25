@@ -83,10 +83,10 @@ export async function POST(request) {
     let totalTax = 0;
     const prepared = [];
     for (const it of items) {
-      const qty = toInt(it.quantity || 0);
+      const qty = Number(it.quantity || 0);
       const unit = toInt(it.unitPriceCents || 0);
       const base = toInt(it.baseCents || 0);
-      const line = (qty * unit) + base;
+      const line = Math.round(qty * unit) + base;
       totalGross += line;
 
       let itemTaxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;

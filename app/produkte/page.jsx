@@ -169,7 +169,16 @@ function ProductDetails({ row }) {
       {row.kind === "service" && (
         <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
           <Field label="Grundpreis"><div>{fmtMoney(row.priceCents)}</div></Field>
-          <Field label="Std.-Satz (optional)"><div>{row.hourlyRateCents ? fmtMoney(row.hourlyRateCents) + "/Std." : "—"}</div></Field>
+          <Field label="Std.-Satz (optional)">
+            <div>
+              {row.hourlyRateCents ? fmtMoney(row.hourlyRateCents) + "/Std." : "—"}
+              {row.hourlyRateCents > 0 && row.quarterHourBilling && (
+                <span style={{ fontSize: "0.8em", color: "var(--muted)", display: "block", marginTop: "2px" }}>
+                  (1/4 Std.-Takt, mind. 1 Std.)
+                </span>
+              )}
+            </div>
+          </Field>
         </div>
       )}
 
@@ -199,6 +208,7 @@ function ProductModal({ title, initial, onClose, onSaved, settings }) {
   // Preise (string-Eingabe, robust)
   const [priceInput, setPriceInput] = useState(initial ? fromCents(initial.priceCents || 0) : "");
   const [hourlyInput, setHourlyInput] = useState(initial?.hourlyRateCents ? fromCents(initial.hourlyRateCents) : "");
+  const [quarterHourBilling, setQuarterHourBilling] = useState(initial?.quarterHourBilling || false);
   const [travelBaseInput, setTravelBaseInput] = useState(initial?.travelBaseCents ? fromCents(initial.travelBaseCents) : "");
   const [travelPerKmInput, setTravelPerKmInput] = useState(initial?.travelPerKmCents ? fromCents(initial.travelPerKmCents) : "");
 
@@ -216,6 +226,7 @@ function ProductModal({ title, initial, onClose, onSaved, settings }) {
       description: description || null,
       priceCents: toCents(priceInput || 0),
       hourlyRateCents: toCents(hourlyInput || 0),
+      quarterHourBilling,
       travelBaseCents: toCents(travelBaseInput || 0),
       travelPerKmCents: toCents(travelPerKmInput || 0),
       taxRate: tRate,
@@ -270,13 +281,26 @@ function ProductModal({ title, initial, onClose, onSaved, settings }) {
         )}
 
         {kind === "service" && (
-          <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
-            <Field label="Grundpreis (€)">
-              <input style={input} inputMode="decimal" value={priceInput} onChange={e=>setPriceInput(e.target.value)} onBlur={e=>setPriceInput(fromCents(toCents(e.target.value)))} placeholder="z. B. 20,00" />
-            </Field>
-            <Field label="Std.-Satz (€/Std., optional)">
-              <input style={input} inputMode="decimal" value={hourlyInput} onChange={e=>setHourlyInput(e.target.value)} onBlur={e=>setHourlyInput(fromCents(toCents(e.target.value)))} placeholder="z. B. 50,00" />
-            </Field>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" }}>
+              <Field label="Grundpreis (€)">
+                <input style={input} inputMode="decimal" value={priceInput} onChange={e=>setPriceInput(e.target.value)} onBlur={e=>setPriceInput(fromCents(toCents(e.target.value)))} placeholder="z. B. 20,00" />
+              </Field>
+              <Field label="Std.-Satz (€/Std., optional)">
+                <input style={input} inputMode="decimal" value={hourlyInput} onChange={e=>setHourlyInput(e.target.value)} onBlur={e=>setHourlyInput(fromCents(toCents(e.target.value)))} placeholder="z. B. 50,00" />
+              </Field>
+            </div>
+            {toCents(hourlyInput || 0) > 0 && (
+              <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:"0.9rem", cursor:"pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={quarterHourBilling}
+                  onChange={e=>setQuarterHourBilling(e.target.checked)}
+                  style={{ width:"16px", height:"16px", accentColor:"var(--brand)" }}
+                />
+                Abrechnung im 1/4-Stunden-Takt (Erste Stunde voll berechnet)
+              </label>
+            )}
           </div>
         )}
 

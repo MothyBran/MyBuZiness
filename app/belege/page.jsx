@@ -208,9 +208,9 @@ function ReceiptsPageContent(){
             id: crypto?.randomUUID?.() || String(Math.random()),
             productId: it.productId || "",
             name: it.name || "",
-            quantity: toInt(it.quantity||1),
+            quantity: Number(it.quantity||1),
             unitPriceCents: toInt(it.unitPriceCents||0),
-            baseCents: toInt(it.baseCents || 0) || Math.max(0, toInt(it.lineTotalCents || 0) - (toInt(it.quantity||1)*toInt(it.unitPriceCents||0))),
+            baseCents: toInt(it.baseCents || 0) || Math.max(0, toInt(it.lineTotalCents || 0) - (Number(it.quantity||1)*toInt(it.unitPriceCents||0))),
             unitDisplay: fromCents(toInt(it.unitPriceCents||0))
           }))
         : [{ id: crypto?.randomUUID?.() || String(Math.random()), productId:"", name:"", quantity:1, unitPriceCents:0, baseCents:0, unitDisplay:"0,00" }]
@@ -244,7 +244,7 @@ function ReceiptsPageContent(){
   const totals = useMemo(()=>{
     const disc = Math.max(0, toCents(discount||"0"));
     // Beachte: unitPriceCents ist ggf. String oder Number in Cents
-    const netRaw = items.reduce((s,r)=> s + (toInt(r.quantity||0) * toInt(r.unitPriceCents||0)) + toInt(r.baseCents||0), 0);
+    const netRaw = items.reduce((s,r)=> s + Math.round(Number(r.quantity||0) * toInt(r.unitPriceCents||0)) + toInt(r.baseCents||0), 0);
     const netAfter = Math.max(0, netRaw - disc);
     const tax = vatExempt ? 0 : Math.round(netAfter * 0.19);
     const gross = netAfter + tax;
@@ -278,7 +278,7 @@ function ReceiptsPageContent(){
       .map(it => ({
         productId: it.productId || null,
         name: (it.name||"").trim() || "Position",
-        quantity: toInt(it.quantity||0),
+        quantity: Number(it.quantity||0),
         unitPriceCents: toInt(it.unitPriceCents||0),
         baseCents: toInt(it.baseCents||0),
       }))
@@ -429,10 +429,10 @@ function ReceiptsPageContent(){
                                   </thead>
                                   <tbody>
                                     {details[r.id].data.items.map((it,i)=>{
-                                      const qty = toInt(it.quantity||0);
+                                      const qty = Number(it.quantity||0);
                                       const unit= toInt(it.unitPriceCents||0);
                                       const base= toInt(it.baseCents||0);
-                                      const line= toInt(it.lineTotalCents ?? ((qty*unit)+base));
+                                      const line= toInt(it.lineTotalCents ?? (Math.round(qty*unit)+base));
                                       return (
                                         <tr key={i}>
                                           <td className="ellipsis">
@@ -520,10 +520,10 @@ function ReceiptsPageContent(){
                     </thead>
                     <tbody>
                       {items.map(r=>{
-                        const qty  = toInt(r.quantity||0);
+                        const qty  = Number(r.quantity||0);
                         const unit = toInt(r.unitPriceCents||0);
                         const base = toInt(r.baseCents||0);
-                        const line = (qty * unit) + base;
+                        const line = Math.round(qty * unit) + base;
                         return (
                           <tr key={r.id}>
                             <td>
@@ -539,13 +539,14 @@ function ReceiptsPageContent(){
                               {base > 0 && <div style={{ fontSize:11, marginTop:4, opacity:0.7 }}>inkl. Grundpreis: {money(base, currency)}</div>}
                             </td>
                             <td>
-                              <select
+                              <input
                                 className="inp"
-                                value={String(qty)}
-                                onChange={(e)=>patchItem(r.id,{ quantity: toInt(e.target.value) })}
-                              >
-                                {Array.from({length:20}).map((_,i)=> <option key={i+1} value={i+1}>{i+1}</option>)}
-                              </select>
+                                type="text"
+                                inputMode="decimal"
+                                value={String(r.quantity ?? 1)}
+                                onChange={(e)=>patchItem(r.id,{ quantity: e.target.value.replace(",", ".") })}
+                                style={{ width: "60px", textAlign: "center" }}
+                              />
                             </td>
                             <td>
                               <input
