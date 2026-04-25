@@ -290,9 +290,21 @@ export default function SchnellerfassungPage() {
         <div className="product-grid">
           {products.map(p => {
             let displayPrice = 0;
-            if (p.kind === "service") displayPrice = p.hourlyRateCents || p.priceCents || 0;
-            else if (p.kind === "travel") displayPrice = p.travelPerKmCents || 0;
-            else displayPrice = p.priceCents || 0;
+            let showAb = false;
+
+            if (p.kind === "service") {
+              const hr = toInt(p.hourlyRateCents || 0);
+              const gp = toInt(p.priceCents || 0);
+              displayPrice = hr + gp;
+              if (hr > 0) showAb = true;
+            } else if (p.kind === "travel") {
+              const perKm = toInt(p.travelPerKmCents || 0);
+              const tBase = toInt(p.travelBaseCents || 0);
+              displayPrice = perKm + tBase;
+              if (perKm > 0) showAb = true;
+            } else {
+              displayPrice = p.priceCents || 0;
+            }
 
             const isAnimating = !!animations[p.id];
             const cartItem = cart.find(item => item.product.id === p.id);
@@ -305,7 +317,9 @@ export default function SchnellerfassungPage() {
                 onClick={() => handleProductClick(p)}
               >
                 <div className="product-name">{p.name}</div>
-                <div className="product-price">{money(displayPrice, currency)}</div>
+                <div className="product-price">
+                  {showAb && "ab "}{money(displayPrice, currency)}
+                </div>
 
                 {qty > 0 && (
                   <div className="product-badge">{Number(qty).toLocaleString("de-DE")}</div>
