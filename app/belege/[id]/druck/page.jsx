@@ -179,6 +179,11 @@ function ReceiptPrintContent({ params }) {
                 <tr key={idx}>
                   <td style={{ paddingBottom: "8px" }}>
                     <span className="item-name">{idx + 1}. {it.name}</span>
+                    {it.kind === "service" && Number(it.hourlyRateCents || 0) > 0 && (
+                      <span className="item-details" style={{ display: "block", marginTop: "2px", color: "#555" }}>
+                        Dauer: {Number(it.quantity).toLocaleString("de-DE")} Std.
+                      </span>
+                    )}
                     <span className="item-details">
                       {Number(it.quantity).toLocaleString("de-DE")} x {money(it.unitPriceCents, curr)}
                       {base > 0 && <><br/>inkl. Grundpreis: {money(base, curr)}</>}
