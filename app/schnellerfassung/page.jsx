@@ -81,14 +81,23 @@ export default function SchnellerfassungPage() {
     const disc = Math.max(0, Math.round(parseFloat(String(discountInput || "0").replace(",", ".")) * 100) || 0);
     const netRaw = cart.reduce((s, item) => {
       let unitPrice = 0;
+      let basePrice = 0;
       if (item.product.kind === "service") {
-        unitPrice = toInt(item.product.hourlyRateCents || item.product.priceCents || 0);
+        const hr = toInt(item.product.hourlyRateCents || 0);
+        const gp = toInt(item.product.priceCents || 0);
+        if (hr > 0) {
+          unitPrice = hr;
+          basePrice = gp;
+        } else {
+          unitPrice = gp;
+        }
       } else if (item.product.kind === "travel") {
         unitPrice = toInt(item.product.travelPerKmCents || 0);
+        basePrice = toInt(item.product.travelBaseCents || 0);
       } else {
         unitPrice = toInt(item.product.priceCents || 0);
       }
-      return s + toInt(item.quantity || 0) * unitPrice;
+      return s + Math.round(Number(item.quantity || 0) * unitPrice) + basePrice;
     }, 0);
     const netAfter = Math.max(0, netRaw - disc);
     const tax = vatExempt ? 0 : Math.round(netAfter * 0.19);
@@ -99,8 +108,24 @@ export default function SchnellerfassungPage() {
   const updateCartQuantity = (productId, delta) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === productId) {
-        const newQ = item.quantity + delta;
-        if (newQ <= 0) return null;
+        let step = 1;
+        if (item.product.kind === "service" && toInt(item.product.hourlyRateCents) > 0 && item.product.quarterHourBilling) {
+          step = 0.25;
+        }
+
+        let newQ = item.quantity + (delta > 0 ? step : -step);
+
+        // mind. 1 Stunde berechnen für Viertelstunden-Takt
+        if (item.product.kind === "service" && toInt(item.product.hourlyRateCents) > 0 && item.product.quarterHourBilling) {
+          if (newQ < 1 && delta < 0) {
+            // Wenn wir bei 1.0 sind und minus klicken, komplett entfernen
+            if (item.quantity === 1) return null;
+            newQ = 1; // Sicherstellen, dass es nicht unter 1 fällt, falls manuell was dazwischen war
+          }
+        } else {
+           if (newQ <= 0) return null;
+        }
+
         return { ...item, quantity: newQ };
       }
       return item;
@@ -117,10 +142,19 @@ export default function SchnellerfassungPage() {
     // We don't specify receiptNo here; the backend will generate it if not provided.
     const items = cart.map(item => {
       let unitPrice = 0;
+      let basePrice = 0;
       if (item.product.kind === "service") {
-        unitPrice = toInt(item.product.hourlyRateCents || item.product.priceCents || 0);
+        const hr = toInt(item.product.hourlyRateCents || 0);
+        const gp = toInt(item.product.priceCents || 0);
+        if (hr > 0) {
+          unitPrice = hr;
+          basePrice = gp;
+        } else {
+          unitPrice = gp;
+        }
       } else if (item.product.kind === "travel") {
         unitPrice = toInt(item.product.travelPerKmCents || 0);
+        basePrice = toInt(item.product.travelBaseCents || 0);
       } else {
         unitPrice = toInt(item.product.priceCents || 0);
       }
@@ -128,7 +162,8 @@ export default function SchnellerfassungPage() {
         productId: item.product.id,
         name: item.product.name,
         quantity: item.quantity,
-        unitPriceCents: unitPrice
+        unitPriceCents: unitPrice,
+        baseCents: basePrice
       };
     });
 
@@ -268,7 +303,7 @@ export default function SchnellerfassungPage() {
                 <div className="product-price">{money(displayPrice, currency)}</div>
 
                 {qty > 0 && (
-                  <div className="product-badge">{qty}</div>
+                  <div className="product-badge">{Number(qty).toLocaleString("de-DE")}</div>
                 )}
 
                 {isAnimating && (
@@ -305,25 +340,41 @@ export default function SchnellerfassungPage() {
                 <div className="cart-items">
                   {cart.map(item => {
                     let unitPrice = 0;
+                    let basePrice = 0;
+                    let unitLabel = "Einheit";
+
                     if (item.product.kind === "service") {
-                      unitPrice = toInt(item.product.hourlyRateCents || item.product.priceCents || 0);
+                      const hr = toInt(item.product.hourlyRateCents || 0);
+                      const gp = toInt(item.product.priceCents || 0);
+                      if (hr > 0) {
+                        unitPrice = hr;
+                        basePrice = gp;
+                        unitLabel = "Std.";
+                      } else {
+                        unitPrice = gp;
+                      }
                     } else if (item.product.kind === "travel") {
                       unitPrice = toInt(item.product.travelPerKmCents || 0);
+                      basePrice = toInt(item.product.travelBaseCents || 0);
+                      unitLabel = "km";
                     } else {
                       unitPrice = toInt(item.product.priceCents || 0);
                     }
-                    const lineTotal = item.quantity * unitPrice;
+                    const lineTotal = Math.round(Number(item.quantity || 0) * unitPrice) + basePrice;
 
                     return (
                       <div key={item.product.id} className="cart-item">
                         <div className="cart-item-info">
                           <div style={{ fontWeight: 600 }}>{item.product.name}</div>
-                          <div className="muted" style={{ fontSize: "0.85rem" }}>{money(unitPrice, currency)} / Einheit</div>
+                          <div className="muted" style={{ fontSize: "0.85rem" }}>
+                            {money(unitPrice, currency)} / {unitLabel}
+                            {basePrice > 0 && ` (+ ${money(basePrice, currency)} Grundpr.)`}
+                          </div>
                         </div>
 
                         <div className="cart-item-controls">
                           <button className="btn btn--subtle btn--icon" onClick={() => updateCartQuantity(item.product.id, -1)}>-</button>
-                          <div className="cart-item-qty">{item.quantity}</div>
+                          <div className="cart-item-qty">{Number(item.quantity).toLocaleString("de-DE")}</div>
                           <button className="btn btn--subtle btn--icon" onClick={() => updateCartQuantity(item.product.id, 1)}>+</button>
                           <button className="btn btn--danger btn--icon" onClick={() => removeCartItem(item.product.id)} style={{ marginLeft: 8 }}><Icon name="x" /></button>
                         </div>
@@ -681,7 +732,7 @@ export default function SchnellerfassungPage() {
         }
 
         .cart-item-qty {
-          width: 24px;
+          min-width: 24px;
           text-align: center;
           font-weight: 600;
         }

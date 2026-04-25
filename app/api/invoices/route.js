@@ -187,7 +187,7 @@ export async function POST(request) {
     let totalTax = 0;
 
     for (const raw of items) {
-      const qty = toInt(raw.quantity || 0);
+      const qty = Number(raw.quantity || 0);
       let unitGross = toInt(raw.unitPriceCents || 0); // Eingegebene Preise sind brutto
       let baseGross = 0;
       let name = (raw.name || "").trim();
@@ -208,7 +208,7 @@ export async function POST(request) {
          itemTaxRate = 0;
       }
 
-      const lineGross = baseGross + qty * unitGross;
+      const lineGross = baseGross + Math.round(qty * unitGross);
       totalGross += lineGross;
 
       const lineNet = Math.round(lineGross / (1 + (itemTaxRate / 100)));

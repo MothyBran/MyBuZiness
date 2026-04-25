@@ -259,7 +259,7 @@ function InvoicesPageContent() {
                                     <tr key={idx}>
                                       <td>{idx + 1}.</td>
                                       <td>{it.name || "—"}</td>
-                                      <td>{toInt(it.quantity || 0)}</td>
+                                      <td>{Number(it.quantity || 0)}</td>
                                       <td>{money(toInt(it.unitPriceCents || 0), r.currency || currency)}</td>
                                       <td>{money(toInt(it.lineTotalCents || 0), r.currency || currency)}</td>
                                     </tr>
@@ -457,9 +457,9 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
         productId: it.productId || "",
         name: it.name || "",
         kind: "product",
-        quantity: toInt(it.quantity || 0),
+        quantity: Number(it.quantity || 0),
         unitPriceCents: toInt(it.unitPriceCents || 0),
-        baseCents: toInt(it.lineTotalCents||0) - toInt(it.quantity||0)*toInt(it.unitPriceCents||0),
+        baseCents: toInt(it.lineTotalCents||0) - Number(it.quantity||0)*toInt(it.unitPriceCents||0),
         unitDisplay: fromCents(toInt(it.unitPriceCents||0))
       }));
     }
@@ -512,7 +512,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
     if (!row || row.kind !== "travel") return;
     patchRow(id, { unitDisplay: v, unitPriceCents: toCents(v) });
   }
-  function lineSum(row) { return toInt(row.baseCents || 0) + toInt(row.quantity || 0) * toInt(row.unitPriceCents || 0); }
+  function lineSum(row) { return toInt(row.baseCents || 0) + Math.round(Number(row.quantity || 0) * toInt(row.unitPriceCents || 0)); }
 
   const totals = useMemo(() => {
     const net = items.reduce((s, r) => s + lineSum(r), 0);
@@ -538,7 +538,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
       items: items.map((r) => ({
         productId: r.productId || null,
         name: r.name || "Position",
-        quantity: toInt(r.quantity || 0),
+        quantity: Number(r.quantity || 0),
         unitPriceCents: toInt(r.unitPriceCents || 0),
       })),
     };
@@ -639,7 +639,7 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
               </thead>
               <tbody>
                 {items.map((r, idx) => {
-                  const sum = toInt(r.baseCents || 0) + toInt(r.quantity || 0) * toInt(r.unitPriceCents || 0);
+                  const sum = toInt(r.baseCents || 0) + Math.round(Number(r.quantity || 0) * toInt(r.unitPriceCents || 0));
                   return (
                     <tr key={r.id}>
                       <td>{idx + 1}.</td>
@@ -659,12 +659,13 @@ function InvoiceModal({ mode="create", initial=null, customers, products, curren
                         )}
                       </td>
                       <td>
-                        <select value={String(r.quantity ?? 1)} onChange={(e) => onQty(r.id, e.target.value)} style={{ ...S.input, maxWidth: "100%" }}>
-                          {Array.from({ length: 20 }).map((_, i) => {
-                            const v = i + 1;
-                            return <option key={v} value={v}>{v}</option>;
-                          })}
-                        </select>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={String(r.quantity ?? 1)}
+                          onChange={(e) => onQty(r.id, e.target.value.replace(",", "."))}
+                          style={{ ...S.input, maxWidth: "60px", textAlign: "center" }}
+                        />
                       </td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>
                         {r.kind === "travel" ? (

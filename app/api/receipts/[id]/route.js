@@ -127,13 +127,13 @@ export async function PUT(req, { params }) {
     const replaceItems = Array.isArray(body.items) && body.items.length > 0;
     const itemsForTotals = replaceItems
       ? body.items.map(it => ({
-          quantity: toInt(it.quantity || 0),
+          quantity: Number(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
           baseCents: toInt(it.baseCents || 0),
           taxRate: it.taxRate !== undefined ? Number(it.taxRate) : 19,
         }))
       : existingItems.map(it => ({
-          quantity: toInt(it.quantity || 0),
+          quantity: Number(it.quantity || 0),
           unitPriceCents: toInt(it.unitPriceCents || 0),
           baseCents: toInt(it.baseCents || 0),
           taxRate: it.taxRate !== undefined ? Number(it.taxRate) : 19,
@@ -150,7 +150,7 @@ export async function PUT(req, { params }) {
     let totalGross = 0;
     let totalTax = 0;
     for (const it of itemsForTotals) {
-      let itemGross = (toInt(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
+      let itemGross = Math.round(Number(it.quantity || 0) * toInt(it.unitPriceCents || 0)) + toInt(it.baseCents || 0);
       totalGross += itemGross;
 
       let itemTaxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
@@ -209,10 +209,10 @@ export async function PUT(req, { params }) {
       for (let i = 0; i < body.items.length; i++) {
         const it = body.items[i];
         const itemId = uuid();
-        const qty  = toInt(it.quantity || 0);
+        const qty  = Number(it.quantity || 0);
         const unit = toInt(it.unitPriceCents || 0);
         const base = toInt(it.baseCents || 0);
-        const line = (qty * unit) + base;
+        const line = Math.round(qty * unit) + base;
         const taxRate = it.taxRate !== undefined ? Number(it.taxRate) : 19;
 
         const offset = i * 9;

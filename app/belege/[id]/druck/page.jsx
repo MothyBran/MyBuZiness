@@ -180,12 +180,12 @@ function ReceiptPrintContent({ params }) {
                   <td style={{ paddingBottom: "8px" }}>
                     <span className="item-name">{idx + 1}. {it.name}</span>
                     <span className="item-details">
-                      {it.quantity} x {money(it.unitPriceCents, curr)}
+                      {Number(it.quantity).toLocaleString("de-DE")} x {money(it.unitPriceCents, curr)}
                       {base > 0 && <><br/>inkl. Grundpreis: {money(base, curr)}</>}
                     </span>
                   </td>
                   <td className="num" style={{ verticalAlign: "bottom", paddingBottom: "8px" }}>
-                    {money(it.lineTotalCents || (it.quantity * it.unitPriceCents) + base, curr)}
+                    {money(it.lineTotalCents || Math.round(Number(it.quantity) * it.unitPriceCents) + base, curr)}
                   </td>
                 </tr>
               );
