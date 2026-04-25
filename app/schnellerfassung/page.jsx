@@ -55,11 +55,16 @@ export default function SchnellerfassungPage() {
   const vatExempt = typeof settings?.kleinunternehmer === "boolean" ? settings.kleinunternehmer : true;
 
   const handleProductClick = (product) => {
+    let step = 1;
+    if (product.kind === "service" && toInt(product.hourlyRateCents) > 0 && product.quarterHourBilling) {
+      step = 0.25;
+    }
+
     // Add to cart
     setCart((prev) => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
-        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + step } : item);
       } else {
         return [...prev, { product, quantity: 1 }];
       }
@@ -366,6 +371,11 @@ export default function SchnellerfassungPage() {
                       <div key={item.product.id} className="cart-item">
                         <div className="cart-item-info">
                           <div style={{ fontWeight: 600 }}>{item.product.name}</div>
+                          {unitLabel === "Std." && (
+                            <div className="muted" style={{ fontSize: "0.85rem", color: "var(--brand)", marginTop: 2, marginBottom: 2 }}>
+                              Dauer: {Number(item.quantity).toLocaleString("de-DE")} Std.
+                            </div>
+                          )}
                           <div className="muted" style={{ fontSize: "0.85rem" }}>
                             {money(unitPrice, currency)} / {unitLabel}
                             {basePrice > 0 && ` (+ ${money(basePrice, currency)} Grundpr.)`}

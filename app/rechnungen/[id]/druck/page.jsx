@@ -228,7 +228,14 @@ export default function InvoicePrintPage({ params }) {
               {Array.isArray(row.items) && row.items.map((it, idx)=>(
                 <tr key={idx}>
                   <td className="ta-left">{idx + 1}.</td>
-                  <td className="ta-left">{it.name || ""}</td>
+                  <td className="ta-left">
+                    {it.name || ""}
+                    {it.kind === "service" && Number(it.hourlyRateCents || 0) > 0 && (
+                      <div style={{ fontSize: "0.85em", color: "#555", marginTop: 2 }}>
+                        Dauer: {Number(it.quantity || 0).toLocaleString("de-DE")} Std.
+                      </div>
+                    )}
+                  </td>
                   <td>{Number(it.quantity || 0).toLocaleString("de-DE")}</td>
                   <td>{money(toInt(it.unitPriceCents || 0), row.currency || currency)}</td>
                   <td>{money(toInt(it.lineTotalCents || 0), row.currency || currency)}</td>

@@ -43,9 +43,11 @@ export async function GET(_req, { params }) {
     )).rows[0];
     if (!inv) return new Response(JSON.stringify({ ok:false, error:"Nicht gefunden." }), { status: 404 });
     const items = (await q(
-      `SELECT * FROM "InvoiceItem"
-        WHERE "invoiceId"=$1
-        ORDER BY "createdAt" ASC`,
+      `SELECT ii.*, p."kind", p."hourlyRateCents"
+         FROM "InvoiceItem" ii
+         LEFT JOIN "Product" p ON p."id" = ii."productId"
+        WHERE ii."invoiceId"=$1
+        ORDER BY ii."createdAt" ASC`,
       [id]
     )).rows;
     return Response.json({ ok:true, data: { ...inv, items } });

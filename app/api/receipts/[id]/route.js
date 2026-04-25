@@ -40,18 +40,21 @@ export async function GET(_req, { params }) {
 
     const items = (await q(
       `SELECT
-         "id","receiptId",
-         COALESCE("productId",NULL)             AS "productId",
-         COALESCE("name",'')                    AS "name",
-         COALESCE("quantity",0)                 AS "quantity",
-         COALESCE("unitPriceCents",0)::bigint   AS "unitPriceCents",
-         COALESCE("baseCents",0)::bigint        AS "baseCents",
-         COALESCE("lineTotalCents",0)::bigint   AS "lineTotalCents",
-         COALESCE("taxRate",19)                 AS "taxRate",
-         "createdAt","updatedAt"
-       FROM "ReceiptItem"
-       WHERE "receiptId"=$1
-       ORDER BY "createdAt" ASC, "id" ASC`,
+         ri."id", ri."receiptId",
+         COALESCE(ri."productId",NULL)             AS "productId",
+         COALESCE(ri."name",'')                    AS "name",
+         COALESCE(ri."quantity",0)                 AS "quantity",
+         COALESCE(ri."unitPriceCents",0)::bigint   AS "unitPriceCents",
+         COALESCE(ri."baseCents",0)::bigint        AS "baseCents",
+         COALESCE(ri."lineTotalCents",0)::bigint   AS "lineTotalCents",
+         COALESCE(ri."taxRate",19)                 AS "taxRate",
+         ri."createdAt", ri."updatedAt",
+         p."kind",
+         p."hourlyRateCents"
+       FROM "ReceiptItem" ri
+       LEFT JOIN "Product" p ON p."id" = ri."productId"
+       WHERE ri."receiptId"=$1
+       ORDER BY ri."createdAt" ASC, ri."id" ASC`,
       [id]
     )).rows;
 
